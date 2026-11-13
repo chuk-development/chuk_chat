@@ -307,7 +307,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                         children: <Widget>[
                           Expanded(
                             child: Text(
-                              'Avatar',
+                              'Body',
                               style: Theme.of(context).textTheme.titleSmall,
                             ),
                           ),
@@ -334,23 +334,11 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
                         ],
                       ),
                     ),
-                    ExpressiveCard(
-                      padding: const EdgeInsets.all(14),
-                      child: _ShapeRow(
-                        agentId: agent.id,
-                        colour: shownColor == null
-                            ? agentAccent(context, agent.id, store: _store)
-                            : Color(shownColor),
-                        selected: _shape ?? _store.profileOf(agent.id).shape,
-                        onPick: (AgentAvatarShape? shape) =>
-                            setState(() => _shape = shape),
-                      ),
-                    ),
                     ExpressiveRow(
                       key: const ValueKey('avatar_reset_default'),
                       icon: Icons.restart_alt_rounded,
                       title: 'Reset to default',
-                      subtitle: "How this agent's mark looks everywhere",
+                      subtitle: 'The colour and the body the app picked',
                       onTap: () => setState(() {
                         _color = null;
                         _clearColor = true;
@@ -492,89 +480,6 @@ class _ColorRow extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// The silhouettes an agent can be given, drawn as themselves.
-///
-/// A row of shapes says what it offers; a row of chips labelled "Rounded
-/// square" makes the reader translate a word back into a picture. The first
-/// entry is the automatic one — the silhouette derived from the agent id,
-/// which is what an agent wears until somebody picks.
-class _ShapeRow extends StatelessWidget {
-  const _ShapeRow({
-    required this.agentId,
-    required this.colour,
-    required this.selected,
-    required this.onPick,
-  });
-
-  final String agentId;
-  final Color colour;
-  final AgentAvatarShape? selected;
-  final ValueChanged<AgentAvatarShape?> onPick;
-
-  static const List<AgentAvatarShape> _offered = <AgentAvatarShape>[
-    AgentAvatarShape.expressive,
-    AgentAvatarShape.round,
-    AgentAvatarShape.roundedSquare,
-    AgentAvatarShape.oval,
-    AgentAvatarShape.triangle,
-    AgentAvatarShape.gem,
-    AgentAvatarShape.clover,
-    AgentAvatarShape.flower,
-    AgentAvatarShape.cookie,
-    AgentAvatarShape.diamond,
-    AgentAvatarShape.burst,
-    AgentAvatarShape.square,
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    final AgentAvatarShape current = selected ?? AgentAvatarShape.expressive;
-    return SizedBox(
-      height: 56,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _offered.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 10),
-        itemBuilder: (BuildContext context, int i) {
-          final AgentAvatarShape shape = _offered[i];
-          final bool isSelected = shape == current;
-          return GestureDetector(
-            key: ValueKey('avatar_shape_${shape.name}'),
-            onTap: () => onPick(shape),
-            child: Container(
-              width: 52,
-              height: 52,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: isSelected
-                    ? Border.all(color: scheme.onSurface, width: 2)
-                    : null,
-              ),
-              child: Container(
-                width: 34,
-                height: 34,
-                decoration: ShapeDecoration(
-                  color: colour,
-                  shape: agentAvatarShape(agentId, shape, 34),
-                ),
-                child: shape == AgentAvatarShape.expressive
-                    ? AppIcon(
-                        Icons.auto_awesome_rounded,
-                        size: 16,
-                        color: scheme.surface,
-                      )
-                    : null,
-              ),
-            ),
-          );
-        },
-      ),
     );
   }
 }

@@ -285,12 +285,12 @@ void main() {
         'settings_Model',
         'settings_Permissions',
         'settings_Documents & pages',
+        'settings_Open screen',
         'settings_Advanced',
         'settings_Skills',
         'settings_Connected apps',
         'settings_Mail',
         'settings_Host & activity',
-        'settings_Open screen',
         'settings_Hide',
         'settings_Remove',
       ];
@@ -302,8 +302,7 @@ void main() {
         expect(top, greaterThan(last), reason: key);
         last = top;
       }
-      // From the top: Documents is in the top group, Open screen in the
-      // fold below it.
+      // From the top: Documents and Open screen are in the top group.
       await tester.drag(find.byType(SettingsListView), const Offset(0, 4000));
       await tester.pumpAndSettle();
       for (final entry in {
@@ -386,19 +385,15 @@ void main() {
     late Directory kv;
     setUp(() async {
       ChatModelSelectionService.instance.clearMemoryForTesting();
-      AgentModel.debugCatalogue = () async =>
-          const <AgentCatalogueModel>[
-            AgentCatalogueModel(
-              id: 'z-ai/glm-5.3-flash',
-              name: 'Z.ai: GLM 5.3 Flash',
-              providers: <AgentProvider>[
-                AgentProvider(
-                  slug: 'fireworks/serverless',
-                  name: 'Fireworks',
-                ),
-              ],
-            ),
-          ];
+      AgentModel.debugCatalogue = () async => const <AgentCatalogueModel>[
+        AgentCatalogueModel(
+          id: 'z-ai/glm-5.3-flash',
+          name: 'Z.ai: GLM 5.3 Flash',
+          providers: <AgentProvider>[
+            AgentProvider(slug: 'fireworks/serverless', name: 'Fireworks'),
+          ],
+        ),
+      ];
       kv = await useTempKvCache();
       await ModelCapabilitiesService.initialize();
     });

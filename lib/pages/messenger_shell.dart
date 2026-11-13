@@ -832,47 +832,6 @@ class _MessengerShellState extends State<MessengerShell>
     setState(() {});
   }
 
-  /// The screen target, tapped while the agent has no screen. Says what has
-  /// to happen first instead of leaving the tap unanswered. It replaces
-  /// whatever snack is up, because it answers a tap the user just made.
-  void _explainNoScreen() {
-    if (!mounted) return;
-    // The host says WHY in a code of its own (`browser_view.reason`, bead
-    // cowork-qp5i), and the app parks the target itself when the host falls
-    // silent (bead cowork-8ptj). Both beat "no screen yet", which is only the
-    // answer when nobody ever said anything about a screen.
-    // ── own browser ──
-    // An agent in the user's own browser never has a screen here.
-    if (_browserPresence?.usesUserBrowserIn(_selectedThreadKey) ?? false) {
-      AppNotifications.show(
-        context,
-        AppLocalizations.of(context)?.ubScreenExplain ??
-            'This agent works in your own browser. There is no screen '
-                'to show here.',
-        duration: const Duration(seconds: 4),
-      );
-      return;
-    }
-    // ── end own browser ──
-    final String text = switch (_browserPresence?.parkedBecause ?? '') {
-      'no_browser' => 'The agent has no page open right now.',
-      'no_sandbox' =>
-        'This agent runs without a sandbox, so there is no screen to show.',
-      'no_display' => 'The agent has no browser screen running.',
-      'vnc_start_failed' =>
-        'The screen server would not start on the agent\'s machine.',
-      'exec_failed' => 'The agent\'s machine could not be reached.',
-      'bridge_failed' => 'The connection to the screen broke.',
-      BrowserPresence.staleReason =>
-        'No word about the screen for a while, so it is off the table. Ask '
-            'the agent to open a page again.',
-      _ =>
-        'No screen yet. Ask the agent to open a page, then take over '
-            'here.',
-    };
-    AppNotifications.show(context, text, duration: const Duration(seconds: 4));
-  }
-
   @override
   void _select(String agentId, String threadKey) {
     final agent = _roster.byId(agentId);
@@ -1079,9 +1038,15 @@ class _MessengerShellState extends State<MessengerShell>
     final VoidCallback? onCopyChat = agent.id == _selectedAgentId
         ? _copyFullChat
         : null;
-    final VoidCallback? onBrowser = agent.id == _selectedAgentId && _browserOpen
-        ? _openBrowserView
-        : null;
+    // On a phone the screen row is always there for the agent in view: a
+    // tap with no screen open says why there is none, so it is never a dead
+    // button. The desktop pane lists it only while a screen is open.
+    final VoidCallback? onBrowser = agent.id != _selectedAgentId
+        ? null
+        : page
+        ? () =>
+              _browserOpen ? unawaited(_openBrowserView()) : _explainNoScreen()
+        : (_browserOpen ? _openBrowserView : null);
     void onDelete() => _deleteAgent(agent.id);
     if (page) {
       return MobileAgentsSettingsPage(
@@ -1102,6 +1067,7 @@ class _MessengerShellState extends State<MessengerShell>
         onDocuments: onDocuments,
         onCopyChat: onCopyChat,
         onBrowser: onBrowser,
+        onMedia: _isPhone ? _openPhoneMedia : null,
         onDelete: onDelete,
       );
     }
@@ -1330,88 +1296,6 @@ class _MessengerShellState extends State<MessengerShell>
         return;
       }
     }
-  }
-
-  /// The menu chip's sheet: the pages that used to be tabs and chips.
-  Future<void> _openPhoneMenu() {
-    final AppLocalizations? l = AppLocalizations.of(context);
-    final bool onThread =
-        !_agentsHomeShown.value && _phoneRoomId == null && !_phoneShowsStatus;
-    final AgentsAgent? agent = onThread ? _selectedAgent : null;
-    final AgentsAgent? anyAgent = _selectedAgent ?? _mainAgent;
-    final String threadKey = _selectedThreadKey;
-    final AppShellConfig? config = widget.shellConfig;
-    return showMobileMenuSheet(
-      context,
-      shortcuts: <MobileMenuItem>[
-        if (config != null)
-          MobileMenuItem(
-            icon: Icons.settings_outlined,
-            label: l?.settings ?? 'Settings',
-            onTap: _openSettings,
-          )
-        else if (anyAgent != null)
-          // No chuk_chat settings to open (a shell without a config): the
-          // agent's own settings are the settings there are.
-          MobileMenuItem(
-            icon: Icons.settings_outlined,
-            label: l?.settings ?? 'Settings',
-            onTap: () => _openAgentProfile(anyAgent),
-          ),
-        MobileMenuItem(
-          icon: Icons.photo_library_outlined,
-          label: l?.media ?? 'Media',
-          onTap: _openPhoneMedia,
-        ),
-        MobileMenuItem(
-          icon: Icons.groups_outlined,
-          label: l?.agentsCwControlRooms ?? 'Control rooms',
-          onTap: _openRooms,
-        ),
-      ],
-      sectionTitle: agent?.name,
-      items: <MobileMenuItem>[
-        if (agent != null) ...<MobileMenuItem>[
-          MobileMenuItem(
-            icon: Icons.person_outline_rounded,
-            label: l?.agentsAgentProfile ?? 'Agent profile',
-            onTap: () => _openAgentProfile(agent),
-          ),
-          MobileMenuItem(
-            icon: Icons.monitor_heart_outlined,
-            label: l?.agentsCwHost ?? 'Host & activity',
-            onTap: () => unawaited(
-              openSettingsSurface(
-                context,
-                (_) => AgentHostActivityPage(
-                  agent: _roster.byId(agent.id) ?? agent,
-                  source: _controlSource,
-                ),
-              ),
-            ),
-          ),
-          // The screen is listed whether or not one is open: a parked tap
-          // says why there is none, so the row is never a dead button.
-          MobileMenuItem(
-            icon: Icons.desktop_windows_outlined,
-            label: l?.agentsCwOpenScreen ?? 'Open screen',
-            onTap: () => _browserOpen
-                ? unawaited(_openBrowserView())
-                : _explainNoScreen(),
-          ),
-          MobileMenuItem(
-            icon: Icons.folder_outlined,
-            label: l?.files ?? 'Files',
-            onTap: () => _openChatFiles(threadKey, agent.name),
-          ),
-          MobileMenuItem(
-            icon: Icons.copy_all_rounded,
-            label: l?.chatSwipeCopyChat ?? 'Copy full chat',
-            onTap: () => unawaited(_copyFullChat()),
-          ),
-        ],
-      ],
-    );
   }
 
   /// Media: every picture and file the agents have sent, as a route.
@@ -1650,10 +1534,8 @@ class _MessengerShellState extends State<MessengerShell>
                     onMenu: _togglePhoneSidebar,
                     menuBadge: unread,
                     centre: _agentsModeSwitch(),
-                    onMore: () => unawaited(_openPhoneMenu()),
                     onAdd: () => unawaited(_openOnboarding()),
                     menuTooltip: l?.chatSwipeMenu ?? 'Menu',
-                    moreTooltip: l?.chatSwipeMore ?? 'More actions',
                     addTooltip: l?.agentsNewAgent ?? 'New agent',
                     addIcon: Icons.person_add_alt_1_rounded,
                     strip: home
@@ -1663,6 +1545,9 @@ class _MessengerShellState extends State<MessengerShell>
                             entries: entries,
                             selectedId: selectedId,
                             controller: _phonePager,
+                            // One way to an agent's settings: a tap on
+                            // its name (owner, 2026-11-13).
+                            onTap: _openShownAgentSettings,
                             semanticsHint:
                                 l?.agentsStripHint ?? 'Swipe to switch agents',
                             workingLabel: l?.chatSwipeWorking ?? 'working',
@@ -1676,6 +1561,55 @@ class _MessengerShellState extends State<MessengerShell>
         );
       },
     );
+  }
+
+  /// The screen target, tapped while the agent has no screen. Says what has
+  /// to happen first instead of leaving the tap unanswered. It replaces
+  /// whatever snack is up, because it answers a tap the user just made.
+  void _explainNoScreen() {
+    if (!mounted) return;
+    // The host says WHY in a code of its own (`browser_view.reason`, bead
+    // cowork-qp5i), and the app parks the target itself when the host falls
+    // silent (bead cowork-8ptj). Both beat "no screen yet", which is only the
+    // answer when nobody ever said anything about a screen.
+    // ── own browser ──
+    // An agent in the user's own browser never has a screen here.
+    if (_browserPresence?.usesUserBrowserIn(_selectedThreadKey) ?? false) {
+      AppNotifications.show(
+        context,
+        AppLocalizations.of(context)?.ubScreenExplain ??
+            'This agent works in your own browser. There is no screen '
+                'to show here.',
+        duration: const Duration(seconds: 4),
+      );
+      return;
+    }
+    // ── end own browser ──
+    final String text = switch (_browserPresence?.parkedBecause ?? '') {
+      'no_browser' => 'The agent has no page open right now.',
+      'no_sandbox' =>
+        'This agent runs without a sandbox, so there is no screen to show.',
+      'no_display' => 'The agent has no browser screen running.',
+      'vnc_start_failed' =>
+        'The screen server would not start on the agent\'s machine.',
+      'exec_failed' => 'The agent\'s machine could not be reached.',
+      'bridge_failed' => 'The connection to the screen broke.',
+      BrowserPresence.staleReason =>
+        'No word about the screen for a while, so it is off the table. Ask '
+            'the agent to open a page again.',
+      _ =>
+        'No screen yet. Ask the agent to open a page, then take over '
+            'here.',
+    };
+    AppNotifications.show(context, text, duration: const Duration(seconds: 4));
+  }
+
+  /// Opens the settings of the agent whose thread is in view. A room or
+  /// the status page has no settings of its own.
+  void _openShownAgentSettings() {
+    if (_phoneRoomId != null || _phoneShowsStatus) return;
+    final AgentsAgent? agent = _selectedAgent;
+    if (agent != null) _openAgentProfile(agent);
   }
 
   void _togglePhoneSidebar() {

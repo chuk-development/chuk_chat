@@ -607,7 +607,11 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         ? 0
         : useContentBlocks
         ? _agentsAnswerStart
-        : (_strippedMessage.trim().isEmpty ? null : 0);
+        // The placeholder of a turn that has not written yet is no answer:
+        // its typing dots stand alone, like the dots of a host run.
+        : (_strippedMessage.trim().isEmpty || _strippedMessage == 'Thinking...'
+              ? null
+              : 0);
     final List<Widget> workKids = answerStart == null
         ? bodyChildren
         : bodyChildren.sublist(0, answerStart);

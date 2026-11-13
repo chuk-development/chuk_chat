@@ -142,11 +142,12 @@ void main() {
     // The plain build's floating bar and its sidebar toggle are gone.
     expect(findId('menu_button'), findsNothing);
     expect(findId('mobile_menu_button'), findsOneWidget);
-    expect(findId('mobile_more_button'), findsOneWidget);
-    // The switch is in the top row, the strip in the row under it, with
-    // the "..." chip at its end.
+    // There is no "..." chip: Settings are in the sidebar.
+    expect(findId('mobile_more_button'), findsNothing);
+    // The switch is in the top row, the strip in the row under it, over
+    // the full width.
     final Rect menu = tester.getRect(findId('mobile_menu_button'));
-    final Rect more = tester.getRect(findId('mobile_more_button'));
+    final Rect add = tester.getRect(findId('mobile_add_button'));
     final Rect pill = tester.getRect(find.byType(ChatTitleStrip));
     final Rect modeSwitch = tester.getRect(find.byKey(_kSwitchKey));
     expect(
@@ -154,8 +155,7 @@ void main() {
       moreOrLessEquals(menu.center.dy, epsilon: 0.5),
     );
     expect(pill.top, greaterThanOrEqualTo(menu.bottom));
-    expect(pill.right, lessThanOrEqualTo(more.left));
-    expect(pill.center.dy, moreOrLessEquals(more.center.dy, epsilon: 0.5));
+    expect(pill.right, greaterThan(add.left));
 
     await tester.tap(findId('mobile_menu_button'));
     await tester.pump();
@@ -282,119 +282,6 @@ void main() {
     expect(find.byType(BottomSheet), findsNothing);
     expect(find.text('Search chats'), findsNothing);
     expect(_stripSelected(tester), '__new__');
-    await _drain(tester);
-  });
-
-  testWidgets('the menu has no Rename or Delete while no chat is selected', (
-    tester,
-  ) async {
-    await _pump(tester);
-    await tester.tap(findId('mobile_more_button'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Rename'), findsNothing);
-    expect(find.text('Delete'), findsNothing);
-    await _drain(tester);
-  });
-
-  /// Swipes from "New chat" to the newest chat, 'a'.
-  Future<void> openAlpha(WidgetTester tester) async {
-    await _withoutBackend(() async {
-      await tester.flingFrom(
-        const Offset(300, 500),
-        const Offset(-250, 0),
-        1500,
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      await tester.pump(const Duration(milliseconds: 400));
-    });
-    expect(_stripSelected(tester), 'a');
-  }
-
-  Future<void> openMenu(WidgetTester tester) async {
-    await tester.tap(findId('mobile_more_button'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-  }
-
-  testWidgets('with a chat in view the menu renames it: the dialog holds '
-      'its name, Cancel keeps it', (tester) async {
-    await _pump(tester);
-    await openAlpha(tester);
-    await openMenu(tester);
-    expect(find.text('Rename'), findsOneWidget);
-    expect(find.text('Delete'), findsOneWidget);
-
-    await tester.tap(find.text('Rename'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Rename chat'), findsOneWidget);
-    final TextField field = tester.widget(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.byType(TextField),
-      ),
-    );
-    expect(field.controller!.text, 'Alpha chat');
-
-    await tester.tap(find.text('Cancel'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.byType(AlertDialog), findsNothing);
-    expect(ChatStorageState.chatsById['a']!.title, 'Alpha chat');
-    expect(_stripSelected(tester), 'a');
-    await _drain(tester);
-  });
-
-  testWidgets('with a chat in view the menu deletes it after a question; '
-      'Cancel keeps it', (tester) async {
-    await _pump(tester);
-    await openAlpha(tester);
-    await openMenu(tester);
-
-    await tester.tap(find.text('Delete'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.text('Delete chat?'), findsOneWidget);
-    expect(
-      find.descendant(
-        of: find.byType(AlertDialog),
-        matching: find.textContaining('Alpha chat'),
-      ),
-      findsOneWidget,
-    );
-
-    await tester.tap(find.text('Cancel'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(find.byType(AlertDialog), findsNothing);
-    expect(ChatStorageState.chatsById.containsKey('a'), isTrue);
-    expect(_stripSelected(tester), 'a');
-    await _drain(tester);
-  });
-
-  testWidgets('the menu chip opens a sheet; Settings opens the settings '
-      'page', (tester) async {
-    final _Routes routes = _Routes();
-    await _pump(tester, routes: routes);
-    await tester.tap(findId('mobile_more_button'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-
-    expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('Media'), findsOneWidget);
-    expect(find.text('Copy full chat'), findsOneWidget);
-    // No onAddComputer was given.
-    expect(find.text('Add your computer'), findsNothing);
-
-    await tester.tap(find.text('Settings'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    expect(routes.pushed, contains('tour:settings'));
-    // Settings may log errors without a backend; the route is what counts.
-    tester.takeException();
     await _drain(tester);
   });
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/services/agents/roster_pins.dart';
@@ -58,6 +59,7 @@ class AgentSettingsView extends StatefulWidget {
     this.onDocuments,
     this.onCopyChat,
     this.onBrowser,
+    this.onMedia,
     this.onDelete,
     this.profiles,
     this.preferences,
@@ -84,6 +86,7 @@ class AgentSettingsView extends StatefulWidget {
   final AgentRosterSource source;
   final AgentProfileStore? profiles;
   final MobileChatPreferences? preferences;
+
   /// [onModel] runs only for an agent with no thread yet; with one, the
   /// page opens the agent's model page itself.
   final VoidCallback onEdit,
@@ -96,6 +99,9 @@ class AgentSettingsView extends StatefulWidget {
       onRooms,
       onSettings;
   final VoidCallback? onDocuments, onCopyChat, onBrowser, onDelete, onChat;
+
+  /// Media: every picture and file the agents sent (phone).
+  final VoidCallback? onMedia;
 
   /// Opens the host's login vault. Null pushes [AgentsLoginVaultPage].
   final VoidCallback? onLogins;
@@ -130,6 +136,7 @@ class MobileAgentsSettingsPage extends AgentSettingsView {
     super.onDocuments,
     super.onCopyChat,
     super.onBrowser,
+    super.onMedia,
     super.onDelete,
     super.profiles,
     super.preferences,
@@ -225,263 +232,271 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
         // "Advanced" its abilities, channels, computer, the conversation,
         // the app, and the destructive actions last.
         final Widget list = SettingsListView(
-            key: const ValueKey('agent-settings'),
-            headerInset: widget.framed,
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-            children: [
-              _contact(agent, profiles),
-              const SizedBox(height: 16),
-              Center(
-                child: ExpressiveButton(
-                  key: const ValueKey('settings_Chat'),
-                  icon: Icons.chat_rounded,
-                  label: l.agentsCwActionChat,
-                  tonal: true,
-                  onTap: () {
-                    _close();
-                    widget.onChat?.call();
-                  },
+          key: const ValueKey('agent-settings'),
+          headerInset: widget.framed,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          children: [
+            _contact(agent, profiles),
+            const SizedBox(height: 16),
+            Center(
+              child: ExpressiveButton(
+                key: const ValueKey('settings_Chat'),
+                icon: Icons.chat_rounded,
+                label: l.agentsCwActionChat,
+                tonal: true,
+                onTap: () {
+                  _close();
+                  widget.onChat?.call();
+                },
+              ),
+            ),
+            // The top: what a normal user changes about an agent, in one
+            // group (bead chuk_chat-pjom, docs/SETTINGS_ORDER.md): its
+            // profile (name, face), its model, what it may do and what it
+            // made. The rest sits in one closed "Advanced" fold, in the
+            // order it had before.
+            const SizedBox(height: 16),
+            ExpressiveGroup(
+              children: [
+                _row(
+                  'Profile & preferences',
+                  l.agentsCwProfile,
+                  Icons.person_outline,
+                  widget.onEdit,
+                  subtitle: l.agentsCwProfileSubtitle,
                 ),
-              ),
-              // The top: what a normal user changes about an agent, in one
-              // group (bead chuk_chat-pjom, docs/SETTINGS_ORDER.md): its
-              // profile (name, face), its model, what it may do and what it
-              // made. The rest sits in one closed "Advanced" fold, in the
-              // order it had before.
-              const SizedBox(height: 16),
-              ExpressiveGroup(
-                children: [
+                // One row, one page: the composer of its chat writes the
+                // same choice.
+                if (widget.chatId != null)
+                  AgentModelTile(
+                    key: const ValueKey('settings_Model'),
+                    chatId: widget.chatId!,
+                    agentName: agent.name,
+                  )
+                else
                   _row(
-                    'Profile & preferences',
-                    l.agentsCwProfile,
-                    Icons.person_outline,
-                    widget.onEdit,
-                    subtitle: l.agentsCwProfileSubtitle,
+                    'Model',
+                    l.agentsCwModel,
+                    Icons.auto_awesome_outlined,
+                    () => _openModel(agent),
+                    subtitle: l.agentsCwModelSubtitle,
                   ),
-                  // One row, one page: the composer of its chat writes the
-                  // same choice.
-                  if (widget.chatId != null)
-                    AgentModelTile(
-                      key: const ValueKey('settings_Model'),
-                      chatId: widget.chatId!,
-                      agentName: agent.name,
-                    )
-                  else
-                    _row(
-                      'Model',
-                      l.agentsCwModel,
-                      Icons.auto_awesome_outlined,
-                      () => _openModel(agent),
-                      subtitle: l.agentsCwModelSubtitle,
+                _row(
+                  'Permissions',
+                  l.agentsCwPermissions,
+                  Icons.verified_rounded,
+                  () => unawaited(
+                    MobileAgentPermissionsPage.open(
+                      context,
+                      agentId: agent.id,
+                      service: widget.permissions,
                     ),
+                  ),
+                  subtitle: l.agentsCwPermissionsSubtitle,
+                ),
+                // The main agent: first in the roster, the one Home opens
+                // (roster_pins.dart). Offered while this one is not it and
+                // there is another to be it.
+                if (widget.source.visibleAgents.length > 1 &&
+                    resolveMainAgent(
+                          widget.source.visibleAgents,
+                          RosterPins.instance.mainAgentId,
+                        )?.id !=
+                        agent.id)
                   _row(
-                    'Permissions',
-                    l.agentsCwPermissions,
-                    Icons.verified_rounded,
-                    () => unawaited(
-                      MobileAgentPermissionsPage.open(
-                        context,
-                        agentId: agent.id,
-                        service: widget.permissions,
-                      ),
-                    ),
-                    subtitle: l.agentsCwPermissionsSubtitle,
+                    'Make main agent',
+                    l.agentsMakeMainAgent,
+                    Icons.star_outline_rounded,
+                    () => RosterPins.instance.setMainAgent(agent.id),
+                    subtitle: l.agentsMakeMainAgentSubtitle,
                   ),
-                  // The main agent: first in the roster, the one Home opens
-                  // (roster_pins.dart). Offered while this one is not it and
-                  // there is another to be it.
-                  if (widget.source.visibleAgents.length > 1 &&
-                      resolveMainAgent(
-                            widget.source.visibleAgents,
-                            RosterPins.instance.mainAgentId,
-                          )?.id !=
-                          agent.id)
+                if (widget.onDocuments != null)
+                  _row(
+                    'Documents & pages',
+                    l.agentsCwDocuments,
+                    Icons.folder_open_rounded,
+                    widget.onDocuments!,
+                    subtitle: l.agentsCwDocumentsSubtitle,
+                  ),
+                // Often used, so not behind Advanced (owner, 2026-11-13).
+                if (widget.onBrowser != null)
+                  _row(
+                    'Open screen',
+                    l.agentsCwOpenScreen,
+                    Icons.desktop_windows_outlined,
+                    widget.onBrowser!,
+                    subtitle: l.agentsCwScreenSubtitle,
+                  ),
+              ],
+            ),
+            ExpressiveAdvancedSection(
+              title: l.settingsAdvanced,
+              toggleKey: const ValueKey<String>('settings_Advanced'),
+              children: [
+                ExpressiveSectionHeader(l.agentsCwSectionAbilities),
+                ExpressiveGroup(
+                  children: [
                     _row(
-                      'Make main agent',
-                      l.agentsMakeMainAgent,
-                      Icons.star_outline_rounded,
-                      () => RosterPins.instance.setMainAgent(agent.id),
-                      subtitle: l.agentsMakeMainAgentSubtitle,
+                      'Skills',
+                      l.skills,
+                      Icons.extension_outlined,
+                      widget.onSkills,
+                      subtitle: l.agentsCwSkillsSubtitle,
                     ),
-                  if (widget.onDocuments != null)
                     _row(
-                      'Documents & pages',
-                      l.agentsCwDocuments,
-                      Icons.folder_open_rounded,
-                      widget.onDocuments!,
-                      subtitle: l.agentsCwDocumentsSubtitle,
+                      'Connected apps',
+                      l.agentsCwConnectedApps,
+                      Icons.link_rounded,
+                      widget.onConnectors,
                     ),
-                ],
-              ),
-              ExpressiveAdvancedSection(
-                title: l.settingsAdvanced,
-                toggleKey: const ValueKey<String>('settings_Advanced'),
-                children: [
-                  ExpressiveSectionHeader(l.agentsCwSectionAbilities),
-                  ExpressiveGroup(
-                    children: [
+                    _row(
+                      'API keys',
+                      l.agentsCwApiKeys,
+                      Icons.key_outlined,
+                      widget.onSecrets,
+                    ),
+                    _row(
+                      'Logins',
+                      l.loginVaultTitle,
+                      Icons.login,
+                      widget.onLogins ?? _openLogins,
+                      subtitle: l.loginVaultRowSubtitle,
+                    ),
+                    _row(
+                      'Schedules & automations',
+                      l.agentsCwSchedules,
+                      Icons.schedule_outlined,
+                      widget.onAutomations,
+                      subtitle: l.agentsCwSchedulesSubtitle,
+                    ),
+                  ],
+                ),
+                // Its channels: mail. There is no messenger channel.
+                ExpressiveSectionHeader(l.agentsChannels),
+                ExpressiveGroup(
+                  children: [
+                    _row(
+                      'Mail',
+                      l.agentMail,
+                      Icons.mail_outline,
+                      _openMail,
+                      subtitle: l.agentMailSubtitle,
+                    ),
+                  ],
+                ),
+                // Its computer: the host, what ran there, the screen, files.
+                ExpressiveSectionHeader(l.agentsCwSectionMachine),
+                ExpressiveGroup(
+                  children: [
+                    _HostRow(
+                      agent: agent,
+                      link: widget.link ?? AgentsRelayLink.instance,
+                    ),
+                    _row(
+                      'Host & activity',
+                      l.agentsCwHost,
+                      Icons.computer_outlined,
+                      widget.onControls,
+                      subtitle: l.agentsCwHostSubtitle,
+                    ),
+                    // checkpoints: the pins of the agent's files.
+                    if (widget.chatId case final String chat)
                       _row(
-                        'Skills',
-                        l.skills,
-                        Icons.extension_outlined,
-                        widget.onSkills,
-                        subtitle: l.agentsCwSkillsSubtitle,
-                      ),
-                      _row(
-                        'Connected apps',
-                        l.agentsCwConnectedApps,
-                        Icons.link_rounded,
-                        widget.onConnectors,
-                      ),
-                      _row(
-                        'API keys',
-                        l.agentsCwApiKeys,
-                        Icons.key_outlined,
-                        widget.onSecrets,
-                      ),
-                      _row(
-                        'Logins',
-                        l.loginVaultTitle,
-                        Icons.login,
-                        widget.onLogins ?? _openLogins,
-                        subtitle: l.loginVaultRowSubtitle,
-                      ),
-                      _row(
-                        'Schedules & automations',
-                        l.agentsCwSchedules,
-                        Icons.schedule_outlined,
-                        widget.onAutomations,
-                        subtitle: l.agentsCwSchedulesSubtitle,
-                      ),
-                    ],
-                  ),
-                  // Its channels: mail. There is no messenger channel.
-                  ExpressiveSectionHeader(l.agentsChannels),
-                  ExpressiveGroup(
-                    children: [
-                      _row(
-                        'Mail',
-                        l.agentMail,
-                        Icons.mail_outline,
-                        _openMail,
-                        subtitle: l.agentMailSubtitle,
-                      ),
-                    ],
-                  ),
-                  // Its computer: the host, what ran there, the screen, files.
-                  ExpressiveSectionHeader(l.agentsCwSectionMachine),
-                  ExpressiveGroup(
-                    children: [
-                      _HostRow(
-                        agent: agent,
-                        link: widget.link ?? AgentsRelayLink.instance,
-                      ),
-                      _row(
-                        'Host & activity',
-                        l.agentsCwHost,
-                        Icons.computer_outlined,
-                        widget.onControls,
-                        subtitle: l.agentsCwHostSubtitle,
-                      ),
-                      if (widget.onBrowser != null)
-                        _row(
-                          'Open screen',
-                          l.agentsCwOpenScreen,
-                          Icons.desktop_windows_outlined,
-                          widget.onBrowser!,
-                          subtitle: l.agentsCwScreenSubtitle,
-                        ),
-                      // checkpoints: the pins of the agent's files.
-                      if (widget.chatId case final String chat)
-                        _row(
-                          'Checkpoints',
-                          l.ckTitle,
-                          Icons.history,
-                          () => unawaited(
-                            showAgentsCheckpointsSheet(
-                              context,
-                              sessionKey: chat,
-                              agentName: agent.name,
-                            ),
+                        'Checkpoints',
+                        l.ckTitle,
+                        Icons.history,
+                        () => unawaited(
+                          showAgentsCheckpointsSheet(
+                            context,
+                            sessionKey: chat,
+                            agentName: agent.name,
                           ),
-                          subtitle: l.ckIntro,
                         ),
-                    ],
-                  ),
-                  ExpressiveSectionHeader(l.agentsCwConversation),
-                  ExpressiveGroup(
-                    children: [
-                      _switch(
-                        l.agentsCwShowThinking,
-                        l.agentsCwShowThinkingSubtitle,
-                        Icons.more_horiz,
-                        _preferences.showThinking,
-                        _preferences.setThinking,
-                        'mobile_show_thinking',
+                        subtitle: l.ckIntro,
                       ),
-                      _switch(
-                        l.agentsCwShowWork,
-                        l.agentsCwShowWorkSubtitle,
-                        Icons.code_rounded,
-                        _preferences.showActivity,
-                        _preferences.setActivity,
-                        'mobile_show_activity',
-                      ),
-                      if (widget.onCopyChat != null)
-                        _row(
-                          'Export conversation',
-                          l.agentsCwExport,
-                          Icons.ios_share_rounded,
-                          widget.onCopyChat!,
-                        ),
-                    ],
-                  ),
-                  ExpressiveSectionHeader(l.agentsCwApp),
-                  ExpressiveGroup(
-                    children: [
+                  ],
+                ),
+                ExpressiveSectionHeader(l.agentsCwConversation),
+                ExpressiveGroup(
+                  children: [
+                    _switch(
+                      l.agentsCwShowThinking,
+                      l.agentsCwShowThinkingSubtitle,
+                      Icons.more_horiz,
+                      _preferences.showThinking,
+                      _preferences.setThinking,
+                      'mobile_show_thinking',
+                    ),
+                    _switch(
+                      l.agentsCwShowWork,
+                      l.agentsCwShowWorkSubtitle,
+                      Icons.code_rounded,
+                      _preferences.showActivity,
+                      _preferences.setActivity,
+                      'mobile_show_activity',
+                    ),
+                    if (widget.onCopyChat != null)
                       _row(
-                        'Control rooms',
-                        l.agentsCwControlRooms,
-                        Icons.group_outlined,
-                        widget.onRooms,
+                        'Export conversation',
+                        l.agentsCwExport,
+                        Icons.ios_share_rounded,
+                        widget.onCopyChat!,
                       ),
+                  ],
+                ),
+                ExpressiveSectionHeader(l.agentsCwApp),
+                ExpressiveGroup(
+                  children: [
+                    _row(
+                      'Control rooms',
+                      l.agentsCwControlRooms,
+                      Icons.group_outlined,
+                      widget.onRooms,
+                    ),
+                    if (widget.onMedia case final VoidCallback onMedia)
                       _row(
-                        'Account & app settings',
-                        l.agentsCwAccountSettings,
-                        Icons.settings_outlined,
-                        widget.onSettings,
-                        subtitle: l.agentsCwAccountSettingsSubtitle,
+                        'Media',
+                        l.media,
+                        Icons.photo_library_outlined,
+                        onMedia,
                       ),
-                    ],
-                  ),
-                  // The destructive actions, last.
-                  ExpressiveSectionHeader(
-                    l.agentsCwSectionDanger,
-                    color: scheme.error,
-                  ),
-                  ExpressiveGroup(
-                    children: [
-                      _row(
-                        'Hide',
-                        l.agentsCwHide,
-                        Icons.visibility_off_outlined,
-                        () => _hide(agent),
-                        subtitle: l.agentsCwHideSubtitle,
+                    _row(
+                      'Account & app settings',
+                      l.agentsCwAccountSettings,
+                      Icons.settings_outlined,
+                      widget.onSettings,
+                      subtitle: l.agentsCwAccountSettingsSubtitle,
+                    ),
+                  ],
+                ),
+                // The destructive actions, last.
+                ExpressiveSectionHeader(
+                  l.agentsCwSectionDanger,
+                  color: scheme.error,
+                ),
+                ExpressiveGroup(
+                  children: [
+                    _row(
+                      'Hide',
+                      l.agentsCwHide,
+                      Icons.visibility_off_outlined,
+                      () => _hide(agent),
+                      subtitle: l.agentsCwHideSubtitle,
+                    ),
+                    if (widget.onDelete != null)
+                      ExpressiveRow(
+                        key: const ValueKey('settings_Remove'),
+                        icon: Icons.delete_outline,
+                        tone: scheme.errorContainer,
+                        title: l.agentsCwRemoveAgent,
+                        onTap: () => _remove(agent),
                       ),
-                      if (widget.onDelete != null)
-                        ExpressiveRow(
-                          key: const ValueKey('settings_Remove'),
-                          icon: Icons.delete_outline,
-                          tone: scheme.errorContainer,
-                          title: l.agentsCwRemoveAgent,
-                          onTap: () => _remove(agent),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          );
+                  ],
+                ),
+              ],
+            ),
+          ],
+        );
         if (!widget.framed) return list;
         return FloatingPageScaffold(
           appBar: FloatingAppBar(
@@ -502,9 +517,8 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
 
   /// The agent's mailbox. The address belongs to the account, so every
   /// agent opens the same mailbox.
-  void _openMail() => unawaited(
-    openSettingsSurface(context, (_) => const AgentMailboxPage()),
-  );
+  void _openMail() =>
+      unawaited(openSettingsSurface(context, (_) => const AgentMailboxPage()));
 
   /// Hides the agent from the list. It keeps its session; the page closes.
   void _hide(AgentsAgent agent) {

@@ -338,7 +338,7 @@ void main() {
     });
   });
 
-  group('actions: no Resend, Retry only on a failed request', () {
+  group('actions: no Resend, Retry on chuk_chat answers only', () {
     final MessageActionsHandler handler = MessageActionsHandler();
 
     List<String> ai({bool failed = false, bool agents = false}) => handler
@@ -364,8 +364,12 @@ void main() {
       expect(labels, containsAll(<String>['Copy', 'Edit']));
     });
 
-    test('a good answer has no Retry', () {
-      expect(ai(), isNot(contains('Retry')));
+    test('a good chuk_chat answer offers Retry too (owner, 2026-11-13)', () {
+      expect(ai(), contains('Retry'));
+    });
+
+    test('a good Agents answer has no Retry', () {
+      expect(ai(agents: true), isNot(contains('Retry')));
     });
 
     test('a failed chuk_chat answer offers Retry', () {

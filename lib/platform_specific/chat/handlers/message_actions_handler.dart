@@ -119,17 +119,20 @@ class MessageActionsHandler {
       // loading, playing and paused states.
     }
 
-    // Retry only where a request really failed (provider error, broken or
-    // cut stream): [failed]. A good answer has nothing to retry. An Agents
-    // thread never offers it: the host retries a failed run on its own.
-    if (!isAssistantPending && failed && !agentsThread) {
+    // Every answer of a chuk_chat chat can be asked for again (owner,
+    // 2026-11-13): a failed one to get an answer at all, a good one to get
+    // another version. An Agents thread never offers it: the host retries
+    // a failed run on its own.
+    if (!isAssistantPending && !agentsThread) {
       final shouldUsePassRetry = canRetryToolPass && onRetryToolPass != null;
       actions.add(
         MessageBubbleAction(
           icon: Icons.replay,
           tooltip: shouldUsePassRetry
               ? 'Retry from failed tool step'
-              : 'Retry response',
+              : failed
+              ? 'Retry response'
+              : 'Answer again',
           label: 'Retry',
           onPressed: () {
             if (shouldUsePassRetry) {

@@ -56,7 +56,9 @@ void main() {
     await tester.pumpWidget(
       _app(const ChatTitleStrip(entries: _entries, selectedId: 'b')),
     );
-    final Rect bar = tester.getRect(find.byType(AnimatedContainer));
+    final Rect bar = tester.getRect(
+      find.byKey(const ValueKey<String>('chat_title_strip_pill')),
+    );
     final Rect face = tester.getRect(
       find.byKey(const ValueKey<String>('face_b')),
     );
@@ -74,7 +76,7 @@ void main() {
     expect(find.text('Gamma'), findsNothing);
   });
 
-  testWidgets('the pill is as wide as its content and the face fills it', (
+  testWidgets('the pill takes the full row and the face fills its start', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(400, 800);
@@ -84,10 +86,11 @@ void main() {
       _app(const ChatTitleStrip(entries: _entries, selectedId: 'b')),
     );
     final Rect row = tester.getRect(find.byType(ChatTitleStrip));
-    final Rect bar = tester.getRect(find.byType(AnimatedContainer));
-    // A short title makes a short pill at the left edge, not a full row.
-    expect(bar.width, lessThan(row.width * 0.75));
-    expect(bar.left - row.left, lessThan(16));
+    final Rect bar = tester.getRect(
+      find.byKey(const ValueKey<String>('chat_title_strip_pill')),
+    );
+    // The pill takes the row, also for a short title (owner, 2026-11-13).
+    expect(bar.width, row.width);
     // Nothing is cut: the title and the last line are both whole.
     final Rect title = tester.getRect(find.text('Beta'));
     final Rect dots = tester.getRect(
@@ -108,32 +111,6 @@ void main() {
     expect(slot.height, 44);
     expect(slot.top - bar.top, bar.bottom - slot.bottom);
     expect(slot.left - bar.left, slot.top - bar.top);
-  });
-
-  testWidgets('a long last line stops at 72 % of the screen', (
-    WidgetTester tester,
-  ) async {
-    tester.view.physicalSize = const Size(400, 800);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(
-      _app(
-        ChatTitleStrip(
-          entries: <SwipeChatEntry>[
-            SwipeChatEntry(
-              id: 'x',
-              title: 'Mail',
-              subtitle: 'a very long last line ' * 8,
-            ),
-          ],
-          selectedId: 'x',
-        ),
-      ),
-    );
-    expect(
-      tester.getSize(find.byType(AnimatedContainer)).width,
-      moreOrLessEquals(400 * 0.72, epsilon: 0.5),
-    );
   });
 
   testWidgets('unread shows as a dot next to the title', (

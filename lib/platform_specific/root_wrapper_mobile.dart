@@ -40,7 +40,7 @@ import 'package:chuk_chat/widgets/icons/huge_icon.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart'
     show sbChatDateLine;
 import 'package:chuk_chat/widgets/sidebar/sidebar_common.dart'
-    show deriveSidebarChatTitle, kSidebarAddComputerLabel;
+    show deriveSidebarChatTitle;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
@@ -914,165 +914,6 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     _handleChatSelected(id, keepKeyboard: true);
   }
 
-  /// The menu chip: the pages the sidebar used to hold.
-  void _openSwipeMenu() {
-    FocusManager.instance.primaryFocus?.unfocus();
-    final AppLocalizations? l = AppLocalizations.of(context);
-    final VoidCallback? onAddComputer = widget.onAddComputer;
-    final String? current = _selectedChatId;
-    unawaited(
-      showMobileMenuSheet(
-        context,
-        shortcuts: <MobileMenuItem>[
-          MobileMenuItem(
-            icon: Icons.settings,
-            label: l?.settings ?? 'Settings',
-            onTap: _openSettingsPage,
-          ),
-          if (kFeatureMediaManager)
-            MobileMenuItem(
-              icon: Icons.image_rounded,
-              label: l?.media ?? 'Media',
-              onTap: _openMediaPage,
-            ),
-          if (workspacesEnabled)
-            MobileMenuItem(
-              icon: Icons.folder_rounded,
-              label: l?.workspaces ?? 'Workspaces',
-              onTap: _openWorkspacesPage,
-            ),
-          if (onAddComputer != null)
-            MobileMenuItem(
-              icon: Icons.computer,
-              label: kSidebarAddComputerLabel,
-              onTap: onAddComputer,
-            ),
-        ],
-        // The chat in view; there is no list to do it from any more.
-        sectionTitle: current == null ? null : _titleOfChat(current),
-        items: <MobileMenuItem>[
-          if (current != null)
-            MobileMenuItem(
-              icon: Icons.edit_outlined,
-              label: l?.chatSwipeRename ?? 'Rename',
-              onTap: () => unawaited(_renameCurrentChat(current)),
-            ),
-          MobileMenuItem(
-            icon: Icons.copy_all,
-            label: l?.chatSwipeCopyChat ?? 'Copy full chat',
-            onTap: _copyDebugChat,
-          ),
-          if (current != null)
-            MobileMenuItem(
-              icon: Icons.delete_outline_rounded,
-              label: l?.delete ?? 'Delete',
-              destructive: true,
-              onTap: () => unawaited(_deleteCurrentChat(current)),
-            ),
-        ],
-      ),
-    );
-  }
-
-  /// The title the strip shows for [chatId], for the menu's section header.
-  String? _titleOfChat(String chatId) {
-    final StoredChat? chat = ChatStorageService.getChatById(chatId);
-    return chat == null ? null : deriveSidebarChatTitle(chat);
-  }
-
-  /// The sidebar's delete path ([SidebarStateCommon]): the same question,
-  /// the same store call, then the same reset of the chat in view.
-  Future<void> _deleteCurrentChat(String chatId) async {
-    final StoredChat? chat = ChatStorageService.getChatById(chatId);
-    if (chat == null) return;
-    final String derivedTitle = deriveSidebarChatTitle(chat);
-    final String chatTitle = derivedTitle.length > 40
-        ? '${derivedTitle.substring(0, 40)}...'
-        : derivedTitle;
-    final bool? shouldDelete = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext dialogContext) => AlertDialog(
-        title: const Text('Delete chat?'),
-        content: Text(
-          '"$chatTitle"\n\nThis will be removed forever. Once deleted, it '
-          'cannot be recovered.',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-    if (shouldDelete != true || !mounted) return;
-    final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(
-      context,
-    );
-    try {
-      await ChatStorageService.deleteChat(chatId);
-    } on StateError catch (error) {
-      if (messenger != null) AppNotifications.showOn(messenger, error.message);
-      return;
-    } catch (error) {
-      if (messenger != null) {
-        AppNotifications.showOn(
-          messenger,
-          'Failed to delete chat: $error',
-          kind: AppNotificationKind.error,
-        );
-      }
-      return;
-    }
-    if (!mounted) return;
-    await _handleChatDeleted(chatId);
-    if (!mounted || messenger == null) return;
-    final String shown = chatTitle.length > 30
-        ? '${chatTitle.substring(0, 30)}...'
-        : chatTitle;
-    AppNotifications.showOn(messenger, '"$shown" deleted');
-  }
-
-  /// The sidebar's rename path ([SidebarStateCommon]).
-  Future<void> _renameCurrentChat(String chatId) async {
-    final StoredChat? chat = ChatStorageService.getChatById(chatId);
-    if (chat == null) return;
-    final String oldName = deriveSidebarChatTitle(chat);
-    // The dialog owns its text controller: it is still built during the
-    // route's exit animation, after showDialog has returned.
-    final String? newName = await showDialog<String>(
-      context: context,
-      builder: (BuildContext dialogContext) =>
-          _RenameChatDialog(initial: oldName),
-    );
-    if (newName == null || newName.isEmpty || newName == oldName) return;
-    if (!mounted) return;
-    final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(
-      context,
-    );
-    try {
-      await ChatStorageService.renameChat(chatId, newName);
-    } on StateError catch (error) {
-      if (messenger != null) AppNotifications.showOn(messenger, error.message);
-      return;
-    } catch (error) {
-      if (messenger != null) {
-        AppNotifications.showOn(
-          messenger,
-          'Failed to rename chat: $error',
-          kind: AppNotificationKind.error,
-        );
-      }
-      return;
-    }
-    if (mounted) setState(() {});
-  }
-
   /// Swipe mode's screen: the one chat view inside the pager, and the top
   /// bar lying over it. The sidebar slides over both ([build]).
   Widget _buildSwipeContent(BuildContext context) {
@@ -1087,10 +928,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       onMenu: _toggleSidebar,
       menuBadge: badge,
       centre: widget.headerCenter,
-      onMore: _openSwipeMenu,
       onAdd: _newChatFromAppBar,
       menuTooltip: l?.chatSwipeMenu ?? 'Menu',
-      moreTooltip: l?.chatSwipeMore ?? 'More actions',
       addTooltip: l?.newChat ?? 'New chat',
       strip: ChatTitleStrip(
         entries: entries,

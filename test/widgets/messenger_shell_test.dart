@@ -417,13 +417,43 @@ void main() {
   /// behind Home.
   final Finder conversation = find.byType(AgentsThreadView);
 
-  /// On a phone: opens the menu chip's sheet and taps the row [label].
+  /// On a phone: a tap on the agent's name opens its settings page, the
+  /// one place for everything about the agent. Then taps the row [label].
+  /// 'Agent profile' is the page itself.
   Future<void> tapPhoneMenu(WidgetTester tester, String label) async {
-    await tester.tap(find.byTooltip('More actions'));
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.descendant(of: find.byType(BottomSheet), matching: find.text(label)),
+    if (find.byType(MobileAgentsSettingsPage).evaluate().isEmpty) {
+      await tester.tap(
+        find.byKey(const ValueKey<String>('phone-agents-strip')),
+      );
+      await tester.pumpAndSettle();
+    }
+    if (label == 'Agent profile') return;
+    final Finder row = find.descendant(
+      of: find.byType(MobileAgentsSettingsPage),
+      matching: find.text(label),
     );
+    final Finder advanced = find.byKey(
+      const ValueKey<String>('settings_Advanced'),
+    );
+    if (row.evaluate().isEmpty && advanced.evaluate().isNotEmpty) {
+      // The rarely used rows are folded behind Advanced.
+      await tester.ensureVisible(advanced);
+      await tester.pumpAndSettle();
+      await tester.tap(advanced);
+      await tester.pumpAndSettle();
+    }
+    await tester.scrollUntilVisible(
+      row,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(MobileAgentsSettingsPage),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(row);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
   }
@@ -1192,7 +1222,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(BrowserViewPage), findsNothing);
 
-      await tapPhoneMenu(tester, 'Files');
+      await tapPhoneMenu(tester, 'Documents & pages');
       await tester.pumpAndSettle();
       final explorer = tester.widget<ChatDocumentsPanel>(
         find.byType(ChatDocumentsPanel),
@@ -1218,8 +1248,9 @@ void main() {
       Future<bool> usesUserBrowser() async {
         await tapPhoneMenu(tester, 'Open screen');
         final bool said = find.textContaining(ownBrowser).evaluate().isNotEmpty;
-        ScaffoldMessenger.of(tester.element(find.byType(SwipeChatPager)))
-            .clearSnackBars();
+        ScaffoldMessenger.of(
+          tester.element(find.byType(MobileAgentsSettingsPage)),
+        ).clearSnackBars();
         await tester.pumpAndSettle();
         return said;
       }
@@ -1572,8 +1603,8 @@ void main() {
       expect(controllerBuilds, 1);
     });
 
-    testWidgets('a tap on the strip opens no list; a drag on the strip '
-        'selects the next agent', (tester) async {
+    testWidgets('a tap on the strip opens the agent\'s settings; a drag on '
+        'the strip selects the next agent', (tester) async {
       final (controller, roster) = await pumpShell(
         tester,
         size: const Size(420, 900),
@@ -1598,6 +1629,16 @@ void main() {
       await tester.tapAt(bar.center);
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsNothing);
+      expect(
+        tester
+            .widget<MobileAgentsSettingsPage>(
+              find.byType(MobileAgentsSettingsPage),
+            )
+            .agentId,
+        host.id,
+      );
+      await tester.pageBack();
+      await tester.pumpAndSettle();
       expect(strip(tester).selectedId, host.id);
 
       await tester.timedDrag(
@@ -1801,9 +1842,8 @@ void main() {
       expect(find.byType(MessengerShell), findsOneWidget);
     });
 
-    testWidgets('the menu opens Settings, Media and Control Rooms', (
-      tester,
-    ) async {
+    testWidgets('a tap on the agent opens its settings, with Media and '
+        'Control Rooms in them', (tester) async {
       final (controller, _) = await pumpShell(
         tester,
         size: const Size(420, 900),
@@ -1811,13 +1851,12 @@ void main() {
       controller.pair();
       await tester.pumpAndSettle();
 
-      // A shell without chuk's config: Settings is the agent's own page.
-      await tapPhoneMenu(tester, 'Settings');
-      await tester.pumpAndSettle();
+      // A tap on the agent's name opens its settings page; there is no
+      // "..." chip.
+      expect(find.byTooltip('More actions'), findsNothing);
+      await tapPhoneMenu(tester, 'Agent profile');
       expect(find.byType(MobileAgentsSettingsPage), findsOneWidget);
       expect(find.byType(SettingsPage), findsNothing);
-      await tester.pageBack();
-      await tester.pumpAndSettle();
 
       await tapPhoneMenu(tester, 'Media');
       await tester.pumpAndSettle();

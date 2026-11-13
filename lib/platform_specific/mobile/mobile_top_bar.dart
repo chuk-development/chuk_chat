@@ -58,10 +58,8 @@ class MobileTopBar extends StatelessWidget {
     required this.centre,
     required this.onAdd,
     this.strip,
-    this.onMore,
     this.menuBadge = false,
     this.menuTooltip = 'Menu',
-    this.moreTooltip = 'More',
     this.addTooltip = 'New chat',
     this.addIcon = Icons.edit_square,
   });
@@ -81,13 +79,11 @@ class MobileTopBar extends StatelessWidget {
 
   /// What to do with the chat in view: the chip at the end of the pill row.
   /// Null hides it.
-  final VoidCallback? onMore;
 
   /// The [ChatTitleStrip] of the half. Null (Home) leaves the row alone.
   final Widget? strip;
 
   final String menuTooltip;
-  final String moreTooltip;
   final String addTooltip;
   final IconData addIcon;
 
@@ -180,15 +176,6 @@ class MobileTopBar extends StatelessWidget {
                       // menu chip (a 42 px chip in a 48 px press).
                       const SizedBox(width: 3),
                       Expanded(child: strip),
-                      if (onMore != null) ...<Widget>[
-                        const SizedBox(width: 4),
-                        FloatingHeaderButton(
-                          icon: Icons.more_horiz_rounded,
-                          onPressed: onMore,
-                          tooltip: moreTooltip,
-                          semanticsId: 'mobile_more_button',
-                        ),
-                      ],
                     ],
                   ),
                 ),

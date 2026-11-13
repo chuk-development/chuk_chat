@@ -4,17 +4,13 @@
 /// drag on the bar drives the [SwipeChatPager] below through its
 /// [SwipeChatPagerController], and chat and title move together.
 ///
-/// Shape (redesign 2026-11-13, owner: "too long, bigger face"): one pill
-/// at the left edge that is only as wide as its content, with a large face
-/// that fills the round start of the pill.
+/// Shape (owner, 2026-11-13): one pill over the full width of the row, with
+/// a large face that fills the round start of the pill.
 ///
 /// ```
 /// (( face ) Title of the chat   • ━ • • )
 ///           last line or status
 /// ```
-///
-/// The title sets the width. A long last line does not: it gets at most
-/// [_kSubtitleShare] of the row and is cut with an ellipsis.
 ///
 /// At rest the neighbours are not drawn: a centred carousel pushed the
 /// title to the middle and left a wide empty band on the left. The position
@@ -50,17 +46,11 @@ const double _kLeadingSize = 44;
 /// the round start of the pill.
 const double _kLeadingInset = (kChatTitleStripHeight - _kLeadingSize) / 2;
 
-/// The most of the row a pill takes when only its last line is long.
-const double _kSubtitleShare = 0.72;
-
-/// How long the pill takes to grow or shrink to the next entry's width.
-const Duration _kResize = Duration(milliseconds: 180);
-
 /// The gap between two titles of the carousel, in logical pixels.
 const double _kTitleGap = 24;
 
 /// The most dots the position row shows at once.
-const int _kMaxDots = 5;
+const int _kMaxDots = 3;
 
 /// The bar that names the entry in view.
 class ChatTitleStrip extends StatelessWidget {
@@ -210,29 +200,13 @@ class ChatTitleStrip extends StatelessWidget {
     );
 
     final Color fill = FloatingChromeSurface.fillOf(context);
-    final double natural = _naturalWidth(
-      context,
-      entry,
-      dots ? entries.length : 0,
-    );
-    Widget bar = LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints box) => Align(
-        alignment: AlignmentDirectional.centerStart,
-        heightFactor: 1,
-        child: AnimatedContainer(
-          duration: _kResize,
-          curve: Curves.easeOutCubic,
-          width: _fitWidth(natural, box.maxWidth),
-          height: kChatTitleStripHeight,
-          padding: const EdgeInsetsDirectional.only(end: _kEndPadding),
-          decoration: ShapeDecoration(
-            color: fill,
-            shape: const StadiumBorder(),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: content,
-        ),
-      ),
+    Widget bar = Container(
+      key: const ValueKey<String>('chat_title_strip_pill'),
+      height: kChatTitleStripHeight,
+      padding: const EdgeInsetsDirectional.only(end: _kEndPadding),
+      decoration: ShapeDecoration(color: fill, shape: const StadiumBorder()),
+      clipBehavior: Clip.antiAlias,
+      child: content,
     );
 
     final bool hasNext = index >= 0 && index < entries.length - 1;
@@ -283,12 +257,6 @@ class ChatTitleStrip extends StatelessWidget {
 
 const double _kEndPadding = 18;
 
-/// The width the pill takes in a row of [available] pixels.
-double _fitWidth(double natural, double available) {
-  if (!available.isFinite) return natural;
-  return math.min(natural, available);
-}
-
 TextStyle _titleStyle(BuildContext context) {
   final ThemeData theme = Theme.of(context);
   // Title medium, emphasized: the one key element of the bar.
@@ -308,48 +276,6 @@ TextStyle _subtitleStyle(BuildContext context) {
     height: 1.25,
     color: theme.colorScheme.onSurfaceVariant,
   );
-}
-
-double _textWidth(BuildContext context, String text, TextStyle style) {
-  final TextPainter painter = TextPainter(
-    text: TextSpan(text: text, style: style),
-    maxLines: 1,
-    textDirection: Directionality.of(context),
-    textScaler: MediaQuery.textScalerOf(context),
-  )..layout();
-  final double width = painter.width;
-  painter.dispose();
-  return width;
-}
-
-/// The width the pill wants for [entry]: its face, its title, and as much
-/// of the last line as [_kSubtitleShare] of the screen allows.
-double _naturalWidth(
-  BuildContext context,
-  SwipeChatEntry? entry,
-  int dotCount,
-) {
-  final double start = entry?.leading != null
-      ? _kLeadingInset + _kLeadingSize + 12
-      : 20;
-  final double end =
-      _kEndPadding + (dotCount > 0 ? 12 + _PositionDots.widthFor(dotCount) : 0);
-  double title = _textWidth(context, entry?.title ?? '', _titleStyle(context));
-  if (entry != null && entry.unread) title += 13;
-  double second = 0;
-  if (entry != null && entry.working) {
-    // Three dots, a gap and the word.
-    second = 28 + _textWidth(context, 'working', _subtitleStyle(context));
-  } else if (entry?.subtitle case final String subtitle
-      when subtitle.isNotEmpty) {
-    second = _textWidth(context, subtitle, _subtitleStyle(context));
-  }
-  // One pixel of slack: a width measured here and laid out again must not
-  // cut the last glyph.
-  final double titleWidth = start + title + end + 1;
-  final double capped = MediaQuery.sizeOf(context).width * _kSubtitleShare;
-  final double secondWidth = math.min(start + second + end + 1, capped);
-  return math.max(titleWidth, secondWidth);
 }
 
 /// Face · title over subtitle (or the working dots), left-aligned.
