@@ -154,6 +154,7 @@ from chuk_agents_runtime.cost import (
     day_start,
     metered,
     round_eur,
+    with_context,
     usage_split,
     week_start,
 )
@@ -7056,7 +7057,10 @@ class Executor:
                             cached_tokens=timings.cached_tokens,
                             cost_eur=run_cost,
                         )
-                    run.cost = cost_block(store.usage_lines(run.run_id))
+                    run.cost = with_context(
+                        cost_block(store.usage_lines(run.run_id)),
+                        timings and timings.as_row(),
+                    )
                 return run_stamp_fields(store.get_run(run.run_id))
             finally:
                 store.close()

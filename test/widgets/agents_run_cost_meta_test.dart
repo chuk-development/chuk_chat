@@ -82,6 +82,34 @@ Widget _item(List<ToolCall> calls, {String text = 'the answer'}) =>
     );
 
 void main() {
+  testWidgets('the line names the context and says when it was compacted', (
+    WidgetTester tester,
+  ) async {
+    final AgentsRunCost cost = AgentsRunCost.fromJson(<String, dynamic>{
+      'input_tokens': 5000,
+      'output_tokens': 150,
+      'context': <String, dynamic>{
+        'tokens': 41000,
+        'window': 200000,
+        'compacted': true,
+      },
+    })!;
+    expect(cost.contextPercent, 21);
+    await tester.pumpWidget(_app(AgentsRunCostMeta(cost: cost)));
+    await tester.pumpAndSettle();
+    final String line = tester.widget<Text>(find.byType(Text)).data!;
+    expect(line, contains('Context 41k / 200k (21%)'));
+    expect(line, endsWith('Context compacted'));
+
+    // An old host sends no context: the line is what it was.
+    await tester.pumpWidget(_app(AgentsRunCostMeta(cost: _cost(eur: null))));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<Text>(find.byType(Text)).data,
+      isNot(contains('Context')),
+    );
+  });
+
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });

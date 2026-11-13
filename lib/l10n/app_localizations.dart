@@ -1304,6 +1304,14 @@ class AppLocalizations {
   String get approvalsNotConnected => _get('approvalsNotConnected');
   String runCostTokens(String count) =>
       _get('runCostTokens').replaceAll('{count}', count);
+  String runCostContext(String used) =>
+      _get('runCostContext').replaceAll('{used}', used);
+  String runCostContextOf(String used, String window, String percent) =>
+      _get('runCostContextOf')
+          .replaceAll('{used}', used)
+          .replaceAll('{window}', window)
+          .replaceAll('{percent}', percent);
+  String get runCostCompacted => _get('runCostCompacted');
   String get runCostSheetTitle => _get('runCostSheetTitle');
   String get runCostTotal => _get('runCostTotal');
   String get runCostLineRun => _get('runCostLineRun');

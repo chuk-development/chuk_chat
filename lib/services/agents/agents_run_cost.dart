@@ -79,7 +79,27 @@ class AgentsRunCost {
     this.cachedTokens = 0,
     this.lines = const <AgentsRunCostLine>[],
     this.raw = const <String, dynamic>{},
+    this.contextTokens = 0,
+    this.contextWindow = 0,
+    this.compacted = false,
   });
+
+  /// What the context held when the run ended (wire `cost.context.tokens`):
+  /// the prompt tokens of the run's last model request. 0 on an old host.
+  final int contextTokens;
+
+  /// The model's context length (wire `cost.context.window`). 0 = not known.
+  final int contextWindow;
+
+  /// The host replaced old messages by a summary since the thread's last run
+  /// (wire `cost.context.compacted`).
+  final bool compacted;
+
+  /// How full the context is, 0 to 100. Null when the window is not known.
+  int? get contextPercent {
+    if (contextTokens <= 0 || contextWindow <= 0) return null;
+    return (contextTokens * 100 / contextWindow).round().clamp(0, 100);
+  }
 
   final String currency;
   final double? eur;
@@ -107,7 +127,11 @@ class AgentsRunCost {
         for (final Object? line in map['lines'] as List)
           ?AgentsRunCostLine.fromJson(line),
     ];
+    final Object? context = map['context'];
     final cost = AgentsRunCost(
+      contextTokens: context is Map ? (_int(context['tokens']) ?? 0) : 0,
+      contextWindow: context is Map ? (_int(context['window']) ?? 0) : 0,
+      compacted: context is Map && context['compacted'] == true,
       currency: _text(map['currency']) ?? 'EUR',
       eur: _eur(map['eur']),
       inputTokens: _int(map['input_tokens']) ?? 0,

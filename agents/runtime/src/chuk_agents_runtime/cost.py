@@ -397,6 +397,7 @@ __all__ = [
     "UsageSink",
     "budget_state",
     "cost_block",
+    "with_context",
     "cost_eur",
     "day_start",
     "metered",
@@ -405,3 +406,25 @@ __all__ = [
     "valid_budget",
     "week_start",
 ]
+
+
+def with_context(
+    block: dict[str, Any] | None, row: Mapping[str, Any] | None
+) -> dict[str, Any] | None:
+    """``block`` with the run's ``context`` added: ``tokens`` (what the context
+    held when the run ended), ``window`` (the model's context length) and
+    ``compacted``. ``row`` is the ``runs`` row or ``RunTimings.as_row()``.
+    A run with no cost block, or with no context tokens, is returned as is."""
+    if not block or not row:
+        return block
+    tokens = int(row.get("context_tokens") or 0)
+    if tokens <= 0:
+        return block
+    context: dict[str, Any] = {
+        "tokens": tokens,
+        "compacted": bool(row.get("compacted")),
+    }
+    window = int(row.get("context_window") or 0)
+    if window > 0:
+        context["window"] = window
+    return {**block, "context": context}

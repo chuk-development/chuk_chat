@@ -27,7 +27,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from .cost import cost_block
+from .cost import cost_block, with_context
 from .search import ensure_fts_schema, register_functions, search_messages
 from .sqlite_tuning import tune_connection
 from .sources import REPLAYED_CONTEXT_SOURCES, valid_source
@@ -136,6 +136,12 @@ CREATE TABLE IF NOT EXISTS runs (
     -- rebuild (``prepare_ms``) left out. 0 = not reported / not measured.
     cached_tokens  INTEGER NOT NULL DEFAULT 0,
     first_token_ms INTEGER NOT NULL DEFAULT 0,
+    -- What the context held when the run ended: prompt tokens of the last
+    -- model request, the model's context length, 1 = a new summary replaced
+    -- old messages since the session's last run. 0 = not known.
+    context_tokens INTEGER NOT NULL DEFAULT 0,
+    context_window INTEGER NOT NULL DEFAULT 0,
+    compacted      INTEGER NOT NULL DEFAULT 0,
     -- The split of ``tokens_spent`` and what the run's own model calls cost in
     -- euro at the price the API bills (chuk_agents_runtime.cost, bead
     -- chuk_chat-qcbv). ``cost_eur`` NULL = not priced (no price list, or a
@@ -208,6 +214,10 @@ RUNS_MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("prompt_tokens", "INTEGER NOT NULL DEFAULT 0"),
     ("completion_tokens", "INTEGER NOT NULL DEFAULT 0"),
     ("cost_eur", "REAL"),
+    # What the context held when the run ended (cost.context_block).
+    ("context_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ("context_window", "INTEGER NOT NULL DEFAULT 0"),
+    ("compacted", "INTEGER NOT NULL DEFAULT 0"),
     # An old database can also have a ``changes_json`` column. Nothing reads
     # or writes it; it stays so that no migration drops user data.
 )
@@ -225,6 +235,9 @@ RUN_TIMING_COLUMNS: tuple[str, ...] = (
     "first_token_ms",
     "prompt_tokens",
     "completion_tokens",
+    "context_tokens",
+    "context_window",
+    "compacted",
 )
 
 #: Run states (the ``runs.state`` column).
@@ -1258,7 +1271,7 @@ class StateStore:
             )
             # What the run cost (docs/WIRE_CONTRACT.md, "Cost per run and
             # weekly budget"): the same block a live done carries.
-            cost = cost_block(lines.get(r["run_id"], []))
+            cost = with_context(cost_block(lines.get(r["run_id"], [])), dict(r))
             if cost:
                 events[-1]["cost"] = cost
         return events

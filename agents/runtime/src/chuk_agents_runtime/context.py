@@ -445,6 +445,23 @@ class AuxSummarizer:
 # -- configuration ------------------------------------------------------------
 
 
+#: A window below this many tokens summarises later, at
+#: ``SMALL_WINDOW_TIER2`` of the budget instead of at half (the rule Hermes
+#: Agent uses). At 50 % a 128k to 262k model summarised with only 64k to 131k
+#: used. The part that cannot shrink (system prompt, tool schemas, the tail,
+#: the summary itself) took most of the room that came back, so the next
+#: summary was due one or two turns later: each one costs an aux call and a
+#: miss of the provider's prompt cache for the whole prefix. A window of 512k
+#: and more keeps 50 %: a 1M model summarises near 500k.
+SMALL_WINDOW_LIMIT = 512_000
+SMALL_WINDOW_TIER2 = 0.75
+
+
+def small_window_tier2(context_length: int, default: float = 0.50) -> float:
+    """The tier-2 threshold for a model with this context window."""
+    return max(default, SMALL_WINDOW_TIER2) if context_length < SMALL_WINDOW_LIMIT else default
+
+
 @dataclass(frozen=True)
 class LadderConfig:
     """Every knob of the ladder. Defaults are the plan's numbers."""
@@ -551,10 +568,14 @@ class LadderConfig:
         output cap, which would leave nothing for the input."""
         ctx = _positive_int(context_length)
         if ctx is None:
-            return cls()
+            return cls(tier2_threshold=small_window_tier2(DEFAULT_CONTEXT_LENGTH))
         quarter = max(1, ctx // 4)
         out = _positive_int(max_output_tokens) or DEFAULT_RESERVED_OUTPUT
-        return cls(context_length=ctx, reserved_output=min(out, quarter))
+        return cls(
+            context_length=ctx,
+            reserved_output=min(out, quarter),
+            tier2_threshold=small_window_tier2(ctx),
+        )
 
     @property
     def tier1_step(self) -> int:

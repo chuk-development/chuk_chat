@@ -173,3 +173,85 @@ def test_writer_uses_a_fresh_client_and_closes_it():
     write = make_interim_writer(_Client)
     assert write("Check meine Mails", ["mail_list"]) == "Ich schaue in deine Mails."
     assert closed == [1]
+
+
+# -- the context report of a run (LoopResult.context) -------------------------
+
+
+class _SummaryRows:
+    def __init__(self, upto):
+        self.upto = upto
+
+    def load_context_summary(self, session_id):
+        return {"summarized_upto": self.upto} if self.upto else None
+
+
+def _report_loop(store, tokens):
+    from types import SimpleNamespace
+
+    from chuk_agents_runtime import loop as loop_module
+
+    loop_module._SUMMARY_SEEN.clear()
+    agent = object.__new__(loop_module.AgentLoop)
+    agent._ladder = SimpleNamespace(
+        summary_store=store,
+        config=SimpleNamespace(context_length=200_000),
+        last_stats=SimpleNamespace(tokens_after=0),
+    )
+    agent._context_tokens = tokens
+    agent._summary_at_start = agent._summarized_upto(7)
+    return agent
+
+
+def test_context_report_names_tokens_and_window():
+    agent = _report_loop(_SummaryRows(0), 41_000)
+    assert agent._context_report(7) == {
+        "tokens": 41_000,
+        "compacted": False,
+        "window": 200_000,
+    }
+
+
+def test_context_report_says_compacted_when_the_summary_grew_in_the_run():
+    store = _SummaryRows(0)
+    agent = _report_loop(store, 90_000)
+    store.upto = 40
+    assert agent._context_report(7)["compacted"] is True
+    # The next run starts on that summary: nothing new.
+    agent._summary_at_start = agent._summarized_upto(7)
+    assert agent._context_report(7)["compacted"] is False
+
+
+def test_context_report_finds_a_summary_written_between_two_runs():
+    store = _SummaryRows(10)
+    agent = _report_loop(store, 90_000)
+    assert agent._context_report(7)["compacted"] is False
+    store.upto = 60  # the background job, after the run
+    agent._summary_at_start = agent._summarized_upto(7)
+    assert agent._context_report(7)["compacted"] is True
+
+
+def test_no_context_report_without_usage():
+    assert _report_loop(_SummaryRows(0), 0)._context_report(7) is None
+
+
+def test_cost_block_carries_the_context_of_the_run_row():
+    from chuk_agents_runtime.cost import with_context
+
+    block = {"input_tokens": 10, "output_tokens": 2}
+    row = {"context_tokens": 41_000, "context_window": 200_000, "compacted": 1}
+    assert with_context(block, row)["context"] == {
+        "tokens": 41_000,
+        "window": 200_000,
+        "compacted": True,
+    }
+    assert with_context(block, {"context_tokens": 0}) == block
+    assert with_context(None, row) is None
+
+
+def test_a_small_window_summarises_at_three_quarters_a_big_one_at_half():
+    from chuk_agents_runtime.context import LadderConfig
+
+    assert LadderConfig.for_model(128_000).tier2_threshold == 0.75
+    assert LadderConfig.for_model(None).tier2_threshold == 0.75
+    assert LadderConfig.for_model(1_000_000).tier2_threshold == 0.50

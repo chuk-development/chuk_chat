@@ -28,8 +28,28 @@ class AgentsRunCostMeta extends StatelessWidget {
     final String count = formatTokenCount(cost.totalTokens, locale: locale);
     final String tokens = l?.runCostTokens(count) ?? '$count tokens';
     final double? eur = cost.eur;
-    if (eur == null) return tokens;
-    return '${formatRunCostEur(eur, locale: locale)} · $tokens';
+    final List<String> parts = <String>[
+      if (eur != null) formatRunCostEur(eur, locale: locale),
+      tokens,
+      ?contextLabel(context, cost),
+      if (cost.compacted) l?.runCostCompacted ?? 'Context compacted',
+    ];
+    return parts.join(' · ');
+  }
+
+  /// "Context 41k / 200k (21%)", or "Context 41k" when the host does not
+  /// know the model's window. Null when the host sent no context size.
+  static String? contextLabel(BuildContext context, AgentsRunCost cost) {
+    if (cost.contextTokens <= 0) return null;
+    final AppLocalizations? l = AppLocalizations.of(context);
+    final String locale =
+        Localizations.maybeLocaleOf(context)?.toString() ?? 'en';
+    final String used = formatTokenCount(cost.contextTokens, locale: locale);
+    final int? percent = cost.contextPercent;
+    if (percent == null) return l?.runCostContext(used) ?? 'Context $used';
+    final String window = formatTokenCount(cost.contextWindow, locale: locale);
+    return l?.runCostContextOf(used, window, '$percent') ??
+        'Context $used / $window ($percent%)';
   }
 
   @override

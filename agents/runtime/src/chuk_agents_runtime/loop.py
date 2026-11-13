@@ -66,6 +66,11 @@ from .telemetry import get_tracer, set_round
 
 logger = logging.getLogger(__name__)
 
+#: How many messages the stored summary of a session covered when a run of
+#: this process last reported it. A summary written in the background between
+#: two runs is found by the later run through this.
+_SUMMARY_SEEN: dict[int, int] = {}
+
 
 #: Stands in for a tool result the run was stopped before reaching. The row has
 #: to exist — an assistant turn whose tool call has no result is a malformed
@@ -278,6 +283,13 @@ class RunTimings:
     #: tokens (reasoning included), as the usage frames reported them. What
     #: the run cost is priced from these and ``cached_tokens``.
     prompt_tokens: int = 0
+    #: What the context held when the run ended: the prompt tokens of the
+    #: last model request, the model's context length, and 1 when a new
+    #: summary replaced old messages since the session's last run. Shown under
+    #: the answer (``cost.context`` of the ``done`` frame). 0 = not known.
+    context_tokens: int = 0
+    context_window: int = 0
+    compacted: int = 0
     completion_tokens: int = 0
 
     def as_row(self) -> dict[str, int]:
@@ -294,6 +306,9 @@ class RunTimings:
             "first_token_ms": int(self.first_token_ms or 0),
             "prompt_tokens": int(self.prompt_tokens),
             "completion_tokens": int(self.completion_tokens),
+            "context_tokens": int(self.context_tokens),
+            "context_window": int(self.context_window),
+            "compacted": int(self.compacted),
         }
 
 
@@ -729,6 +744,10 @@ class AgentLoop:
         self._budget = budget or IterationBudget(max_iterations)
         self._token_budget = token_budget
         self._tokens_spent = 0
+        #: Prompt tokens of the newest model request: what the context holds.
+        self._context_tokens = 0
+        #: Messages the stored summary covered when this run started.
+        self._summary_at_start = 0
         #: True once any model request of this loop got an answer back (a
         #: first stream event or a finished response). A failure after that
         #: was billed: the automation guard must not re-run it as transient.
@@ -960,6 +979,40 @@ class AgentLoop:
             ]
         return messages, [m.created_at for m in rows], turn_start
 
+    def _summarized_upto(self, session_id: int) -> int:
+        """How many messages the stored summary of the session covers."""
+        store = getattr(self._ladder, "summary_store", None)
+        if store is None:
+            return 0
+        try:
+            row = store.load_context_summary(session_id)
+        except Exception:  # noqa: BLE001 — a display value, never a failed run
+            return 0
+        if not isinstance(row, dict):
+            return 0
+        try:
+            return max(0, int(row.get("summarized_upto") or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    def _context_report(self, session_id: int) -> dict | None:
+        """Tokens, window and ``compacted`` for :class:`RunTimings`. ``None``
+        when no model request reported usage."""
+        ladder = self._ladder
+        tokens = self._context_tokens
+        if tokens <= 0 and ladder is not None:
+            tokens = int(getattr(ladder.last_stats, "tokens_after", 0) or 0)
+        covered = self._summarized_upto(session_id)
+        before = min(self._summary_at_start, _SUMMARY_SEEN.get(session_id, covered))
+        _SUMMARY_SEEN[session_id] = covered
+        if tokens <= 0:
+            return None
+        report: dict = {"tokens": tokens, "compacted": covered > before}
+        window = getattr(getattr(ladder, "config", None), "context_length", None)
+        if isinstance(window, int) and window > 0:
+            report["window"] = window
+        return report
+
     def _plan_compaction(self, session_id: int) -> None:
         """After the run (cowork-z9mo): let the ladder start the next turn's
         summary in the background now, so that turn does not wait for it.
@@ -1039,6 +1092,8 @@ class AgentLoop:
                 loop="pydantic_ai",
             )
         session_id = store.route(session_key)
+        self._context_tokens = 0
+        self._summary_at_start = self._summarized_upto(session_id)
         if regenerate:
             store.drop_last_user_turn(session_id)
         conversation = store.get_conversation(session_id)
@@ -1100,6 +1155,11 @@ class AgentLoop:
                 pending_recall.consumed = True
                 timings.recall_ms = active.recall_waited_ms
 
+        context = self._context_report(session_id)
+        if context is not None:
+            timings.context_tokens = int(context["tokens"])
+            timings.context_window = int(context.get("window") or 0)
+            timings.compacted = 1 if context["compacted"] else 0
         outcome = LoopResult(
             reason=reason,
             final_answer=final_answer,
@@ -1539,6 +1599,8 @@ class AgentLoop:
                 raw_usage["cached_tokens"] = usage.cache_read_tokens
         timings.cached_tokens += cached_tokens_from_usage(raw_usage)
         prompt, completion = _split_tokens(raw_usage)
+        if prompt > 0:
+            self._context_tokens = prompt
         timings.prompt_tokens += prompt
         timings.completion_tokens += completion
         if timings.first_token_ms is None and timings.model_calls == 1:
