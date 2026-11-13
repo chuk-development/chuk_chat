@@ -255,3 +255,17 @@ def test_a_small_window_summarises_at_three_quarters_a_big_one_at_half():
     assert LadderConfig.for_model(128_000).tier2_threshold == 0.75
     assert LadderConfig.for_model(None).tier2_threshold == 0.75
     assert LadderConfig.for_model(1_000_000).tier2_threshold == 0.50
+
+
+def test_a_run_a_person_waits_for_retries_a_model_call_for_three_minutes():
+    from chuk_agents_runtime.model_retry import (
+        ATTENDED_WINDOW,
+        RetryPolicy,
+        attended_policy,
+    )
+
+    policy = RetryPolicy()
+    assert attended_policy(policy, False) is policy
+    assert attended_policy(policy, True).window == ATTENDED_WINDOW == 180.0
+    off = RetryPolicy(window=0)
+    assert attended_policy(off, True) is off

@@ -69,6 +69,24 @@ class RetryPolicy:
         return base
 
 
+#: How long a model call is retried when a person waits for the answer.
+#: The 30 min window is for a run nobody watches (an automation, a mail).
+#: On 2026-11-12 a typed message was retried for 23 and for 31 minutes; the
+#: person saw nothing and could not pick another model in that time.
+ATTENDED_WINDOW = 3 * 60.0
+
+
+def attended_policy(policy: RetryPolicy, attended: bool) -> RetryPolicy:
+    """``policy``, with the short window when a person waits for the run."""
+    if not attended or policy.window <= ATTENDED_WINDOW:
+        return policy
+    return RetryPolicy(
+        quick_delays=policy.quick_delays,
+        slow_interval=policy.slow_interval,
+        window=ATTENDED_WINDOW,
+    )
+
+
 class EmptyModelResponse(RuntimeError):
     """The stream closed without a single part and without a finish reason:
     the provider dropped the answer, the request itself was fine."""

@@ -55,7 +55,7 @@ from .context import (
     prompt_tokens_from_usage,
     total_tokens_from_usage,
 )
-from .model_retry import EmptyModelResponse, RetryPolicy, RetryTracker
+from .model_retry import EmptyModelResponse, RetryPolicy, RetryTracker, attended_policy
 from .registry import ToolRegistry
 from .tool_search import relevance_search
 from .sources import REPLAYED_CONTEXT_SOURCES, tag_row, valid_source
@@ -599,6 +599,8 @@ class _ActiveRun:
     #: such a run gets the automatic interim message (CHAT-89).
     user_message: str = ""
     interactive: bool = False
+    #: A person started this run (typed it or pressed Retry) and is waiting.
+    attended: bool = False
     #: Set once the run told the user what it is doing (the model's own
     #: ``send_message``, its text before the tools, or the written fallback).
     interim_sent: bool = False
@@ -1126,6 +1128,7 @@ class AgentLoop:
         active.recall = pending_recall
         active.user_message = user_message or ""
         active.interactive = not valid_source(source) and not regenerate
+        active.attended = not valid_source(source)
         # The first request's tools are built before its history (Pydantic AI
         # prepares the tools first), so the found set is read once here.
         if self._registry.deferred_names():
@@ -1226,7 +1229,7 @@ class AgentLoop:
         streaming = not is_legacy(run_model)
         request_log = getattr(run_model, "request_log", None)
 
-        tracker = RetryTracker(self._retry_policy)
+        tracker = RetryTracker(attended_policy(self._retry_policy, active.attended))
         try:
             while True:
                 try:
@@ -1428,7 +1431,7 @@ class AgentLoop:
     async def _wait_retry(self, retry: _RetryModelCall, tracker: RetryTracker) -> bool:
         """Wait before the next attempt of a failed model call and tell the
         app. False when a Stop (or the e-stop) came during the wait."""
-        window = self._retry_policy.window
+        window = tracker.policy.window
         spent = 0.0 if tracker.first_failure is None else tracker.clock() - tracker.first_failure
         info = {
             "attempt": retry.attempt,
