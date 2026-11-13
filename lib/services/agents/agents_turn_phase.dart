@@ -314,7 +314,7 @@ String agentsTurnPhaseLabel(
     AgentsTurnPhase.waitingForYou =>
       l?.agentsPhaseWaitingForYou ?? 'Waiting for you',
     AgentsTurnPhase.notDelivered =>
-      l?.agentsPhaseNotDelivered ?? 'Did not reach your computer',
+      l?.agentsPhaseNotDelivered ?? 'Not sent yet, trying again',
   };
 }
 

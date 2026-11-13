@@ -1163,7 +1163,7 @@ class AgentsPendingTasks {
 
   /// The error a task that was sent but never confirmed shows.
   static const String notConfirmedError =
-      'Your computer did not confirm this message.';
+      'Not sent yet. The app sends it again on its own.';
 
   /// [task] went out [maxAttempts] times and the host never confirmed it: it
   /// becomes a failed outbox entry under its own `task_id`, and its bubble

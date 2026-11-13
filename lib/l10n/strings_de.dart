@@ -238,7 +238,7 @@ const Map<String, String> stringsDe = {
   'agentsPhaseWorking': 'Arbeitet',
   'agentsPhaseWriting': 'Schreibt',
   'agentsPhaseWaitingForYou': 'Wartet auf dich',
-  'agentsPhaseNotDelivered': 'Nicht bei deinem Computer angekommen',
+  'agentsPhaseNotDelivered': 'Noch nicht gesendet, neuer Versuch',
   'agentsPhaseRetry': 'Erneut versuchen',
   // UI audit fixes A (2026-10-05): tool phase, automation states, the
   // phone agent page.

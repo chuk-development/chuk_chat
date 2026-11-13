@@ -99,6 +99,14 @@ class CloudHostParty(HostParty):
             return
         super().on_controller_joined(token)
 
+    def on_controller_left(self, token):
+        # The relay says no controller is attached. A session that a newer
+        # connection of its device replaced has no reader left, so sealing
+        # every answer for it too would only cost bandwidth.
+        if self._controllers is not None:
+            self._controllers.forget_older()
+        super().on_controller_left(token)
+
     def _sessions(self) -> ControllerSessions:
         if self._controllers is None:
             trust = self._trust_provider()
@@ -163,15 +171,17 @@ class CloudHostParty(HostParty):
         # Authenticate here, then issue a private one-use ticket for the
         # existing executor input boundary. The shared executor's Stop,
         # approvals and run ownership work across all controllers.
-        plaintext = sessions.open(frame)
+        plaintext, opened_by = sessions.open_with_session(frame)
         payload = json.loads(plaintext)
         kind = payload.get("type")
         device = frame.device_id
         session_key = payload.get("session_key")
 
         if kind == "controller_close":
-            with sessions.lock:
-                sessions.sessions.pop(device, None)
+            # Only the connection that said it is closing. The app's login
+            # recovery opens and closes a second connection of the same
+            # device; the main connection must outlive that.
+            sessions.close(device, opened_by)
             self._controller_present = bool(sessions.sessions)
             self._frames.acted(kind, DECISION_CLOSED, device=device)
             return

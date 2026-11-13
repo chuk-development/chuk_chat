@@ -52,9 +52,10 @@ void main() {
       ],
     };
     AgentsQueuedMarks.readRows = (String key) => transcript[key];
-    AgentsQueuedMarks.writeRows =
-        (String key, List<Map<String, dynamic>> rows) async =>
-            transcript[key] = rows;
+    AgentsQueuedMarks.writeRows = (
+      String key,
+      List<Map<String, dynamic>> rows,
+    ) async => transcript[key] = rows;
   });
 
   tearDown(() async {
@@ -235,7 +236,47 @@ void main() {
     expect(run.running, isFalse);
     expect(run.outcome, AgentsRunOutcome.notDelivered);
     expect(run.endedWithoutAnswer, isTrue);
-    expect(agentsRunEndNotice(run.outcome!), contains('did not reach'));
+    expect(agentsRunEndNotice(run.outcome!), contains('Not sent yet'));
+  });
+
+  test('the second silence drops the socket instead of a third send', () async {
+    // 2026-11-13: the host had ended this device's session. Every send on
+    // the paired socket was dropped, so a third send there was useless.
+    final AgentsRunLedger ledger = AgentsRunLedger.instance;
+    final DateTime t0 = DateTime(2026, 11, 13, 1, 47);
+    final List<String> resends = <String>[];
+    final List<String> refreshes = <String>[];
+    ledger.onTaskUnacknowledged = resends.add;
+    ledger.onLinkSuspect = refreshes.add;
+    addTearDown(() {
+      ledger.onTaskUnacknowledged = null;
+      ledger.onLinkSuspect = null;
+    });
+
+    ledger.begin(sessionKey);
+    ledger.taskSent(sessionKey, 'task-1', at: t0);
+    ledger.sweep(now: t0.add(const Duration(seconds: 9)));
+    expect(resends, <String>[sessionKey]);
+    expect(refreshes, isEmpty);
+
+    ledger.sweep(now: t0.add(const Duration(seconds: 18)));
+    expect(resends, <String>[sessionKey]);
+    expect(refreshes, <String>[sessionKey]);
+
+    // The new dial gets its own time before the window counts again.
+    ledger.sweep(now: t0.add(const Duration(seconds: 27)));
+    expect(ledger.isRunning(sessionKey), isTrue);
+
+    // The reconnect sent the task again and the host confirms it.
+    ledger.taskSent(
+      sessionKey,
+      'task-1',
+      at: t0.add(const Duration(seconds: 28)),
+    );
+    ledger.taskAcknowledged(sessionKey, taskId: 'task-1');
+    ledger.sweep(now: t0.add(const Duration(seconds: 60)));
+    expect(ledger.isRunning(sessionKey), isTrue);
+    expect(refreshes, <String>[sessionKey]);
   });
 
   test('a send the ledger gives up on ends the open stream', () async {
@@ -256,16 +297,10 @@ void main() {
 
     ledger.sweep(now: t0.add(const Duration(seconds: 27)));
     await _drain();
-    expect(
-      ledger.runFor(sessionKey)?.outcome,
-      AgentsRunOutcome.notDelivered,
-    );
+    expect(ledger.runFor(sessionKey)?.outcome, AgentsRunOutcome.notDelivered);
     final ErrorEvent error = out.seen.whereType<ErrorEvent>().single;
     expect(error.code, StreamErrorCodes.connectionLost);
-    expect(
-      error.message,
-      agentsRunEndNotice(AgentsRunOutcome.notDelivered),
-    );
+    expect(error.message, agentsRunEndNotice(AgentsRunOutcome.notDelivered));
     expect(out.seen.last, isA<DoneEvent>());
     expect(out.seen.whereType<DoneEvent>(), hasLength(1));
     expect(out.closedFn(), isTrue);

@@ -79,10 +79,42 @@ def test_two_devices_reconnect_and_broadcast(host):
         )
     old = phone[2].seal(b'{"type":"stop"}')
     controller(host, "phone", phone[0])
-    # Phone reconnect invalidates old traffic but leaves desktop live.
+    # A second connection of the phone leaves its first one usable, until the
+    # relay says no controller is attached.
+    assert host.open(old)
+    host.forget_older()
     with pytest.raises(AgentsFrameRejected):
-        host.open(old)
+        host.open(phone[2].seal(b'{"type":"stop"}'))
     assert host.open(desktop[2].seal(b'{"type":"agent_list"}'))
+
+
+def test_second_connection_of_one_device_does_not_end_the_first(host):
+    """The app recovers its login through a second connection with its own
+    device id and closes it at once. The main connection must keep working:
+    on 2026-11-13 the host dropped every later message as deviceNotApproved."""
+    identity = DeviceIdentity.generate()
+    main = controller(host, "desktop", identity)
+    recovery = controller(host, "desktop", identity)
+    assert host.open(main[2].seal(b'{"type":"task"}'))
+    _, opened_by = host.open_with_session(
+        recovery[2].seal(b'{"type":"controller_close"}')
+    )
+    host.close("desktop", opened_by)
+    assert host.open(main[2].seal(b'{"type":"task","n":2}'))
+    frames = host.seal(b'{"type":"task_ack"}').frames
+    assert len(frames) == 1
+    assert json.loads(main[3].open(base64.b64decode(frames[0]["frame"])))
+    assert not host.older
+
+
+def test_a_device_keeps_at_most_two_replaced_sessions(host):
+    identity = DeviceIdentity.generate()
+    clients = [controller(host, "desktop", identity) for _ in range(4)]
+    with pytest.raises(AgentsFrameRejected):
+        host.open(clients[0][2].seal(b"{}"))
+    for client in clients[1:]:
+        assert host.open(client[2].seal(b"{}")) == b"{}"
+    assert len(host.seal(b"{}").frames) == 3
 
 
 def test_proof_and_frame_replays_rejected(host):

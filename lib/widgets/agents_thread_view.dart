@@ -503,6 +503,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     // A task the host has not acknowledged at all is SENT AGAIN rather than
     // waited on: nothing about it says it ever arrived.
     _ledger.onTaskUnacknowledged = _onTaskUnacknowledged;
+    _ledger.onLinkSuspect = _onLinkSuspect;
     _reconcileOnOpen();
     _loader.addListener(_onLoaderChanged);
     _automations.attach();
@@ -616,6 +617,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     if (_ledger.onTaskUnacknowledged == _onTaskUnacknowledged) {
       _ledger.onTaskUnacknowledged = null;
     }
+    if (_ledger.onLinkSuspect == _onLinkSuspect) _ledger.onLinkSuspect = null;
     _loader.removeListener(_onLoaderChanged);
     _automations.removeListener(_onAutomationsChanged);
     AgentsBudgetNotices.instance.removeListener(_onBudgetNotices); // F1
@@ -1124,6 +1126,20 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     if (!mounted || sessionKey != widget.threadKey) return;
     final controller = _controller;
     if (controller == null || !controller.state.value.isPaired) return;
+    unawaited(_resendUnacknowledged(controller));
+  }
+
+  /// The re-send got no answer either: drop the socket. The reconnect opens a
+  /// new session with the host, and its paired transition sends the task
+  /// again ([_resendUnacknowledged]).
+  void _onLinkSuspect(String sessionKey) {
+    if (!mounted || sessionKey != widget.threadKey) return;
+    final controller = _controller;
+    if (controller == null || !controller.state.value.isPaired) return;
+    if (controller is AgentsLinkRefresh) {
+      unawaited((controller as AgentsLinkRefresh).refreshLink());
+      return;
+    }
     unawaited(_resendUnacknowledged(controller));
   }
 

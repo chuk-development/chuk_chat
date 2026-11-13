@@ -110,6 +110,20 @@ abstract interface class AgentsLinkProbe {
   Future<bool> probeLink({Duration timeout});
 }
 
+/// A controller that can drop its socket so the normal reconnect dials a new
+/// one and the host gets a new session.
+///
+/// The thread view asks for this when the host has not confirmed a message
+/// twice while the socket says it is paired: then the socket is fine and the
+/// SESSION is not. On 2026-11-13 a second connection of the same device had
+/// ended the host's session; the host dropped every message and the app
+/// reported "did not reach your host" for hours.
+abstract interface class AgentsLinkRefresh {
+  /// Closes the paired socket and reports the link as closed. No-op when
+  /// there is no paired socket.
+  Future<void> refreshLink();
+}
+
 /// Opens a [RelaySocket] to [url]. Default is [defaultRelaySocketConnector];
 /// tests inject one that returns a fake.
 typedef RelaySocketConnector = Future<RelaySocket> Function(Uri url);
@@ -2013,6 +2027,7 @@ class AgentsRelayClient
     implements
         AgentsRelayController,
         AgentsLinkProbe,
+        AgentsLinkRefresh,
         ExecutorTransport,
         AgentsAutomationControl,
         // ── F2: automations + cost totals ──
@@ -4267,6 +4282,20 @@ class AgentsRelayClient
           detail: 'Disconnected',
         ),
       );
+    }
+  }
+
+  @override
+  Future<void> refreshLink() async {
+    final socket = _socket;
+    if (_disposed || socket == null || !_state.value.isPaired) return;
+    // The same path a socket the relay closed takes: the state goes to
+    // `closed` and the normal reconnect dials again with a new handshake.
+    _onSocketDone();
+    try {
+      await socket.close();
+    } catch (_) {
+      // A socket that is gone already is closed.
     }
   }
 

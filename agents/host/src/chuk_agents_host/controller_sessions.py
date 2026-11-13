@@ -45,6 +45,10 @@ def mac(key: bytes, label: str, message: bytes) -> bytes:
     return hmac.digest(key, label.encode() + message, "sha256")
 
 
+#: How many replaced sessions one device keeps next to its newest one.
+MAX_OLDER = 2
+
+
 @dataclass
 class Session:
     connection: str
@@ -72,6 +76,15 @@ class ControllerSessions:
         self.host_device_id = host_device_id
         self.pending: dict[str, tuple[float, dict, bytes]] = {}
         self.sessions: dict[str, Session] = {}
+        # Sessions of a device that a newer connection of the SAME device
+        # replaced, newest last. The app opens a second connection with its
+        # own device id when it recovers its login through the host
+        # (lib/services/session_recovery.dart) and closes it at once. That
+        # used to end the session of the app's main connection: every later
+        # message was dropped as ``deviceNotApproved`` and the app never knew
+        # (2026-11-13). A replaced session stays usable until its connection
+        # is gone (:meth:`forget_older`) or MAX_OLDER newer ones exist.
+        self.older: dict[str, list[Session]] = {}
         self.lock = threading.RLock()
 
     def challenge(self, message: dict) -> dict:
@@ -126,6 +139,11 @@ class ControllerSessions:
             )
             approved = ApprovedDevices.empty()
             approved.approve(device, key)
+            replaced = self.sessions.get(device)
+            if replaced is not None:
+                kept = self.older.setdefault(device, [])
+                kept.append(replaced)
+                del kept[:-MAX_OLDER]
             self.sessions[device] = Session(
                 connection,
                 AgentsFrameOpener(
@@ -145,12 +163,49 @@ class ControllerSessions:
         }
 
     def open(self, frame) -> bytes:
+        return self.open_with_session(frame)[0]
+
+    def open_with_session(self, frame) -> tuple[bytes, Session]:
+        """Open ``frame`` with the session of its device that fits it.
+
+        The newest session is tried first, then the replaced ones. A session
+        that does not fit rejects the frame before it burns a sequence number,
+        so a try costs nothing. The rejection of the newest session is the one
+        that is raised when none fits.
+        """
         parsed = AgentsFrame.from_bytes(frame) if isinstance(frame, bytes) else frame
         with self.lock:
             session = self.sessions.get(parsed.device_id)
             if session is None:
                 raise AgentsFrameRejected(AgentsFrameRejection.DEVICE_NOT_APPROVED)
-            return session.opener.open(parsed)
+            try:
+                return session.opener.open(parsed), session
+            except AgentsFrameRejected as first:
+                for old in reversed(self.older.get(parsed.device_id, [])):
+                    try:
+                        return old.opener.open(parsed), old
+                    except AgentsFrameRejected:
+                        continue
+                raise first
+
+    def close(self, device: str, session: Session) -> None:
+        """End ``session`` of ``device`` and no other session of that device."""
+        with self.lock:
+            kept = self.older.get(device, [])
+            if self.sessions.get(device) is session:
+                if kept:
+                    self.sessions[device] = kept.pop()
+                else:
+                    self.sessions.pop(device, None)
+            else:
+                self.older[device] = [old for old in kept if old is not session]
+            if not self.older.get(device):
+                self.older.pop(device, None)
+
+    def forget_older(self) -> None:
+        """No controller is attached: a replaced session has no reader left."""
+        with self.lock:
+            self.older.clear()
 
     def seal(self, plaintext: bytes) -> OutboundBatch:
         payload = json.loads(plaintext)
@@ -161,6 +216,12 @@ class ControllerSessions:
                     "connection": session.connection,
                     "frame": b64(session.sealer.seal(plaintext).to_bytes()),
                 }
-                for device, session in self.sessions.items()
+                for device, session in self._all_sessions()
             ]
         return OutboundBatch(frames, payload.get("type") == "agent_list")
+
+    def _all_sessions(self) -> list[tuple[str, Session]]:
+        result = list(self.sessions.items())
+        for device, kept in self.older.items():
+            result.extend((device, old) for old in kept)
+        return result

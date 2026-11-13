@@ -150,8 +150,7 @@ String? _plainRunEndNotice(AgentsRunOutcome outcome) => switch (outcome) {
   AgentsRunOutcome.stopped => 'Stopped. No answer was written.',
   AgentsRunOutcome.failed => 'This run failed. No answer was written.',
   AgentsRunOutcome.lost => 'Lost this run. No answer came back.',
-  AgentsRunOutcome.notDelivered =>
-    'This message did not reach your host. Nothing ran — send it again.',
+  AgentsRunOutcome.notDelivered => 'Not sent yet. The app sends it again on its own when your Sidekicks answer.',
 };
 
 String _clipNotice(String text) =>
@@ -665,6 +664,16 @@ class AgentsRunLedger extends ChangeNotifier {
   /// [onRunSilent]: the ledger owns no socket and no timer of its own.
   void Function(String sessionKey)? onTaskUnacknowledged;
 
+  /// Called when the re-send got no answer either. The socket says it is
+  /// paired, so the session behind it is the suspect: the thread view drops
+  /// the socket, and the reconnect that follows sends the task again on a
+  /// new session. When nobody listens, the task is simply sent again.
+  void Function(String sessionKey)? onLinkSuspect;
+
+  /// How long a link refresh may take before the pre-run window counts
+  /// again: a new dial, a new handshake and the re-send.
+  static Duration linkRefreshGrace = const Duration(seconds: 12);
+
   /// Called when a run has produced nothing for [ceiling]. The thread view
   /// hangs the probe here: it asks the host for a fresh `run_state`, which
   /// either revives the run or reconciles it away.
@@ -728,6 +737,14 @@ class AgentsRunLedger extends ChangeNotifier {
     // every second asks for ONE re-send and then waits for its answer.
     run.taskWaits += 1;
     run.taskSentAt = clock;
+    final suspect = onLinkSuspect;
+    if (run.taskWaits >= 2 && suspect != null) {
+      // Two sends on this socket and no answer to either: a third on the
+      // same session would get the same silence.
+      run.taskSentAt = clock.add(linkRefreshGrace);
+      suspect(run.sessionKey);
+      return true;
+    }
     onTaskUnacknowledged?.call(run.sessionKey);
     return true;
   }

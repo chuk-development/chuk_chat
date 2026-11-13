@@ -230,7 +230,7 @@ const Map<String, String> stringsEn = {
   'agentsPhaseWorking': 'Working',
   'agentsPhaseWriting': 'Writing',
   'agentsPhaseWaitingForYou': 'Waiting for you',
-  'agentsPhaseNotDelivered': 'Did not reach your computer',
+  'agentsPhaseNotDelivered': 'Not sent yet, trying again',
   'agentsPhaseRetry': 'Retry',
   // UI audit fixes A (2026-10-05): tool phase, automation states, the
   // phone agent page.
