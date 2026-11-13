@@ -1684,37 +1684,33 @@ void main() {
       await tester.pumpAndSettle();
 
       // Closed: the list is off stage, the conversation is in front.
-      expect(find.byType(MobileAgentList), findsNothing);
+      expect(find.byType(AgentRosterView), findsNothing);
       expect(conversation, findsOneWidget);
       final String before = strip(tester).selectedId!;
       expect(before, isNot(other.id));
 
       await tester.tap(find.byTooltip('Menu'));
       await tester.pumpAndSettle();
-      expect(find.byType(MobileAgentList), findsOneWidget);
+      expect(find.byType(AgentRosterView), findsOneWidget);
       // The whole screen is the list: the conversation moved out.
       expect(
-        tester.getRect(find.byType(MobileAgentList)),
+        tester.getRect(find.byType(AgentRosterView)),
         const Rect.fromLTWH(0, 0, 420, 900),
       );
       expect(tester.getRect(conversation).left, 420);
       // The socket owner did not remount.
       expect(controllerBuilds, 1);
-      // The sidebar says whether the computer answers, and holds the ways
-      // into Media and Settings. (The summary line needs the switch above
-      // it: mobile_agent_list_test.)
-      expect(find.text('Computer online'), findsOneWidget);
-      expect(findId('phone_sidebar_media'), findsOneWidget);
-      expect(findId('phone_sidebar_settings'), findsOneWidget);
+      // It is chuk's sidebar design: the same parts as the Chats sidebar.
+      expect(find.byType(SbBlock), findsWidgets);
 
       await tester.tap(
         find.descendant(
-          of: find.byType(MobileAgentList),
+          of: find.byType(AgentRosterView),
           matching: find.text('jade-heron'),
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byType(MobileAgentList), findsNothing);
+      expect(find.byType(AgentRosterView), findsNothing);
       expect(strip(tester).selectedId, other.id);
       expect(tester.getRect(conversation).left, 0);
       expect(controllerBuilds, 1);
@@ -1730,11 +1726,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Menu'));
       await tester.pumpAndSettle();
-      expect(find.byType(MobileAgentList), findsOneWidget);
+      expect(find.byType(AgentRosterView), findsOneWidget);
 
       await tester.binding.handlePopRoute();
       await tester.pumpAndSettle();
-      expect(find.byType(MobileAgentList), findsNothing);
+      expect(find.byType(AgentRosterView), findsNothing);
       expect(conversation, findsOneWidget);
       expect(find.byType(MobileHomeComposer), findsNothing);
 
@@ -1771,7 +1767,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(
         find.descendant(
-          of: find.byType(MobileAgentList),
+          of: find.byType(AgentRosterView),
           matching: find.text('jade-heron'),
         ),
       );

@@ -109,7 +109,6 @@ import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/platform_specific/mobile/chat_title_strip.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_home_composer.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_media_page.dart';
-import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_top_bar.dart';
 import 'package:chuk_chat/platform_specific/mobile/pull_up_to_create.dart';
 import 'package:chuk_chat/platform_specific/mobile/swipe_chat_pager.dart';
@@ -180,7 +179,6 @@ import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/agents_desktop/quick_switcher.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
-import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 import 'package:chuk_chat/widgets/pane_header.dart';
 import 'package:chuk_chat/widgets/settings_surface.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -1687,123 +1685,49 @@ class _MessengerShellState extends State<MessengerShell>
   }
 
   /// The phone's sidebar of the Sidekicks half (owner, 2026-11-13): the
-  /// switch between the halves on top, and under it every Sidekick and room
-  /// with its last line, its time and its unread count, so one look says
-  /// who has news. A tap opens that conversation and closes the sidebar.
+  /// desktop's roster ([AgentRosterView]), which is built from the parts of
+  /// chuk's own sidebar. So the sidebar of Chats and the sidebar of
+  /// Sidekicks are one design: the same head, the same cards, the same
+  /// blocks. Every Sidekick and room shows its last line, its time and its
+  /// unread mark. A tap opens that conversation and closes the sidebar.
   Widget _buildPhoneSidebar(BuildContext context) {
     void close() => _phoneSidebarOpen.value = false;
-    return ColoredBox(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: MobileAgentList(
-        key: const ValueKey<String>('phone-sidebar-list'),
-        source: _roster,
-        selectedAgentId: _selectedAgentId,
-        selectedThreadKey: _selectedThreadKey,
-        onSelect: (String agentId, String threadKey) {
-          close();
-          _leaveAgentsHome();
-          _select(agentId, threadKey);
-        },
-        onAddAgent: () {
-          close();
-          unawaited(_openOnboarding());
-        },
-        rooms: _rooms,
-        onOpenRoom: (String roomId) {
-          close();
-          unawaited(_openRoom(roomId));
-        },
-        onCreateRoom: () {
-          close();
-          unawaited(_openRoomCreate());
-        },
-        onOpenProfile: _openAgentProfile,
-        onRenameAgent: (AgentsAgent target) =>
-            unawaited(_openAgentRename(target)),
-        onDeleteAgent: (AgentsAgent target) => _deleteAgent(target.id),
-        readMarks: _readMarks,
-        profiles: _agentProfiles,
-        mainAgentSection: true,
-        emptyState: _buildStatusPanel(),
-        // The head names the list. The switch is on top of the conversation,
-        // not here (owner, 2026-11-13).
-        headerCenter: Align(
-          alignment: AlignmentDirectional.centerStart,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 6),
-            child: Text(
-              AppLocalizations.of(context)?.agentsModeAgents ?? 'Sidekicks',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800),
-            ),
-          ),
-        ),
-        summaryLine: true,
-        footer: _buildPhoneSidebarFooter(context),
-      ),
-    );
-  }
-
-  /// The foot of the phone's sidebar: whether the computer answers, and the
-  /// ways into Media and Settings.
-  Widget _buildPhoneSidebarFooter(BuildContext context) {
-    final AppLocalizations? l = AppLocalizations.of(context);
-    final AgentsAgent? anyAgent = _selectedAgent ?? _mainAgent;
-    void close() => _phoneSidebarOpen.value = false;
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: ValueListenableBuilder<AgentsRelayController?>(
-            valueListenable: _controller,
-            builder:
-                (
-                  BuildContext context,
-                  AgentsRelayController? controller,
-                  Widget? _,
-                ) {
-                  if (controller == null) {
-                    return const _PhoneLinkPill(online: false);
-                  }
-                  return ValueListenableBuilder<AgentsRelayState>(
-                    valueListenable: controller.state,
-                    builder:
-                        (
-                          BuildContext context,
-                          AgentsRelayState state,
-                          Widget? _,
-                        ) => _PhoneLinkPill(
-                          online: state.phase == AgentsRelayPhase.paired,
-                        ),
-                  );
-                },
-          ),
-        ),
-        const SizedBox(width: 6),
-        FloatingHeaderButton(
-          icon: Icons.photo_library_outlined,
-          tooltip: l?.media ?? 'Media',
-          semanticsId: 'phone_sidebar_media',
-          onPressed: () {
-            close();
-            _openPhoneMedia();
-          },
-        ),
-        FloatingHeaderButton(
-          icon: Icons.settings_outlined,
-          tooltip: l?.settings ?? 'Settings',
-          semanticsId: 'phone_sidebar_settings',
-          onPressed: () {
-            close();
-            if (widget.shellConfig != null) {
+    return AgentRosterView(
+      key: const ValueKey<String>('phone-sidebar-list'),
+      source: _roster,
+      readMarks: _readMarks,
+      profiles: _agentProfiles,
+      selectedAgentId: _selectedAgentId,
+      selectedThreadKey: _selectedThreadKey,
+      onToggleCollapsed: close,
+      onSelect: (String agentId, String threadKey) {
+        close();
+        _leaveAgentsHome();
+        _select(agentId, threadKey);
+      },
+      onOpenProfile: _openAgentProfile,
+      onAddAgent: () {
+        close();
+        unawaited(_openOnboarding());
+      },
+      onDeleteAgent: _deleteAgent,
+      onRenameAgent: _renameAgent,
+      rooms: _rooms,
+      onOpenRoom: (String roomId) {
+        close();
+        unawaited(_openRoom(roomId));
+      },
+      onCreateRoom: () {
+        close();
+        unawaited(_openRoomCreate());
+      },
+      onOpenSettings: widget.shellConfig == null
+          ? null
+          : () {
+              close();
               _openSettings();
-            } else if (anyAgent != null) {
-              _openAgentProfile(anyAgent);
-            }
-          },
-        ),
-      ],
+            },
+      mainAgentSection: true,
     );
   }
 
@@ -1814,62 +1738,6 @@ class _MessengerShellState extends State<MessengerShell>
     );
     if (preview == null || preview.text.isEmpty) return null;
     return preview.fromUser ? 'You: ${preview.text}' : preview.text;
-  }
-}
-
-/// The sidebar's word on the link to the computer: a dot and "Computer
-/// online", or "Connecting" while the app dials. Never an error (owner:
-/// the app redials on its own).
-class _PhoneLinkPill extends StatelessWidget {
-  const _PhoneLinkPill({required this.online});
-
-  final bool online;
-
-  @override
-  Widget build(BuildContext context) {
-    final AppLocalizations? l = AppLocalizations.of(context);
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        key: const ValueKey<String>('phone_sidebar_link'),
-        height: 42,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: ShapeDecoration(
-          color: FloatingChromeSurface.fillOf(context),
-          shape: const StadiumBorder(),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Container(
-              width: 9,
-              height: 9,
-              decoration: BoxDecoration(
-                color: online
-                    ? const Color(0xFF34C759)
-                    : scheme.onSurfaceVariant.withValues(alpha: 0.5),
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(
-                online
-                    ? (l?.sidebarComputerOnline ?? 'Computer online')
-                    : (l?.sidebarComputerConnecting ?? 'Connecting…'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: scheme.onSurface,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
 

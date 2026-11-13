@@ -333,7 +333,7 @@ void main() {
   Finder onStageSwitch() => find.byType(AppModeSwitch);
 
   /// The phone's sidebar of the Sidekicks half, when it is open.
-  final Finder sidekicksSidebar = find.byType(MobileAgentList);
+  final Finder sidekicksSidebar = find.byType(AgentRosterView);
 
   /// The switch is on top in every place; this opens the sidebar only if a
   /// layout ever has none on stage.
