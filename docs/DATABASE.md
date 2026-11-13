@@ -346,3 +346,27 @@ on the `updated_at` it read, so it never overwrites a newer edit made on
 another device in between.
 
 The encryption key is derived from the user's password using PBKDF2 with 600,000 iterations.
+
+## When Supabase is slow (found 2026-11-13)
+
+The project runs on the smallest compute size. Read the cause in this order:
+
+1. **Is the server itself slow?** Time pure CPU work:
+   `echo "explain (analyze, timing off, summary on) select count(*) from generate_series(1,2000000)" | python3 scripts/supabase/query.py`.
+   Normal: 0.3 to 0.5 s. On 2026-11-13 it was 36 s while the database did
+   almost no work (1 % of a core, no disk reads, no replication lag). Then no
+   query of ours is the cause: the server is starved. A project restart fixed
+   it in three minutes: `python3 scripts/supabase/api.py POST /v1/projects/<ref>/restart`.
+   The dashboard shows this state as "CPU 93 %".
+2. **Which query costs time now?** `python3 scripts/supabase/load.py 60`
+   prints the queries by execution time over the window. The Realtime poll
+   (`SELECT wal->>...`, about one call per second) is normal at 5 ms a call;
+   at 500 ms a call the server is starved (step 1).
+3. **What got it there?** `pg_stat_statements` ordered by `wal_bytes`: the
+   update of `encrypted_chats` wrote 12 GB of WAL, because every save writes
+   the whole encrypted chat row. Agents threads are throttled since CHAT-91;
+   plain chats are not yet.
+
+The scripts read the Supabase CLI token from the keyring and print no secret.
+The instance metrics endpoint (`/customer/v1/privileged/metrics`) refused the
+legacy service key, the secret key and a self-signed token (401).
