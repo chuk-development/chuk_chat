@@ -66,52 +66,133 @@ void main() {
     controller.emit(AgentsRelayDelta(a, replay: true, mid: aMid));
   }
 
-  AgentsRelayDone pageEnd({required bool hasMore, required int oldestMid, int? beforeId}) =>
-      AgentsRelayDone(
-        reason: 'replay',
-        finalAnswer: null,
-        iterations: 0,
-        replay: true,
-        hasMore: hasMore,
-        oldestMid: oldestMid,
-        pageBeforeId: beforeId,
-      );
+  AgentsRelayDone pageEnd({
+    required bool hasMore,
+    required int oldestMid,
+    int? beforeId,
+  }) => AgentsRelayDone(
+    reason: 'replay',
+    finalAnswer: null,
+    iterations: 0,
+    replay: true,
+    hasMore: hasMore,
+    oldestMid: oldestMid,
+    pageBeforeId: beforeId,
+  );
 
-  test('the newest page paints first, older pages are fetched and prepended',
-      () async {
-    // The thread view asks a full replay; the host answers with the newest page.
+  test(
+    'the newest page paints first, older pages are fetched and prepended',
+    () async {
+      // The thread view asks a full replay; the host answers with the newest page.
+      loader.expect(session);
+      turn('q4', 40, 'a4', 41);
+      turn('q5', 50, 'a5', 51);
+      controller.emit(pageEnd(hasMore: true, oldestMid: 40));
+      await drain();
+
+      // Painted at once, from the first page alone.
+      expect(texts(), ['q4', 'a4', 'q5', 'a5']);
+      expect(loader.cursorFor(session), 51);
+      // ...and the loader asked for the page below it, with the page size.
+      expect(controller.replayPages, [(session, 40, kReplayPageSize)]);
+
+      // The older page arrives and goes in front.
+      turn('q2', 20, 'a2', 21);
+      turn('q3', 30, 'a3', 31);
+      controller.emit(pageEnd(hasMore: true, oldestMid: 20, beforeId: 40));
+      await drain();
+      expect(texts(), ['q2', 'a2', 'q3', 'a3', 'q4', 'a4', 'q5', 'a5']);
+      // The cursor stays at the newest row: an older page never moves it down.
+      expect(loader.cursorFor(session), 51);
+      expect(controller.replayPages.last, (session, 20, kReplayPageSize));
+
+      // The last page: no more below it, so nothing else is asked for.
+      turn('q0', 1, 'a0', 2);
+      turn('q1', 10, 'a1', 11);
+      controller.emit(pageEnd(hasMore: false, oldestMid: 1, beforeId: 20));
+      await drain();
+      expect(texts(), [
+        'q0',
+        'a0',
+        'q1',
+        'a1',
+        'q2',
+        'a2',
+        'q3',
+        'a3',
+        'q4',
+        'a4',
+        'q5',
+        'a5',
+      ]);
+      expect(controller.replayPages, hasLength(2));
+    },
+  );
+
+  test('a full replay over a cached thread takes one page and keeps the rows '
+      'below it (CHAT-114)', () async {
+    // The whole thread is in the cache: three pages, fetched once.
     loader.expect(session);
     turn('q4', 40, 'a4', 41);
     turn('q5', 50, 'a5', 51);
     controller.emit(pageEnd(hasMore: true, oldestMid: 40));
     await drain();
-
-    // Painted at once, from the first page alone.
-    expect(texts(), ['q4', 'a4', 'q5', 'a5']);
-    expect(loader.cursorFor(session), 51);
-    // ...and the loader asked for the page below it, with the page size.
-    expect(controller.replayPages, [(session, 40, kReplayPageSize)]);
-
-    // The older page arrives and goes in front.
     turn('q2', 20, 'a2', 21);
     turn('q3', 30, 'a3', 31);
-    controller.emit(pageEnd(hasMore: true, oldestMid: 20, beforeId: 40));
+    controller.emit(pageEnd(hasMore: false, oldestMid: 20, beforeId: 40));
     await drain();
     expect(texts(), ['q2', 'a2', 'q3', 'a3', 'q4', 'a4', 'q5', 'a5']);
-    // The cursor stays at the newest row: an older page never moves it down.
-    expect(loader.cursorFor(session), 51);
-    expect(controller.replayPages.last, (session, 20, kReplayPageSize));
+    final int asked = controller.replayPages.length;
 
-    // The last page: no more below it, so nothing else is asked for.
-    turn('q0', 1, 'a0', 2);
-    turn('q1', 10, 'a1', 11);
-    controller.emit(pageEnd(hasMore: false, oldestMid: 1, beforeId: 20));
+    // A run ended: the view forgets the cursor and asks for a full replay.
+    // The host sends its newest page, with one new turn.
+    loader.invalidateCursor(session);
+    loader.expect(session);
+    turn('q5', 50, 'a5', 51);
+    turn('q6', 60, 'a6', 61);
+    controller.emit(pageEnd(hasMore: true, oldestMid: 50));
     await drain();
+
+    // The older rows stay, the page replaces the tail, nothing is doubled.
     expect(texts(), [
-      'q0', 'a0', 'q1', 'a1', 'q2', 'a2', 'q3', 'a3', 'q4', 'a4', 'q5', 'a5',
+      'q2',
+      'a2',
+      'q3',
+      'a3',
+      'q4',
+      'a4',
+      'q5',
+      'a5',
+      'q6',
+      'a6',
     ]);
-    expect(controller.replayPages, hasLength(2));
+    expect(loader.cursorFor(session), 61);
+    // No older page is asked for again.
+    expect(controller.replayPages, hasLength(asked));
   });
+
+  test(
+    'keptBelowPage keeps nothing when the cache does not reach the page',
+    () {
+      Map<String, String> user(int? mid) => <String, String>{
+        'sender': 'user',
+        'text': 'q',
+        if (mid != null) 'hostMid': '$mid',
+      };
+      const ai = <String, String>{'sender': 'ai', 'text': 'a'};
+      // Rows on both sides of the page start: the rows below it are kept.
+      expect(
+        AgentsReplayLoader.keptBelowPage([user(10), ai, user(20), ai], 20),
+        hasLength(2),
+      );
+      // The cache ends before the page: rows between the two would be missing.
+      expect(AgentsReplayLoader.keptBelowPage([user(10), ai], 20), isNull);
+      // Nothing below the page: there is nothing to keep.
+      expect(AgentsReplayLoader.keptBelowPage([user(20), ai], 20), isNull);
+      // Rows without a host id say nothing.
+      expect(AgentsReplayLoader.keptBelowPage([user(null), ai], 20), isNull);
+    },
+  );
 
   test('a page that does not move the floor is not asked for twice', () async {
     loader.expect(session);
@@ -132,8 +213,14 @@ void main() {
   test('an unpaged replay (old host) is committed exactly as before', () async {
     loader.expect(session);
     turn('q0', 1, 'a0', 2);
-    controller.emit(const AgentsRelayDone(
-      reason: 'replay', finalAnswer: null, iterations: 0, replay: true));
+    controller.emit(
+      const AgentsRelayDone(
+        reason: 'replay',
+        finalAnswer: null,
+        iterations: 0,
+        replay: true,
+      ),
+    );
     await drain();
     expect(texts(), ['q0', 'a0']);
     expect(controller.replayPages, isEmpty);

@@ -155,6 +155,9 @@ class AgentsChatStore {
   /// overtaken by a later, newer one for the same thread.
   static final Map<String, Future<void>> _chains = <String, Future<void>>{};
 
+  /// Threads with a write queued that has not started yet.
+  static final Set<String> _writeWaiting = <String>{};
+
   /// Cloud write throttle (CHAT-91). A thread is one encrypted row, written
   /// whole: a 3.5 MB Mail thread saved on every event of a run used up the
   /// Supabase disk IO budget. The local copy and the outbox flag are written
@@ -327,17 +330,33 @@ class AgentsChatStore {
       return chat;
     }
 
-    final payloadJson = _payloadJson(messages, resolvedName);
-
+    // One queued write per thread is enough: it takes the newest copy in
+    // memory when it runs. A long thread is saved many times in one run, and
+    // each save used to encode the whole thread on the UI thread (CHAT-114).
+    if (!_writeWaiting.add(sessionKey)) return chat;
     _enqueue(sessionKey, () async {
-      await _writeLocalCache(userId, chat, payloadJson);
+      _writeWaiting.remove(sessionKey);
+      final current = ChatStorageState.chatsById[sessionKey];
+      if (current == null || !current.isFullyLoaded) return;
+      if (_currentUserId() != userId) return;
+      final currentName = _normalized(current.customName);
+      final currentTitle =
+          currentName ??
+          current.title ??
+          ChatStorageCrud.extractTitleFromMessages(current.messages);
+      final stamp = current.updatedAt ?? now;
+      final payloadJson = await _payloadJsonAsync(
+        current.messages,
+        currentName,
+      );
+      await _writeLocalCache(userId, current, payloadJson);
       // The local copy is newer than the cloud from this moment on. Mark it
       // before the attempt: a crash mid-write then still flushes later.
       if (_lastCloudHash[sessionKey] == payloadJson.hashCode &&
           !_dirty.containsKey(sessionKey)) {
         return; // The cloud already has exactly this.
       }
-      await _markDirty(userId, sessionKey, chat.updatedAt ?? now);
+      await _markDirty(userId, sessionKey, stamp);
       final wait = _cloudWait(sessionKey, payloadJson.length);
       if (wait > Duration.zero) {
         _scheduleTrailingFlush(wait);
@@ -347,8 +366,8 @@ class AgentsChatStore {
         userId,
         id: sessionKey,
         payloadJson: payloadJson,
-        title: title,
-        updatedAt: chat.updatedAt ?? now,
+        title: currentTitle,
+        updatedAt: stamp,
       );
       if (ok) await _clearDirty(userId, sessionKey);
     });
@@ -1082,6 +1101,7 @@ class AgentsChatStore {
     _dirty.clear();
     _lastCloudPush.clear();
     _lastCloudHash.clear();
+    _writeWaiting.clear();
     _trailingFlush?.cancel();
     _trailingFlush = null;
     cloudWriteInterval = const Duration(seconds: 60);
@@ -1379,7 +1399,7 @@ class AgentsChatStore {
           inMemory.title ??
           ChatStorageCrud.extractTitleFromMessages(inMemory.messages);
       return _LocalCopy(
-        payloadJson: _payloadJson(inMemory.messages, customName),
+        payloadJson: await _payloadJsonAsync(inMemory.messages, customName),
         title: title,
         updatedAt: inMemory.updatedAt ?? inMemory.createdAt,
       );
@@ -1409,12 +1429,30 @@ class AgentsChatStore {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  static String _payloadJson(List<ChatMessage> messages, String? customName) =>
-      jsonEncode(<String, dynamic>{
-        'v': kChatPayloadVersionV2,
-        'customName': ?customName,
-        'messages': messages.map((m) => m.toJson()).toList(),
-      });
+  /// The payload of a thread. A long thread is encoded in a background
+  /// isolate: the Mail thread is 3.5 MB of JSON, and encoding it on the UI
+  /// thread dropped a dozen frames for every save (CHAT-114).
+  static Future<String> _payloadJsonAsync(
+    List<ChatMessage> messages,
+    String? customName,
+  ) {
+    final maps = <Map<String, dynamic>>[for (final m in messages) m.toJson()];
+    var chars = 0;
+    for (final m in messages) {
+      chars +=
+          m.text.length +
+          (m.toolCalls?.length ?? 0) +
+          (m.contentBlocks?.length ?? 0) +
+          (m.reasoning?.length ?? 0);
+    }
+    final job = (maps: maps, customName: customName);
+    if (chars < _kBackgroundEncodeChars) {
+      return Future<String>.value(_encodeThreadPayload(job));
+    }
+    return compute(_encodeThreadPayload, job);
+  }
+
+  static const int _kBackgroundEncodeChars = 128 * 1024;
 
   static Future<bool> _ensureKey() async {
     if (keyLoader != null) return keyLoader!();
@@ -1530,4 +1568,18 @@ class _CloudRow {
       assistantId: existing?.assistantId,
     );
   }
+}
+
+/// Runs in a background isolate for a long thread. The hash is taken here,
+/// so the UI thread does not walk the string again.
+String _encodeThreadPayload(
+  ({List<Map<String, dynamic>> maps, String? customName}) job,
+) {
+  final json = jsonEncode(<String, dynamic>{
+    'v': kChatPayloadVersionV2,
+    'customName': ?job.customName,
+    'messages': job.maps,
+  });
+  json.hashCode;
+  return json;
 }

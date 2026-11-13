@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -291,6 +292,52 @@ void main() {
       expect(order.last, contains('B'));
     },
   );
+
+  test('saves that queue up behind each other become one write of the newest '
+      'copy (CHAT-114)', () async {
+    final written = <String>[];
+    AgentsChatStore.userIdProvider = () => 'user-7';
+    AgentsChatStore.keyLoader = () async => false;
+    AgentsChatStore.localCacheWriter = (_, row) async {
+      written.add(row['payload'] as String);
+    };
+    for (final text in <String>['A', 'B', 'C']) {
+      unawaited(
+        AgentsChatStore.replaceThread(
+          'agent-1',
+          rows([
+            ['user', text],
+          ]),
+        ),
+      );
+    }
+    await AgentsChatStore.pending('agent-1');
+    expect(written, hasLength(1));
+    expect(written.single, contains('"C"'));
+  });
+
+  test('a long thread is encoded off the UI thread and reads back whole '
+      '(CHAT-114)', () async {
+    String? written;
+    AgentsChatStore.userIdProvider = () => 'user-7';
+    AgentsChatStore.keyLoader = () async => false;
+    AgentsChatStore.localCacheWriter = (_, row) async {
+      written = row['payload'] as String;
+    };
+    final big = 'x' * (200 * 1024);
+    await AgentsChatStore.replaceThread(
+      'agent-1',
+      rows([
+        ['user', 'question'],
+        ['ai', big],
+      ]),
+    );
+    await AgentsChatStore.pending('agent-1');
+    final decoded = jsonDecode(written!) as Map<String, dynamic>;
+    final messages = decoded['messages'] as List<dynamic>;
+    expect(messages, hasLength(2));
+    expect((messages.last as Map<String, dynamic>)['text'], big);
+  });
 
   test('a custom name survives a host replace and becomes the title', () async {
     await AgentsChatStore.replaceThread(

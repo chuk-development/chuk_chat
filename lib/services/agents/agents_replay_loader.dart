@@ -946,7 +946,28 @@ class AgentsReplayLoader extends ChangeNotifier {
     }
 
     var rows = draft.rows;
-    if (draft.beforeId > 0) {
+    // The newest page of a full replay, and the cache already holds the rows
+    // below it: keep them. See [keptBelowPage].
+    bool olderRowsKept = false;
+    final int? pageFloor = draft.oldestMid;
+    if (draft.beforeId == 0 &&
+        !honouredCursor &&
+        draft.hasMore &&
+        pageFloor != null) {
+      final existing = await _cachedRows(session);
+      final kept = keptBelowPage(existing, pageFloor);
+      if (kept != null) {
+        olderRowsKept = true;
+        rows = appendWithoutRepeats(kept, draft.rows);
+        if (_sameRows(rows, existing)) {
+          _advanceCursor(session, draft.maxMid);
+          return;
+        }
+      }
+    }
+    if (olderRowsKept) {
+      // Merged above.
+    } else if (draft.beforeId > 0) {
       // An OLDER page (replay paging): it goes in front of what the newer
       // pages already put in the cache. Nothing there yet (the cache was lost
       // between pages) is not an error — the page is then simply the thread.
@@ -1016,7 +1037,40 @@ class AgentsReplayLoader extends ChangeNotifier {
     _advanceCursor(session, draft.maxMid);
     _revisions[session] = (_revisions[session] ?? 0) + 1;
     notifyListeners();
-    _requestOlderPage(draft);
+    if (!olderRowsKept) _requestOlderPage(draft);
+  }
+
+  /// The cached rows that sit below a replay page whose first row is
+  /// [oldestMid], or null when the cache does not reach down past the page.
+  ///
+  /// A full replay comes in pages of [kReplayPageSize] rows, newest first.
+  /// The first page used to REPLACE the thread, and the older pages were
+  /// asked for one by one, each with a save of the whole thread and a new
+  /// screen. For a thread of 1300 rows that was seven rounds after an
+  /// answer (CHAT-114). The cache already holds those older rows, so only
+  /// the page is taken from the host: the rows before the first cached user
+  /// row at or above [oldestMid] stay as they are.
+  ///
+  /// Null (the old replace, then the older pages) when no cached user row
+  /// has a `hostMid` on each side of the page start: without one below there
+  /// is nothing to keep, and without one at or above the cache ends before
+  /// the page and rows between the two would be missing.
+  @visibleForTesting
+  static List<Map<String, String>>? keptBelowPage(
+    List<Map<String, String>> existing,
+    int oldestMid,
+  ) {
+    bool below = false;
+    for (int i = 0; i < existing.length; i++) {
+      final int? mid = int.tryParse(existing[i][kAgentsHostMidKey] ?? '');
+      if (mid == null) continue;
+      if (mid < oldestMid) {
+        below = true;
+        continue;
+      }
+      return below ? existing.sublist(0, i) : null;
+    }
+    return null;
   }
 
   /// Replay paging (docs/WIRE_CONTRACT.md, Bead cowork-axx): the page just
