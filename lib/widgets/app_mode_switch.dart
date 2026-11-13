@@ -31,7 +31,15 @@ class AppModeSwitch extends StatelessWidget {
     required this.onChanged,
     this.home = false,
     this.onHome,
+    this.large = false,
   });
+
+  /// The head of the phone's sidebar: the switch takes the whole width it
+  /// is given and is [largeHeight] high, so a thumb hits a segment easily.
+  final bool large;
+
+  /// The painted height of the [large] switch.
+  static const double largeHeight = 46;
 
   /// The half in front.
   final AppMode mode;
@@ -96,13 +104,15 @@ class AppModeSwitch extends StatelessWidget {
       explicitChildNodes: true,
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: preferredWidth(context, withHome: withHome),
+          maxWidth: large
+              ? double.infinity
+              : preferredWidth(context, withHome: withHome),
         ),
         child: ConnectedGroup(
           labels: shown,
           selected: selected,
           margin: EdgeInsets.zero,
-          height: height,
+          height: large ? largeHeight : height,
           onSelected: (int i) {
             if (i == selected) return;
             if (withHome && i == 0) {

@@ -41,6 +41,10 @@ class SidebarMobile extends StatefulWidget {
   final String? selectedChatId;
   final bool isCompactMode; // Not directly used in the UI, but kept for context
 
+  /// Takes the wordmark's place at the top: the Agents build's switch
+  /// between the halves (Home | Chats | Sidekicks).
+  final Widget? header;
+
   const SidebarMobile({
     super.key,
     required this.onChatSelected,
@@ -51,6 +55,7 @@ class SidebarMobile extends StatefulWidget {
     this.onChatDeleted,
     this.onCollapseTapped,
     this.onAddComputerTapped,
+    this.header,
     required this.selectedChatId,
     required this.isCompactMode,
   });
@@ -275,9 +280,9 @@ class _SidebarMobileState extends State<SidebarMobile>
   ) {
     return chats
         .where((chat) {
-          final bool titleMatches = deriveSidebarChatTitle(
-            chat,
-          ).toLowerCase().contains(lowerQuery);
+          final bool titleMatches = deriveSidebarChatTitle(chat)
+              .toLowerCase()
+              .contains(lowerQuery);
           if (titleMatches) return true;
           return (chat.messagesOrNull ?? const [])
               .take(_searchMessageLimit)
@@ -332,9 +337,7 @@ class _SidebarMobileState extends State<SidebarMobile>
             child: CustomScrollView(
               controller: scrollController,
               slivers: <Widget>[
-                SliverToBoxAdapter(
-                  child: SizedBox(height: navBlockBottom + 6),
-                ),
+                SliverToBoxAdapter(child: SizedBox(height: navBlockBottom + 6)),
                 ..._buildMobileSlivers(accentColor),
                 SliverToBoxAdapter(
                   child: SizedBox(height: bottomChromeHeight + bottomInset),
@@ -374,7 +377,9 @@ class _SidebarMobileState extends State<SidebarMobile>
                       Expanded(
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: BrandWordmark(color: theme.resolvedIconColor),
+                          child:
+                              widget.header ??
+                              BrandWordmark(color: theme.resolvedIconColor),
                         ),
                       ),
                       if (widget.onCollapseTapped != null) ...[
@@ -416,7 +421,9 @@ class _SidebarMobileState extends State<SidebarMobile>
               children: [
                 const UpdateBanner(),
                 KeyedSubtree(
-                  key: TourKeyRegistry.instance.anchorFor(TourSlots.settingsEntry),
+                  key: TourKeyRegistry.instance.anchorFor(
+                    TourSlots.settingsEntry,
+                  ),
                   child: Padding(
                     // The home indicator sits below the box, so it keeps its
                     // own 6 px and adds what the device reserves.

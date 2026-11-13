@@ -1566,6 +1566,7 @@ const Map<String, String> stringsEn = {
   // ── end Home dashboard ──
   // ── Chats half, swipe mode (phone) ──
   'chatSwipeMenu': 'Menu',
+  'chatSwipeMore': 'More actions',
   'chatSwipeCopyChat': 'Copy full chat',
   'chatSwipeRename': 'Rename',
   'chatSwipeStripHint': 'Swipe to switch chats',

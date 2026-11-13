@@ -1,4 +1,4 @@
-/// The full-width bar under the mode switch that names the chat in view.
+/// The pill in the phone's top bar that names the chat in view.
 ///
 /// It is the swipe surface of the phone (owner, 2026-11-05): a sideways
 /// drag on the bar drives the [SwipeChatPager] below through its
@@ -71,7 +71,7 @@ class ChatTitleStrip extends StatelessWidget {
     this.controller,
     this.progress,
     this.onTap,
-    this.margin = const EdgeInsets.symmetric(horizontal: 13),
+    this.margin = EdgeInsets.zero,
     this.semanticsHint = 'Swipe to switch chats',
     this.workingLabel = 'working',
     this.emptyTitle = '',
@@ -92,8 +92,7 @@ class ChatTitleStrip extends StatelessWidget {
   /// A tap on the strip: the list of chats.
   final VoidCallback? onTap;
 
-  /// Room around the bar. The default lines its edges up with the round
-  /// chips of the row above (10 px row padding + 3 px chip slop).
+  /// Room around the bar. None by default: the top bar's row places it.
   final EdgeInsetsGeometry margin;
   final String semanticsHint;
 

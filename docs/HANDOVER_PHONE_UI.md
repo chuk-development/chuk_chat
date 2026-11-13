@@ -1,5 +1,15 @@
 # Handover: phone UI of the Agents build (2026-11-05)
 
+> **Changed on 2026-11-13 (CHAT-109).** The owner wants the sidebar back:
+> without a list he could not see which Sidekick had news. Now: one top row
+> (menu chip, title pill, "..." chip, add button). The menu chip opens a
+> full-page sidebar: `SidebarMobile` in the Chats half, `MobileAgentList` in
+> the Sidekicks half, the switch Home | Chats | Sidekicks as the head of
+> both. One open state for both halves (`_phoneSidebarOpen` in
+> `messenger_shell.dart`). The swipe between chats stays. A pull up at the
+> end of a chat makes a new one (`pull_up_to_create.dart`). The text below
+> is the state before that.
+
 Read this first, then `CLAUDE.md`. Bead: `chuk_chat-2gku` (still open).
 
 ## What the owner wants (his words, condensed)

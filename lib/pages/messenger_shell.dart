@@ -109,7 +109,9 @@ import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/platform_specific/mobile/chat_title_strip.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_home_composer.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_media_page.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_top_bar.dart';
+import 'package:chuk_chat/platform_specific/mobile/pull_up_to_create.dart';
 import 'package:chuk_chat/platform_specific/mobile/swipe_chat_pager.dart';
 import 'package:chuk_chat/widgets/kept_tabs.dart';
 import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
@@ -345,6 +347,15 @@ class _MessengerShellState extends State<MessengerShell>
   /// drives the title strip under the switch.
   final SwipeChatPagerController _phonePager = SwipeChatPagerController();
 
+  /// Whether the phone's sidebar is open. One value for both halves: chuk's
+  /// wrapper follows it too, so the switch in the open sidebar shows the
+  /// other half with its sidebar open.
+  final ValueNotifier<bool> _phoneSidebarOpen = ValueNotifier<bool>(false);
+
+  /// Whether a Sidekick has said something the user has not seen: the dot
+  /// on the menu chip of both halves.
+  final ValueNotifier<bool> _phoneUnread = ValueNotifier<bool>(false);
+
   /// The room a phone shows as a route on top of the thread, while that
   /// route is open: the strip names it. Null again when the route closes,
   /// so the strip names the thread that is still open underneath.
@@ -472,11 +483,14 @@ class _MessengerShellState extends State<MessengerShell>
   /// On a phone it is Home | Chats | Agents (owner, 2026-11-05): Home is a
   /// segment of its own, not a page the swipe passes through. Agents then
   /// means the conversations, so picking it leaves Home.
-  Widget _buildModeSwitch() => AppModeSwitch(
+  Widget _buildModeSwitch({bool large = false}) => AppModeSwitch(
+    large: large,
     mode: _shownMode,
     home: _isPhone && _agentsHomeShown.value,
     onHome: _isPhone
         ? () {
+            // Home has no list to show: the sidebar closes.
+            _phoneSidebarOpen.value = false;
             _showAgentsHome();
             unawaited(_appMode.select(AppMode.agents));
           }
@@ -582,7 +596,8 @@ class _MessengerShellState extends State<MessengerShell>
   /// A device with no computer also gets chuk's sidebar entry "Add your
   /// computer" ([_addComputerAction]).
   Widget _buildChatMode(BuildContext context, bool phone) {
-    final Widget modeSwitch = _buildModeSwitch();
+    // On a phone the switch is the head of chuk's sidebar.
+    final Widget modeSwitch = _buildModeSwitch(large: phone && !kIsWeb);
     final VoidCallback? addComputer = _addComputerAction;
     final builder = widget.chatModeBuilder;
     if (builder != null) {
@@ -600,9 +615,11 @@ class _MessengerShellState extends State<MessengerShell>
         headerCenter: modeSwitch,
         selectedChatIdReader: _readChatModeChatId,
         onAddComputer: addComputer,
-        // The Agents build's phone: no drawer, swipe between chats, the
-        // title strip under the switch (owner, 2026-11-05).
+        // The Agents build's phone: swipe between chats, the sidebar
+        // behind the menu chip (owner, 2026-11-05 and 2026-11-13).
         swipeNavigation: true,
+        sidebarOpen: _phoneSidebarOpen,
+        menuBadge: _phoneUnread,
       );
     }
     return RootWrapperDesktop(
@@ -785,6 +802,8 @@ class _MessengerShellState extends State<MessengerShell>
     unawaited(_attachSub?.cancel());
     if (_ownsAppMode) _appMode.dispose();
     _phonePager.dispose();
+    _phoneSidebarOpen.dispose();
+    _phoneUnread.dispose();
     _controller.removeListener(_onControllerForBrowser);
     _browserPresence?.dispose();
     _browserPresence = null;
@@ -1511,6 +1530,7 @@ class _MessengerShellState extends State<MessengerShell>
         _agentProfiles,
         RosterPins.instance,
         ThreadPreviewStore.instance,
+        _phoneSidebarOpen,
       ]),
       builder: (BuildContext context, Widget? _) {
         final AppLocalizations? l = AppLocalizations.of(context);
@@ -1526,6 +1546,14 @@ class _MessengerShellState extends State<MessengerShell>
         final double homeTop =
             MediaQuery.viewPaddingOf(context).top + kMobileTopBarRowOnlyHeight;
         if (thread) _schedulePhoneRead();
+        final bool unread = _roster.visibleAgents.any(_readMarks.isUnread);
+        if (unread != _phoneUnread.value) {
+          // After the frame: chuk's top bar listens, and nothing may be
+          // marked dirty from inside this build.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _phoneUnread.value = unread;
+          });
+        }
 
         final Widget body = Stack(
           children: <Widget>[
@@ -1537,7 +1565,15 @@ class _MessengerShellState extends State<MessengerShell>
                   enabled: thread,
                   child: ExcludeFocus(
                     excluding: !thread,
-                    child: _buildThread(topInset: top, phone: true),
+                    // At the end of a conversation, a pull up starts a
+                    // new Sidekick.
+                    child: PullUpToCreate(
+                      enabled: thread,
+                      icon: Icons.person_add_alt_1_rounded,
+                      label: l?.agentsNewAgent ?? 'New agent',
+                      onCreate: () => unawaited(_openOnboarding()),
+                      child: _buildThread(topInset: top, phone: true),
+                    ),
                   ),
                 ),
               ),
@@ -1569,13 +1605,23 @@ class _MessengerShellState extends State<MessengerShell>
 
         return PopScope(
           // Android back on an agent (or a room's place) goes to Home; on
-          // Home it leaves the app. Behind chuk's chats it is not ours.
-          canPop: home || _shownMode != AppMode.agents,
+          // Home it leaves the app. Behind chuk's chats it is not ours. An
+          // open sidebar closes first.
+          canPop:
+              _shownMode != AppMode.agents ||
+              (home && !_phoneSidebarOpen.value),
           onPopInvokedWithResult: (bool didPop, Object? _) {
-            if (didPop) return;
+            if (didPop || _shownMode != AppMode.agents) return;
+            if (_phoneSidebarOpen.value) {
+              _phoneSidebarOpen.value = false;
+              return;
+            }
             _showAgentsHome();
           },
-          child: RepaintBoundary(
+          child: _PhoneSidebarScaffold(
+            open: _phoneSidebarOpen,
+            onClose: () => _phoneSidebarOpen.value = false,
+            sidebar: _buildPhoneSidebar(context),
             child: Stack(
               children: <Widget>[
                 Positioned.fill(
@@ -1596,10 +1642,13 @@ class _MessengerShellState extends State<MessengerShell>
                   left: 0,
                   right: 0,
                   child: MobileTopBar(
-                    onMenu: () => unawaited(_openPhoneMenu()),
+                    onMenu: _togglePhoneSidebar,
+                    menuBadge: unread,
                     centre: _agentsModeSwitch(),
+                    onMore: () => unawaited(_openPhoneMenu()),
                     onAdd: () => unawaited(_openOnboarding()),
                     menuTooltip: l?.chatSwipeMenu ?? 'Menu',
+                    moreTooltip: l?.chatSwipeMore ?? 'More actions',
                     addTooltip: l?.agentsNewAgent ?? 'New agent',
                     addIcon: Icons.person_add_alt_1_rounded,
                     strip: home
@@ -1624,6 +1673,56 @@ class _MessengerShellState extends State<MessengerShell>
     );
   }
 
+  void _togglePhoneSidebar() {
+    final bool open = !_phoneSidebarOpen.value;
+    if (open) FocusManager.instance.primaryFocus?.unfocus();
+    _phoneSidebarOpen.value = open;
+  }
+
+  /// The phone's sidebar of the Sidekicks half (owner, 2026-11-13): the
+  /// switch between the halves on top, and under it every Sidekick and room
+  /// with its last line, its time and its unread count, so one look says
+  /// who has news. A tap opens that conversation and closes the sidebar.
+  Widget _buildPhoneSidebar(BuildContext context) {
+    void close() => _phoneSidebarOpen.value = false;
+    return ColoredBox(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: MobileAgentList(
+        key: const ValueKey<String>('phone-sidebar-list'),
+        source: _roster,
+        selectedAgentId: _selectedAgentId,
+        selectedThreadKey: _selectedThreadKey,
+        onSelect: (String agentId, String threadKey) {
+          close();
+          _leaveAgentsHome();
+          _select(agentId, threadKey);
+        },
+        onAddAgent: () {
+          close();
+          unawaited(_openOnboarding());
+        },
+        rooms: _rooms,
+        onOpenRoom: (String roomId) {
+          close();
+          unawaited(_openRoom(roomId));
+        },
+        onCreateRoom: () {
+          close();
+          unawaited(_openRoomCreate());
+        },
+        onOpenProfile: _openAgentProfile,
+        onRenameAgent: (AgentsAgent target) =>
+            unawaited(_openAgentRename(target)),
+        onDeleteAgent: (AgentsAgent target) => _deleteAgent(target.id),
+        readMarks: _readMarks,
+        profiles: _agentProfiles,
+        mainAgentSection: true,
+        emptyState: _buildStatusPanel(),
+        headerCenter: _chatModeAvailable ? _buildModeSwitch(large: true) : null,
+      ),
+    );
+  }
+
   /// The last line of [agent], the way the old inbox said it.
   String? _phonePreview(AgentsAgent agent) {
     final ThreadPreview? preview = ThreadPreviewStore.instance.newestOf(
@@ -1631,6 +1730,119 @@ class _MessengerShellState extends State<MessengerShell>
     );
     if (preview == null || preview.text.isEmpty) return null;
     return preview.fromUser ? 'You: ${preview.text}' : preview.text;
+  }
+}
+
+/// The phone body with its sidebar: [sidebar] is a full page that slides in
+/// from the left and pushes [child] out to the right, the way chuk's own
+/// phone sidebar does (`RootWrapperMobile`), with the same timing.
+class _PhoneSidebarScaffold extends StatefulWidget {
+  const _PhoneSidebarScaffold({
+    required this.open,
+    required this.onClose,
+    required this.sidebar,
+    required this.child,
+  });
+
+  final ValueListenable<bool> open;
+  final VoidCallback onClose;
+  final Widget sidebar;
+  final Widget child;
+
+  @override
+  State<_PhoneSidebarScaffold> createState() => _PhoneSidebarScaffoldState();
+}
+
+class _PhoneSidebarScaffoldState extends State<_PhoneSidebarScaffold>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 200),
+    value: widget.open.value ? 1 : 0,
+  );
+  late final Animation<double> _slide = CurvedAnimation(
+    parent: _controller,
+    curve: Curves.easeOutCubic,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    widget.open.addListener(_onOpen);
+  }
+
+  @override
+  void didUpdateWidget(_PhoneSidebarScaffold old) {
+    super.didUpdateWidget(old);
+    if (old.open == widget.open) return;
+    old.open.removeListener(_onOpen);
+    widget.open.addListener(_onOpen);
+    _onOpen();
+  }
+
+  @override
+  void dispose() {
+    widget.open.removeListener(_onOpen);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onOpen() {
+    if (widget.open.value) {
+      _controller.forward();
+    } else {
+      _controller.reverse();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      // Built once per build of this widget, not once per frame.
+      child: widget.child,
+      builder: (BuildContext context, Widget? content) {
+        final double t = _slide.value;
+        // Fully closed, the sidebar is off stage: not laid out, not
+        // painted, not in the focus or semantics tree.
+        final bool closed = _controller.isDismissed;
+        final bool open = widget.open.value;
+        return Stack(
+          children: <Widget>[
+            Positioned.fill(
+              child: FractionalTranslation(
+                translation: Offset(t, 0),
+                child: IgnorePointer(
+                  ignoring: open,
+                  child: RepaintBoundary(child: content),
+                ),
+              ),
+            ),
+            Positioned.fill(
+              key: const ValueKey<String>('phone-sidebar'),
+              child: Offstage(
+                offstage: closed,
+                child: FractionalTranslation(
+                  translation: Offset(t - 1, 0),
+                  child: IgnorePointer(
+                    ignoring: !open,
+                    // A flick to the left closes it, as in chuk's sidebar.
+                    child: GestureDetector(
+                      onHorizontalDragEnd: (DragEndDetails details) {
+                        if ((details.primaryVelocity ?? 0) < -500) {
+                          widget.onClose();
+                        }
+                      },
+                      child: widget.sidebar,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 

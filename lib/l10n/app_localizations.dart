@@ -1581,6 +1581,7 @@ class AppLocalizations {
   // ── end Home dashboard ──
   // ── Chats half, swipe mode (phone) ──
   String get chatSwipeMenu => _get('chatSwipeMenu');
+  String get chatSwipeMore => _get('chatSwipeMore');
   String get chatSwipeCopyChat => _get('chatSwipeCopyChat');
   String get chatSwipeRename => _get('chatSwipeRename');
   String get chatSwipeStripHint => _get('chatSwipeStripHint');

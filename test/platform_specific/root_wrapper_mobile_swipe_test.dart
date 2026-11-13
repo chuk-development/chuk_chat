@@ -134,22 +134,43 @@ void main() {
     ChatStorageState.chatsById.clear();
   });
 
-  testWidgets('no drawer: a top bar with the switch and a title strip', (
-    tester,
-  ) async {
+  testWidgets('one top row with the title strip; the menu chip opens the '
+      'sidebar, which holds the switch', (tester) async {
     await _pump(tester);
 
-    expect(find.byType(SidebarMobile, skipOffstage: false), findsNothing);
+    // Closed: the sidebar is off stage, and so is the switch in its head.
+    expect(find.byType(SidebarMobile), findsNothing);
+    expect(find.byKey(_kSwitchKey), findsNothing);
     // The plain build's floating bar and its sidebar toggle are gone.
     expect(findId('menu_button'), findsNothing);
     expect(findId('mobile_menu_button'), findsOneWidget);
+    expect(findId('mobile_more_button'), findsOneWidget);
+    // The strip is in the row, between the chips.
+    final Rect menu = tester.getRect(findId('mobile_menu_button'));
+    final Rect more = tester.getRect(findId('mobile_more_button'));
+    final Rect pill = tester.getRect(find.byType(ChatTitleStrip));
+    expect(pill.left, greaterThanOrEqualTo(menu.right));
+    expect(pill.right, lessThanOrEqualTo(more.left));
+    expect(pill.center.dy, moreOrLessEquals(menu.center.dy, epsilon: 0.5));
+
+    await tester.tap(findId('mobile_menu_button'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(SidebarMobile), findsOneWidget);
     expect(
       find.descendant(
-        of: find.byType(MobileTopBar),
+        of: find.byType(SidebarMobile),
         matching: find.byKey(_kSwitchKey),
       ),
       findsOneWidget,
     );
+    // Android back closes it and stays in the app.
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(SidebarMobile), findsNothing);
+    expect(find.byType(RootWrapperMobile), findsOneWidget);
+
     final ChatTitleStrip strip = tester.widget(find.byType(ChatTitleStrip));
     expect(strip.selectedId, '__new__');
     expect(strip.entries.map((SwipeChatEntry e) => e.id).toList(), <String>[
@@ -165,11 +186,12 @@ void main() {
       findsOneWidget,
     );
 
-    // A sideways drag from the left edge no longer opens a drawer: on the
-    // "New chat" page there is nothing to the left, so it springs back.
+    // A sideways drag on the chat is the pager's, it does not open the
+    // sidebar: on the "New chat" page there is nothing to the left, so it
+    // springs back.
     await tester.flingFrom(const Offset(10, 500), const Offset(300, 0), 1500);
     await tester.pump(const Duration(seconds: 1));
-    expect(find.byType(SidebarMobile, skipOffstage: false), findsNothing);
+    expect(find.byType(SidebarMobile), findsNothing);
     expect(_stripSelected(tester), '__new__');
     await _drain(tester);
   });
@@ -262,7 +284,7 @@ void main() {
     tester,
   ) async {
     await _pump(tester);
-    await tester.tap(findId('mobile_menu_button'));
+    await tester.tap(findId('mobile_more_button'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Settings'), findsOneWidget);
@@ -287,7 +309,7 @@ void main() {
   }
 
   Future<void> openMenu(WidgetTester tester) async {
-    await tester.tap(findId('mobile_menu_button'));
+    await tester.tap(findId('mobile_more_button'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
   }
@@ -352,7 +374,7 @@ void main() {
       'page', (tester) async {
     final _Routes routes = _Routes();
     await _pump(tester, routes: routes);
-    await tester.tap(findId('mobile_menu_button'));
+    await tester.tap(findId('mobile_more_button'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 

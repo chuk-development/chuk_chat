@@ -14,6 +14,7 @@ import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:chuk_chat/platform_specific/mobile/chat_title_strip.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_top_bar.dart';
+import 'package:chuk_chat/platform_specific/mobile/pull_up_to_create.dart';
 import 'package:chuk_chat/platform_specific/mobile/swipe_chat_pager.dart';
 import 'package:chuk_chat/platform_specific/sidebar_mobile.dart'; // UPDATED: Use mobile sidebar
 import 'package:chuk_chat/services/artifact_storage_service.dart';
@@ -66,16 +67,26 @@ class RootWrapperMobile extends StatefulWidget {
   /// sidebar. Null, as in chuk_chat, draws nothing.
   final VoidCallback? onAddComputer;
 
-  /// The Agents build's phone layout for the Chats half (owner, 2026-11-05):
-  /// no drawer, no bottom bar. [MobileTopBar] holds the menu chip,
-  /// [headerCenter] (the Chats | Agents switch) and the new-chat button, and
-  /// under them a [ChatTitleStrip] that names the chat in view. A sideways
-  /// swipe on the chat moves to the next or previous chat ([SwipeChatPager])
-  /// in the same chat view; a tap on the strip opens the chat list.
+  /// The Agents build's phone layout for the Chats half (owner, 2026-11-05
+  /// and 2026-11-13). [MobileTopBar] holds the menu chip, a
+  /// [ChatTitleStrip] that names the chat in view, the "..." chip and the
+  /// new-chat button. A sideways swipe on the chat moves to the next or
+  /// previous chat ([SwipeChatPager]) in the same chat view. The menu chip
+  /// opens the sidebar, with [headerCenter] (the switch between the halves)
+  /// at its top.
   ///
   /// False, the default, is chuk_chat's layout unchanged: the floating top
   /// bar and the sliding sidebar.
   final bool swipeNavigation;
+
+  /// Whether the sidebar is open, shared with the Sidekicks half: both
+  /// halves follow it, so the switch in an open sidebar shows the other
+  /// half with its sidebar open too. Null keeps the state in this widget.
+  final ValueNotifier<bool>? sidebarOpen;
+
+  /// Draws the unread dot on the menu chip (swipe layout): a Sidekick has
+  /// said something the user has not seen.
+  final ValueListenable<bool>? menuBadge;
 
   const RootWrapperMobile({
     super.key,
@@ -84,6 +95,8 @@ class RootWrapperMobile extends StatefulWidget {
     this.selectedChatIdReader,
     this.onAddComputer,
     this.swipeNavigation = false,
+    this.sidebarOpen,
+    this.menuBadge,
   });
 
   @override
@@ -188,6 +201,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       );
     }
 
+    widget.sidebarOpen?.addListener(_onSharedSidebar);
+
     // Initialize smooth sidebar animation
     _sidebarAnimController = AnimationController(
       vsync: this,
@@ -253,6 +268,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   @override
   void dispose() {
+    widget.sidebarOpen?.removeListener(_onSharedSidebar);
     WorkspacesSetting.instance.removeListener(_onWorkspacesSettingChanged);
     ShareIntentService.instance.incoming.removeListener(_onShareIncoming);
     if (kFeatureArtifacts) {
@@ -439,19 +455,30 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     }
   }
 
-  void _toggleSidebar() {
+  void _toggleSidebar() => _setSidebar(!_isSidebarExpanded);
+
+  /// Opens or closes the sidebar, and tells the other half
+  /// ([RootWrapperMobile.sidebarOpen]).
+  void _setSidebar(bool open) {
+    if (open == _isSidebarExpanded) return;
     // Hide keyboard when opening sidebar
-    if (!_isSidebarExpanded) {
-      FocusManager.instance.primaryFocus?.unfocus();
-    }
+    if (open) FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
-      _isSidebarExpanded = !_isSidebarExpanded;
-      if (_isSidebarExpanded) {
+      _isSidebarExpanded = open;
+      if (open) {
         _sidebarAnimController.forward(); // Animate in
       } else {
         _sidebarAnimController.reverse(); // Animate out
       }
     });
+    widget.sidebarOpen?.value = open;
+  }
+
+  /// The other half opened or closed the shared sidebar.
+  void _onSharedSidebar() {
+    final ValueNotifier<bool>? shared = widget.sidebarOpen;
+    if (!mounted || shared == null) return;
+    _setSidebar(shared.value);
   }
 
   void _openSettingsPage() {
@@ -553,6 +580,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         _sidebarAnimController.reverse();
       }
     });
+    widget.sidebarOpen?.value = false;
     if (kFeatureArtifacts) {
       unawaited(
         ArtifactStorageService.setActiveChat(chatId, forceRefresh: false),
@@ -986,8 +1014,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   }
 
   /// Swipe mode's screen: the one chat view inside the pager, and the top
-  /// bar with the strip lying over it.
-  Widget _buildSwipeLayout(BuildContext context) {
+  /// bar lying over it. The sidebar slides over both ([build]).
+  Widget _buildSwipeContent(BuildContext context) {
     final AppLocalizations? l = AppLocalizations.of(context);
     // viewPaddingOf: see the plain build below.
     final double topInset =
@@ -995,47 +1023,62 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     final List<SwipeChatEntry> entries = _swipeEntries(context);
     final String selectedId = _selectedChatId ?? _kNewChatEntryId;
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Stack(
-        children: <Widget>[
-          Positioned.fill(
-            child: SwipeChatPager(
-              entries: entries,
-              selectedId: selectedId,
-              controller: _swipeController,
-              onSelected: _onSwipeSelected,
-              // Only the name in the strip moves (owner, 2026-11-05).
-              moveChild: false,
+    Widget bar(bool badge) => MobileTopBar(
+      onMenu: _toggleSidebar,
+      menuBadge: badge,
+      centre: null,
+      onMore: _openSwipeMenu,
+      onAdd: _newChatFromAppBar,
+      menuTooltip: l?.chatSwipeMenu ?? 'Menu',
+      moreTooltip: l?.chatSwipeMore ?? 'More actions',
+      addTooltip: l?.newChat ?? 'New chat',
+      strip: ChatTitleStrip(
+        entries: entries,
+        selectedId: selectedId,
+        controller: _swipeController,
+        semanticsHint: l?.chatSwipeStripHint ?? 'Swipe to switch chats',
+        workingLabel: l?.chatSwipeWorking ?? 'working',
+        // A chat that is not in the list yet (saved a moment ago).
+        emptyTitle: _currentChatTitle() ?? (l?.newChat ?? 'New chat'),
+      ),
+    );
+    final ValueListenable<bool>? badge = widget.menuBadge;
+
+    return Stack(
+      children: <Widget>[
+        Positioned.fill(
+          child: SwipeChatPager(
+            entries: entries,
+            selectedId: selectedId,
+            controller: _swipeController,
+            onSelected: _onSwipeSelected,
+            // Only the name in the strip moves (owner, 2026-11-05).
+            moveChild: false,
+            // At the end of a chat, a pull up starts a new one.
+            child: PullUpToCreate(
+              enabled: _selectedChatId != null,
+              label: l?.newChat ?? 'New chat',
+              onCreate: _newChatFromAppBar,
               child: _buildChatView(
                 topInset: topInset,
-                onToggleSidebar: _openSwipeMenu,
+                onToggleSidebar: _toggleSidebar,
               ),
             ),
           ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: MobileTopBar(
-              onMenu: _openSwipeMenu,
-              centre: widget.headerCenter,
-              onAdd: _newChatFromAppBar,
-              menuTooltip: l?.chatSwipeMenu ?? 'Menu',
-              addTooltip: l?.newChat ?? 'New chat',
-              strip: ChatTitleStrip(
-                entries: entries,
-                selectedId: selectedId,
-                controller: _swipeController,
-                semanticsHint: l?.chatSwipeStripHint ?? 'Swipe to switch chats',
-                workingLabel: l?.chatSwipeWorking ?? 'working',
-                // A chat that is not in the list yet (saved a moment ago).
-                emptyTitle: _currentChatTitle() ?? (l?.newChat ?? 'New chat'),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: badge == null
+              ? bar(false)
+              : ValueListenableBuilder<bool>(
+                  valueListenable: badge,
+                  builder: (BuildContext context, bool on, Widget? _) =>
+                      bar(on),
+                ),
+        ),
+      ],
     );
   }
 
@@ -1085,7 +1128,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   @override
   Widget build(BuildContext context) {
-    if (widget.swipeNavigation) return _buildSwipeLayout(context);
+    final bool swipe = widget.swipeNavigation;
 
     // sizeOf, not of(): this sits above the Scaffold, so `of` would see the
     // raw animating viewInsets and rebuild the app bar, the chat screen and
@@ -1112,40 +1155,46 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     final Widget mainContent = GestureDetector(
       behavior: HitTestBehavior.translucent,
       onTap: _isSidebarExpanded ? _toggleSidebar : null,
-      onHorizontalDragEnd: (DragEndDetails details) {
-        if (details.primaryVelocity == null) return;
+      // In swipe mode a sideways drag on the chat is the pager's: it moves
+      // to the next chat. The sidebar opens from the menu chip there.
+      onHorizontalDragEnd: swipe
+          ? null
+          : (DragEndDetails details) {
+              if (details.primaryVelocity == null) return;
 
-        // Swipe right to open (when closed)
-        if (!_isSidebarExpanded && details.primaryVelocity! > 500) {
-          _toggleSidebar();
-        }
-        // Swipe left to close (when open)
-        else if (_isSidebarExpanded && details.primaryVelocity! < -500) {
-          _toggleSidebar();
-        }
-      },
+              // Swipe right to open (when closed)
+              if (!_isSidebarExpanded && details.primaryVelocity! > 500) {
+                _toggleSidebar();
+              }
+              // Swipe left to close (when open)
+              else if (_isSidebarExpanded && details.primaryVelocity! < -500) {
+                _toggleSidebar();
+              }
+            },
       child: IgnorePointer(
         ignoring: _isSidebarExpanded,
         // Overlay, not a column: the top bar floats on top of the chat so
         // the conversation scrolls under its translucent chips and shows
         // through. The chat reserves `topBarInset` at the top so nothing
         // starts hidden behind the bar.
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: _buildChatView(
-                topInset: topBarInset,
-                onToggleSidebar: _toggleSidebar,
+        child: swipe
+            ? _buildSwipeContent(context)
+            : Stack(
+                children: [
+                  Positioned.fill(
+                    child: _buildChatView(
+                      topInset: topBarInset,
+                      onToggleSidebar: _toggleSidebar,
+                    ),
+                  ),
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: _buildFloatingTopBar(iconFg),
+                  ),
+                ],
               ),
-            ),
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: _buildFloatingTopBar(iconFg),
-            ),
-          ],
-        ),
       ),
     );
 
@@ -1179,6 +1228,8 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 if (_isSidebarExpanded) _toggleSidebar();
                 widget.onAddComputer!();
               },
+        // Swipe mode: the switch between the halves is the sidebar's head.
+        header: swipe ? widget.headerCenter : null,
         selectedChatId: _selectedChatId,
         isCompactMode: true,
       ),
@@ -1186,33 +1237,49 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: AnimatedBuilder(
-        animation: _sidebarAnimation,
-        builder: (context, child) {
-          final animValue = _sidebarAnimation.value;
-          final sidebarOffset =
-              -sidebarVisibleWidth + (sidebarVisibleWidth * animValue);
-
-          return Stack(
-            children: [
-              // Main content that slides right - keeps full width to prevent layout collapse
-              Positioned.fill(
-                child: Transform.translate(
-                  offset: Offset(sidebarVisibleWidth * animValue, 0),
-                  child: mainContent,
-                ),
-              ),
-              // Sidebar that slides in from left
-              Positioned(
-                left: sidebarOffset,
-                top: 0,
-                bottom: 0,
-                width: sidebarVisibleWidth,
-                child: sidebar,
-              ),
-            ],
-          );
+      body: PopScope(
+        // Android back closes the open sidebar first (swipe mode; chuk's
+        // own layout is as it was).
+        canPop: !(swipe && _isSidebarExpanded),
+        onPopInvokedWithResult: (bool didPop, Object? _) {
+          if (didPop || !swipe) return;
+          _setSidebar(false);
         },
+        child: AnimatedBuilder(
+          animation: _sidebarAnimation,
+          builder: (context, child) {
+            final animValue = _sidebarAnimation.value;
+            final sidebarOffset =
+                -sidebarVisibleWidth + (sidebarVisibleWidth * animValue);
+
+            return Stack(
+              children: [
+                // Main content that slides right - keeps full width to prevent layout collapse
+                Positioned.fill(
+                  child: Transform.translate(
+                    offset: Offset(sidebarVisibleWidth * animValue, 0),
+                    child: mainContent,
+                  ),
+                ),
+                // Sidebar that slides in from left
+                Positioned(
+                  left: sidebarOffset,
+                  top: 0,
+                  bottom: 0,
+                  width: sidebarVisibleWidth,
+                  // Swipe mode: closed, the sidebar is off stage. It is not
+                  // laid out or painted behind the chat it never shows with.
+                  child: swipe
+                      ? Offstage(
+                          offstage: _sidebarAnimController.isDismissed,
+                          child: sidebar,
+                        )
+                      : sidebar,
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

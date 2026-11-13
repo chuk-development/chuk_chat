@@ -419,7 +419,7 @@ void main() {
 
   /// On a phone: opens the menu chip's sheet and taps the row [label].
   Future<void> tapPhoneMenu(WidgetTester tester, String label) async {
-    await tester.tap(find.byTooltip('Menu'));
+    await tester.tap(find.byTooltip('More actions'));
     await tester.pumpAndSettle();
     await tester.tap(
       find.descendant(of: find.byType(BottomSheet), matching: find.text(label)),
@@ -1670,6 +1670,107 @@ void main() {
       expect(find.byType(RoomThreadView), findsNothing);
       expect(strip(tester).selectedId, agentId);
       expect(conversation, findsOneWidget);
+    });
+
+    testWidgets('the menu chip opens the sidebar: every Sidekick in one '
+        'list; a tap opens that one and closes the sidebar', (tester) async {
+      final (controller, roster) = await pumpShell(
+        tester,
+        size: const Size(420, 900),
+      );
+      controller.pair();
+      await tester.pumpAndSettle();
+      final other = roster.addAgent(name: 'jade-heron');
+      await tester.pumpAndSettle();
+
+      // Closed: the list is off stage, the conversation is in front.
+      expect(find.byType(MobileAgentList), findsNothing);
+      expect(conversation, findsOneWidget);
+      final String before = strip(tester).selectedId!;
+      expect(before, isNot(other.id));
+
+      await tester.tap(find.byTooltip('Menu'));
+      await tester.pumpAndSettle();
+      expect(find.byType(MobileAgentList), findsOneWidget);
+      // The whole screen is the list: the conversation moved out.
+      expect(
+        tester.getRect(find.byType(MobileAgentList)),
+        const Rect.fromLTWH(0, 0, 420, 900),
+      );
+      expect(tester.getRect(conversation).left, 420);
+      // The socket owner did not remount.
+      expect(controllerBuilds, 1);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MobileAgentList),
+          matching: find.text('jade-heron'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(MobileAgentList), findsNothing);
+      expect(strip(tester).selectedId, other.id);
+      expect(tester.getRect(conversation).left, 0);
+      expect(controllerBuilds, 1);
+    });
+
+    testWidgets('Android back closes the open sidebar first, then goes to '
+        'Home', (tester) async {
+      final (controller, _) = await pumpShell(
+        tester,
+        size: const Size(420, 900),
+      );
+      controller.pair();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Menu'));
+      await tester.pumpAndSettle();
+      expect(find.byType(MobileAgentList), findsOneWidget);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(MobileAgentList), findsNothing);
+      expect(conversation, findsOneWidget);
+      expect(find.byType(MobileHomeComposer), findsNothing);
+
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.byType(MobileHomeComposer), findsOneWidget);
+    });
+
+    testWidgets('the menu chip carries a dot while a Sidekick has unread '
+        'news', (tester) async {
+      final (controller, roster) = await pumpShell(
+        tester,
+        size: const Size(420, 900),
+      );
+      controller.pair();
+      await tester.pumpAndSettle();
+      final Finder badge = find.byKey(
+        const ValueKey<String>('mobile_menu_badge'),
+      );
+      expect(
+        tester.widget<MobileTopBar>(find.byType(MobileTopBar)).menuBadge,
+        isFalse,
+      );
+      expect(badge, findsNothing);
+
+      // Another Sidekick says something while this one is in view.
+      final other = roster.addAgent(name: 'jade-heron');
+      roster.markActivity(other.id, other.threads.single.key, DateTime.now());
+      await tester.pumpAndSettle();
+      expect(badge, findsOneWidget);
+
+      // Opening it reads it: the dot goes.
+      await tester.tap(find.byTooltip('Menu'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(MobileAgentList),
+          matching: find.text('jade-heron'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(badge, findsNothing);
     });
 
     testWidgets('Android back on an agent goes to Home', (tester) async {
