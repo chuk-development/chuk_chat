@@ -56,7 +56,7 @@ void main() {
     await tester.pumpWidget(
       _app(const ChatTitleStrip(entries: _entries, selectedId: 'b')),
     );
-    final Rect bar = tester.getRect(find.byType(Container).first);
+    final Rect bar = tester.getRect(find.byType(AnimatedContainer));
     final Rect face = tester.getRect(
       find.byKey(const ValueKey<String>('face_b')),
     );
@@ -72,6 +72,68 @@ void main() {
     expect(bar.right - dots.right, lessThan(24));
     expect(find.text('Alpha'), findsNothing);
     expect(find.text('Gamma'), findsNothing);
+  });
+
+  testWidgets('the pill is as wide as its content and the face fills it', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(const ChatTitleStrip(entries: _entries, selectedId: 'b')),
+    );
+    final Rect row = tester.getRect(find.byType(ChatTitleStrip));
+    final Rect bar = tester.getRect(find.byType(AnimatedContainer));
+    // A short title makes a short pill at the left edge, not a full row.
+    expect(bar.width, lessThan(row.width * 0.75));
+    expect(bar.left - row.left, lessThan(16));
+    // Nothing is cut: the title and the last line are both whole.
+    final Rect title = tester.getRect(find.text('Beta'));
+    final Rect dots = tester.getRect(
+      find.byKey(const ValueKey<String>('chat_title_strip_position')),
+    );
+    expect(title.right, lessThanOrEqualTo(dots.left));
+    expect(
+      tester.getSize(find.text('second line')).width,
+      greaterThan(tester.getSize(find.text('Beta')).width),
+    );
+    // The face is drawn 44 px high, concentric in the 56 px pill.
+    final Rect slot = tester.getRect(
+      find.ancestor(
+        of: find.byKey(const ValueKey<String>('face_b')),
+        matching: find.byType(FittedBox),
+      ),
+    );
+    expect(slot.height, 44);
+    expect(slot.top - bar.top, bar.bottom - slot.bottom);
+    expect(slot.left - bar.left, slot.top - bar.top);
+  });
+
+  testWidgets('a long last line stops at 72 % of the screen', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      _app(
+        ChatTitleStrip(
+          entries: <SwipeChatEntry>[
+            SwipeChatEntry(
+              id: 'x',
+              title: 'Mail',
+              subtitle: 'a very long last line ' * 8,
+            ),
+          ],
+          selectedId: 'x',
+        ),
+      ),
+    );
+    expect(
+      tester.getSize(find.byType(AnimatedContainer)).width,
+      moreOrLessEquals(400 * 0.72, epsilon: 0.5),
+    );
   });
 
   testWidgets('unread shows as a dot next to the title', (

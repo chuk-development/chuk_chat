@@ -4,14 +4,17 @@
 /// drag on the bar drives the [SwipeChatPager] below through its
 /// [SwipeChatPagerController], and chat and title move together.
 ///
-/// Shape (redesign 2026-11-10, owner: "no big gap on the left, no big
-/// animations, quick to work with"): one search-bar-sized pill, content
-/// left-aligned like the M3 Expressive app bar title.
+/// Shape (redesign 2026-11-13, owner: "too long, bigger face"): one pill
+/// at the left edge that is only as wide as its content, with a large face
+/// that fills the round start of the pill.
 ///
 /// ```
-/// ( face )  Title of the chat                 • ━ • •
+/// (( face ) Title of the chat   • ━ • • )
 ///           last line or status
 /// ```
+///
+/// The title sets the width. A long last line does not: it gets at most
+/// [_kSubtitleShare] of the row and is cut with an ellipsis.
 ///
 /// At rest the neighbours are not drawn: a centred carousel pushed the
 /// title to the middle and left a wide empty band on the left. The position
@@ -39,8 +42,19 @@ const double kChatTitleStripHeight = 56;
 /// Corner radius of the strip: a full pill.
 const double kChatTitleStripRadius = kChatTitleStripHeight / 2;
 
-/// Size of the leading face or icon slot.
-const double _kLeadingSize = 36;
+/// Size of the leading face or icon slot. The face is drawn to fill it,
+/// whatever size its builder gave it.
+const double _kLeadingSize = 44;
+
+/// Room between the pill's edge and the face: the face sits concentric in
+/// the round start of the pill.
+const double _kLeadingInset = (kChatTitleStripHeight - _kLeadingSize) / 2;
+
+/// The most of the row a pill takes when only its last line is long.
+const double _kSubtitleShare = 0.72;
+
+/// How long the pill takes to grow or shrink to the next entry's width.
+const Duration _kResize = Duration(milliseconds: 180);
 
 /// The gap between two titles of the carousel, in logical pixels.
 const double _kTitleGap = 24;
@@ -111,7 +125,7 @@ class ChatTitleStrip extends StatelessWidget {
         // needs less of it than a bare title, and each title brings its own
         // as it slides in.
         padding: EdgeInsetsDirectional.only(
-          start: e?.leading != null ? 10 : 20,
+          start: e?.leading != null ? _kLeadingInset : 20,
         ),
         child: _EntryLine(
           entry: e,
@@ -196,15 +210,30 @@ class ChatTitleStrip extends StatelessWidget {
       ],
     );
 
-    Widget bar = Container(
-      height: kChatTitleStripHeight,
-      padding: const EdgeInsetsDirectional.only(end: 18),
-      decoration: ShapeDecoration(
-        color: FloatingChromeSurface.fillOf(context),
-        shape: const StadiumBorder(),
+    final Color fill = FloatingChromeSurface.fillOf(context);
+    final double natural = _naturalWidth(
+      context,
+      entry,
+      dots ? entries.length : 0,
+    );
+    Widget bar = LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints box) => Align(
+        alignment: AlignmentDirectional.centerStart,
+        heightFactor: 1,
+        child: AnimatedContainer(
+          duration: _kResize,
+          curve: Curves.easeOutCubic,
+          width: _fitWidth(natural, box.maxWidth),
+          height: kChatTitleStripHeight,
+          padding: const EdgeInsetsDirectional.only(end: _kEndPadding),
+          decoration: ShapeDecoration(
+            color: fill,
+            shape: const StadiumBorder(),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: content,
+        ),
       ),
-      clipBehavior: Clip.antiAlias,
-      child: content,
     );
 
     final bool hasNext = index >= 0 && index < entries.length - 1;
@@ -224,7 +253,11 @@ class ChatTitleStrip extends StatelessWidget {
         child: bar,
       );
     } else if (onTap != null) {
-      bar = GestureDetector(onTap: onTap, child: bar);
+      bar = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: bar,
+      );
     }
 
     return Padding(
@@ -249,6 +282,77 @@ class ChatTitleStrip extends StatelessWidget {
   }
 }
 
+const double _kEndPadding = 18;
+
+/// The width the pill takes in a row of [available] pixels.
+double _fitWidth(double natural, double available) {
+  if (!available.isFinite) return natural;
+  return math.min(natural, available);
+}
+
+TextStyle _titleStyle(BuildContext context) {
+  final ThemeData theme = Theme.of(context);
+  // Title medium, emphasized: the one key element of the bar.
+  return (theme.textTheme.titleMedium ?? const TextStyle()).copyWith(
+    fontSize: 16,
+    height: 1.25,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.1,
+    color: theme.colorScheme.onSurface,
+  );
+}
+
+TextStyle _subtitleStyle(BuildContext context) {
+  final ThemeData theme = Theme.of(context);
+  return (theme.textTheme.bodySmall ?? const TextStyle()).copyWith(
+    fontSize: 12.5,
+    height: 1.25,
+    color: theme.colorScheme.onSurfaceVariant,
+  );
+}
+
+double _textWidth(BuildContext context, String text, TextStyle style) {
+  final TextPainter painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    maxLines: 1,
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+  )..layout();
+  final double width = painter.width;
+  painter.dispose();
+  return width;
+}
+
+/// The width the pill wants for [entry]: its face, its title, and as much
+/// of the last line as [_kSubtitleShare] of the screen allows.
+double _naturalWidth(
+  BuildContext context,
+  SwipeChatEntry? entry,
+  int dotCount,
+) {
+  final double start = entry?.leading != null
+      ? _kLeadingInset + _kLeadingSize + 12
+      : 20;
+  final double end =
+      _kEndPadding + (dotCount > 0 ? 12 + _PositionDots.widthFor(dotCount) : 0);
+  double title = _textWidth(context, entry?.title ?? '', _titleStyle(context));
+  if (entry != null && entry.unread) title += 13;
+  double second = 0;
+  if (entry != null && entry.working) {
+    // Three dots, a gap and the word.
+    second = 28 + _textWidth(context, 'working', _subtitleStyle(context));
+  } else if (entry?.subtitle case final String subtitle
+      when subtitle.isNotEmpty) {
+    second = _textWidth(context, subtitle, _subtitleStyle(context));
+  }
+  // One pixel of slack: a width measured here and laid out again must not
+  // cut the last glyph.
+  final double titleWidth = start + title + end + 1;
+  final double capped = MediaQuery.sizeOf(context).width * _kSubtitleShare;
+  final double secondWidth = math.min(start + second + end + 1, capped);
+  return math.max(titleWidth, secondWidth);
+}
+
 /// Face · title over subtitle (or the working dots), left-aligned.
 class _EntryLine extends StatelessWidget {
   const _EntryLine({
@@ -264,7 +368,6 @@ class _EntryLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    final TextTheme text = Theme.of(context).textTheme;
     final SwipeChatEntry? e = entry;
     final String? subtitle = e?.subtitle;
     final bool hasSubtitle = subtitle != null && subtitle.isNotEmpty;
@@ -278,14 +381,7 @@ class _EntryLine extends StatelessWidget {
             maxLines: 1,
             softWrap: false,
             overflow: TextOverflow.ellipsis,
-            // Title medium, emphasized: the one key element of the bar.
-            style: (text.titleMedium ?? const TextStyle()).copyWith(
-              fontSize: 16,
-              height: 1.25,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.1,
-              color: scheme.onSurface,
-            ),
+            style: _titleStyle(context),
           ),
         ),
         if (e != null && e.unread) ...<Widget>[
@@ -307,7 +403,9 @@ class _EntryLine extends StatelessWidget {
         if (e?.leading != null) ...<Widget>[
           SizedBox.square(
             dimension: _kLeadingSize,
-            child: Center(child: e!.leading),
+            // The builders hand in faces of their own size; the strip
+            // draws each one as large as its slot.
+            child: FittedBox(child: e!.leading),
           ),
           const SizedBox(width: 12),
         ],
@@ -334,11 +432,7 @@ class _EntryLine extends StatelessWidget {
                     maxLines: 1,
                     softWrap: false,
                     overflow: TextOverflow.ellipsis,
-                    style: text.bodySmall?.copyWith(
-                      fontSize: 12.5,
-                      height: 1.25,
-                      color: scheme.onSurfaceVariant,
-                    ),
+                    style: _subtitleStyle(context),
                   ),
                 ),
             ],
