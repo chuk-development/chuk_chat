@@ -1,0 +1,114 @@
+
+// Appended to the head of
+// test/platform_specific/root_wrapper_mobile_swipe_test.dart by
+// scripts/phone_screens.sh. Renders the Chats half, one PNG per screen.
+
+void main() {
+  setUpAll(loadRealFonts);
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    ChatStorageState.chatsById.clear();
+    final DateTime now = DateTime.now();
+    ChatStorageState.chatsById['a'] = StoredChat(
+      id: 'a',
+      messages: <ChatMessage>[
+        ChatMessage.fromJson(<String, dynamic>{
+          'role': 'user',
+          'text': 'Was ist der Unterschied zwischen TCP und UDP?',
+        }),
+        ChatMessage.fromJson(<String, dynamic>{
+          'role': 'ai',
+          'text':
+              'TCP baut eine Verbindung auf und stellt sicher, dass alles '
+              'ankommt. UDP schickt einfach los: schneller, aber ohne '
+              'Garantie.',
+        }),
+      ],
+      createdAt: now.subtract(const Duration(minutes: 1)),
+      updatedAt: now.subtract(const Duration(minutes: 1)),
+      isStarred: false,
+      title: 'TCP und UDP',
+    );
+    ChatStorageState.chatsById['b'] = _chat(
+      'b',
+      'Urlaub planen',
+      now.subtract(const Duration(days: 2)),
+    );
+  });
+
+  testWidgets('phone screens: Chats', (tester) async {
+    // Pixel 7 Pro: 1440 x 3120 px at 3.5, status bar and gesture bar.
+    tester.view.physicalSize = const Size(1440, 3120);
+    tester.view.devicePixelRatio = 3.5;
+    tester.view.padding = const FakeViewPadding(top: 126, bottom: 84);
+    tester.view.viewPadding = const FakeViewPadding(top: 126, bottom: 84);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: buildAppTheme(
+          accent: kDefaultAccentColor,
+          iconFg: kDefaultIconFgColor,
+          bg: kDefaultBgColor,
+          brightness: Brightness.dark,
+        ),
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: RootWrapperMobile(
+          config: testShellConfig(),
+          swipeNavigation: true,
+          headerCenter: AppModeSwitch(
+            mode: AppMode.chats,
+            onChanged: (_) {},
+            home: false,
+            onHome: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+
+    Future<void> shoot(String name) async {
+      debugDisableShadows = false;
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('../../_scratch/screens/$name.png'),
+      );
+      debugDisableShadows = true;
+      // ignore: avoid_print
+      print('SCREEN $name');
+    }
+
+    Future<void> step(String name, Future<void> Function() go) async {
+      try {
+        await _withoutBackend(() async {
+          await go();
+          await tester.pump();
+          await tester.pump(const Duration(milliseconds: 800));
+          await tester.pump(const Duration(milliseconds: 800));
+        });
+        await shoot(name);
+      } catch (error) {
+        // ignore: avoid_print
+        print('SKIPPED $name: ${'$error'.split('\n').first}');
+      }
+      tester.takeException();
+    }
+
+    await step('10_chats_new_chat', () async {});
+    await step(
+      '11_chat_thread',
+      () => tester.flingFrom(
+        const Offset(300, 500),
+        const Offset(-250, 0),
+        1500,
+      ),
+    );
+    await step(
+      '12_chats_sidebar',
+      () => tester.tap(findId('mobile_menu_button')),
+    );
+    await _drain(tester);
+  });
+}

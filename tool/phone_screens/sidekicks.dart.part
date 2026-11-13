@@ -1,0 +1,134 @@
+
+// Appended to the head of test/widgets/messenger_shell_test.dart by
+// scripts/phone_screens.sh. Renders the Sidekicks half, one PNG per screen.
+
+AppModeService _agentsInFront() =>
+    AppModeService(initial: AppMode.agents)..show(AppMode.agents);
+
+void main() {
+  setUpAll(loadRealFonts);
+  setUp(() {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    AgentsRelayLink.instance.reset();
+    AgentsRunLedger.instance.reset();
+  });
+
+  testWidgets('phone screens: Sidekicks', (tester) async {
+    // Pixel 7 Pro: 1440 x 3120 px at 3.5, status bar and gesture bar.
+    tester.view.physicalSize = const Size(1440, 3120);
+    tester.view.devicePixelRatio = 3.5;
+    tester.view.padding = const FakeViewPadding(top: 126, bottom: 84);
+    tester.view.viewPadding = const FakeViewPadding(top: 126, bottom: 84);
+    addTearDown(tester.view.reset);
+
+    final roster = LocalAgentRosterSource();
+    final mail = roster.addAgent(name: 'Mail');
+    final research = roster.addAgent(name: 'Research');
+    roster.addAgent(name: 'Wahlradar');
+    final DateTime t = DateTime.now();
+    ThreadPreviewStore.instance.noteRows(mail.threads.single.key, [
+      {
+        'role': 'assistant',
+        'text': '3 neue Mails, eine braucht eine Antwort von dir.',
+        'timestamp': t.subtract(const Duration(minutes: 4)).toIso8601String(),
+      },
+    ]);
+    ThreadPreviewStore.instance.noteRows(research.threads.single.key, [
+      {
+        'role': 'user',
+        'text': 'Such mir die neuen offenen Modelle raus',
+        'timestamp': t.subtract(const Duration(hours: 3)).toIso8601String(),
+      },
+    ]);
+    roster.markActivity(research.id, research.threads.single.key, t);
+    roster.markRunning(research.id, true);
+    final controller = _FakeRelayController();
+    await tester.pumpWidget(
+      MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: buildAppTheme(
+          accent: kDefaultAccentColor,
+          iconFg: kDefaultIconFgColor,
+          bg: kDefaultBgColor,
+          brightness: Brightness.dark,
+        ),
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: MessengerShell(
+          appMode: _agentsInFront(),
+          relayControllerBuilder: () async => controller,
+          sessionSource: const _FakeSessionSource(),
+          pairingStore: AgentsPairingStore(backend: _MemoryStore()),
+          rosterSource: roster,
+          chatModeBuilder:
+              (context, {required phone, required modeSwitch, onAddComputer}) =>
+                  const SizedBox(),
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    controller.pair();
+    await settle(tester);
+    await tester.pump(const Duration(milliseconds: 1400));
+
+    Future<void> shoot(String name) async {
+      debugDisableShadows = false;
+      await expectLater(
+        find.byType(MaterialApp),
+        matchesGoldenFile('../../_scratch/screens/$name.png'),
+      );
+      debugDisableShadows = true;
+      // ignore: avoid_print
+      print('SCREEN $name');
+    }
+
+    // One step failing must not lose the screens after it.
+    Future<void> step(String name, Future<void> Function() go) async {
+      try {
+        await go();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 1600));
+        await shoot(name);
+      } catch (error) {
+        // ignore: avoid_print
+        print('SKIPPED $name: ${'$error'.split('\n').first}');
+      }
+      tester.takeException();
+    }
+
+    Future<void> back() async {
+      await tester.binding.handlePopRoute();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+    }
+
+    await step('01_sidekick_thread', () async {});
+    await step('02_sidekicks_sidebar', () => tester.tap(find.byTooltip('Menu')));
+    await back();
+    await step(
+      '03_agent_settings',
+      () => tester.tap(find.byKey(const ValueKey<String>('phone-agents-strip'))),
+    );
+    await step(
+      '04_agent_edit_profile',
+      () => tester.tap(find.byTooltip('Edit agent')),
+    );
+    await back();
+    await step('05_agent_settings_advanced', () async {
+      final Finder advanced = find.byKey(
+        const ValueKey<String>('settings_Advanced'),
+      );
+      await tester.ensureVisible(advanced);
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(advanced);
+      await tester.pump(const Duration(milliseconds: 600));
+      // Show what the fold holds.
+      await tester.drag(find.byType(Scrollable).last, const Offset(0, -520));
+    });
+    await back();
+    await step('06_new_sidekick', () => tester.tap(find.byTooltip('New agent')));
+    await back();
+    await step('07_sidekicks_home', () => tester.tap(find.text('Home').first));
+  });
+}

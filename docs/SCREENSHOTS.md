@@ -98,3 +98,13 @@ pages out of frame.
 `scripts/make-app-ad.sh <name>` grabs the live app window on your own desktop
 and puts it on the same painting at 3840x2160. This is the only one of the three
 that captures the real session, so what is on screen must be demo content.
+
+## Every phone screen, by name (review sheet)
+
+`scripts/phone_screens.sh` renders the phone screens of the Agents build
+headless, at the size of a Pixel 7 Pro (1440 x 3120 px), into
+`_scratch/screens/<NN>_<name>.png`, plus `index.png`, one sheet with every
+screen and its name. It is for review ("in 03_agent_settings, the row ..."),
+not for the store. A new screen is one `step('<NN>_<name>', ...)` line in
+`tool/phone_screens/sidekicks.dart.part` or `chats.dart.part`. Text set in a
+font the test engine does not have shows as blocks.
