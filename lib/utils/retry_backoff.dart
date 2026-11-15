@@ -1,7 +1,10 @@
 // lib/utils/retry_backoff.dart
 //
 // Delay before the next reconnect attempt of a streaming pass.
+import 'dart:async';
 import 'dart:math';
+
+import 'package:flutter/foundation.dart';
 
 /// First delay of the reconnect backoff.
 const Duration kReconnectBackoffBase = Duration(milliseconds: 700);
@@ -31,4 +34,31 @@ Duration reconnectBackoff(int attempt, {Random? random}) {
     kReconnectBackoffCap.inMilliseconds.toDouble(),
   );
   return Duration(milliseconds: ms.round());
+}
+
+/// Waits [delay], or less: the wait ends at once when [online] turns true
+/// (the network came back). A reconnect then does not sit out the rest of an
+/// 8 s backoff after the phone found its signal again.
+Future<void> waitBeforeReconnect(
+  Duration delay, {
+  ValueListenable<bool>? online,
+}) {
+  final Completer<void> done = Completer<void>();
+  final bool wasOnline = online?.value ?? true;
+  void finish() {
+    if (!done.isCompleted) done.complete();
+  }
+
+  final Timer timer = Timer(delay, finish);
+  void onChange() {
+    // Only a change to online ends the wait early; the status saying
+    // "online" the whole time says nothing new.
+    if ((online?.value ?? false) && !wasOnline) finish();
+  }
+
+  online?.addListener(onChange);
+  return done.future.whenComplete(() {
+    timer.cancel();
+    online?.removeListener(onChange);
+  });
 }

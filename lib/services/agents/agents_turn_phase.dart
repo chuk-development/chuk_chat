@@ -178,6 +178,9 @@ AgentsTurnStatus? agentsTurnStatusFor({
       StreamPhase.thinking => const AgentsTurnStatus(AgentsTurnPhase.thinking),
       StreamPhase.working => const AgentsTurnStatus(AgentsTurnPhase.working),
       StreamPhase.writing => const AgentsTurnStatus(AgentsTurnPhase.writing),
+      StreamPhase.reconnecting => const AgentsTurnStatus(
+        AgentsTurnPhase.offline,
+      ),
     };
   }
 

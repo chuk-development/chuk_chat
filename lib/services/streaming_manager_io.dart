@@ -3,6 +3,7 @@
 // notification, foreground-service, idle-timeout and UI-throttle handling.
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
@@ -84,7 +85,6 @@ class StreamingManager extends StreamingManagerBase {
       onError: onError,
     );
   }
-
 
   /// The idle watchdog: nothing arrived for [_idleTimeout], so the connection
   /// is treated as dead.
@@ -279,6 +279,22 @@ class StreamingManager extends StreamingManagerBase {
       chatId: chatId,
       chatTitle: stream.chatTitle ?? 'AI Chat',
       contentPreview: contentPreview,
+    );
+  }
+
+  @override
+  Future<void>? turnNotification({
+    required String chatId,
+    required String? chatTitle,
+    required String contentPreview,
+    required bool stopped,
+  }) {
+    if (!_shouldShowCompletionNotification()) return null;
+    return NotificationService.showCompletionNotification(
+      chatId: chatId,
+      chatTitle: chatTitle ?? 'Chuk Chat',
+      contentPreview: contentPreview,
+      stopped: stopped,
     );
   }
 

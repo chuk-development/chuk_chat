@@ -117,7 +117,9 @@ const Map<String, String> _kAlertAliases = <String, String>{
 final RegExp _partialCloseRe = RegExp(r'^ {0,3}:{1,2}\s*$');
 
 final RegExp _alertRe = RegExp(
-  r'^ {0,3}>[ \t]?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(.*)$',
+  // INTERRUPTED is the app's own note on a turn that ended on an error
+  // (`turnErrorNote` in stream_error_notice.dart); no model writes it.
+  r'^ {0,3}>[ \t]?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION|INTERRUPTED)\][ \t]*(.*)$',
   caseSensitive: false,
 );
 
@@ -1203,7 +1205,8 @@ String extractPageImage(String html, Uri page) {
     RegExp(r'''"image"\s*:\s*\[?\s*"([^"]+)"'''),
   ]) {
     for (final RegExpMatch m in re.allMatches(html)) {
-      final String clean = m.group(1)!
+      final String clean = m
+          .group(1)!
           .replaceAll('&amp;', '&')
           .replaceAll(r'\/', '/');
       final Uri? resolved = Uri.tryParse(clean);

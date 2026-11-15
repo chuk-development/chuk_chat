@@ -23,11 +23,13 @@ import 'package:chuk_chat/services/tool_image_result_service.dart';
 import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/round_content_block_service.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/utils/retry_backoff.dart';
+import 'package:chuk_chat/utils/stream_error_notice.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Handles message streaming and sending
@@ -169,6 +171,33 @@ class StreamingMessageHandler {
   bool get isStreaming => _isStreaming;
   bool get isSending => _isSending;
 
+  /// The chat whose turn this handler runs, from send to the turn's end.
+  /// Set even between passes, while tools run or the network is gone, so
+  /// the composer keeps its stop button for the whole turn.
+  String? _turnChatId;
+
+  /// Ends the turn in the [StreamingManager]. With [notify] it announces the
+  /// answer (see [StreamingManagerBase.endTurn]); every other end only closes
+  /// the turn. Idempotent.
+  void _endTurn({
+    bool notify = false,
+    String preview = '',
+    bool stopped = false,
+  }) {
+    final String? chatId = _turnChatId;
+    _turnChatId = null;
+    if (chatId == null) return;
+    unawaited(
+      _streamingManager.endTurn(
+        chatId,
+        notify: notify,
+        contentPreview: preview,
+        chatTitle: ChatStorageService.getChatById(chatId)?.title,
+        stopped: stopped,
+      ),
+    );
+  }
+
   String? _turnRequestBase;
 
   /// The `client_request_id` base of the latest turn (pass n sends
@@ -299,6 +328,11 @@ class StreamingMessageHandler {
     _cancelRequested = false;
     _streamFinalized = false;
     _clearSnapshot();
+    // A previous turn of this handler that never reached its end (a
+    // teardown) must not hold its chat open.
+    _endTurn();
+    _turnChatId = activeChatId;
+    _streamingManager.beginTurn(activeChatId);
     onUpdateUI?.call();
     await _acquireForegroundKeepAlive();
 
@@ -502,6 +536,11 @@ class StreamingMessageHandler {
     // reconnects with exponential backoff before giving up.
     const int kMaxPassReconnectRetries = 3;
 
+    // How long a turn waits for a lost link to come back before it gives up
+    // (see the reconnect branch in `onError`). Long enough for a train
+    // tunnel or a dead zone; the server keeps the run going that long.
+    const Duration kLinkLossBudget = Duration(minutes: 15);
+
     // Message-level auto-retry: if the final answer is empty after all
     // tool-loop retries, re-send the last user message once to give the
     // model another chance (separate from the tool-loop internal retries).
@@ -680,6 +719,7 @@ class StreamingMessageHandler {
       int reconnectRetries = 0,
       int cacheMissRetries = 0,
       String? passRequestId,
+      DateTime? linkLostAt,
     }) async {
       // One `client_request_id` per pass; a retry of this pass (reconnect,
       // cache miss) passes it back in, so the server answers it once.
@@ -1193,6 +1233,9 @@ class StreamingMessageHandler {
                 title: 'Response ready',
                 content: effectiveContent,
               );
+              // The one place the answer is complete: announce it here, not
+              // at the `done` of each tool-loop pass.
+              _endTurn(notify: true, preview: effectiveContent);
 
               _markStreamFinalized();
               _isStreaming = false;
@@ -1258,6 +1301,7 @@ class StreamingMessageHandler {
                 reconnectRetries: reconnectRetries,
                 cacheMissRetries: cacheMissRetries + 1,
                 passRequestId: requestId,
+                linkLostAt: linkLostAt,
               );
             }());
             return;
@@ -1301,21 +1345,58 @@ class StreamingMessageHandler {
           final bool hostStillWorking = AgentsRunLedger.instance.isRunning(
             chatId,
           );
+          // A lost link (no DNS in a train tunnel, a socket that died) is
+          // not a failed turn. The server keeps the request running after
+          // its socket went away and answers a re-send of the same
+          // `client_request_id` from that run, so the turn waits for the
+          // network as long as [kLinkLossBudget] and then picks up where it
+          // was. Three quick tries over ~5 s gave up long before a train
+          // left the tunnel, and wrote the socket error in as the answer.
+          //
+          // Except a first send the server never took: after the quick tries
+          // the outbox below keeps it, which also survives an app restart.
+          final bool linkLost =
+              code == StreamErrorCodes.connectionLost ||
+              (code == null &&
+                  NetworkStatusService.isNetworkError(errorMessage));
+          final bool outboxCanTakeIt =
+              currentPass == 0 &&
+              !regenerate &&
+              continuePriorText == null &&
+              !ChatOrigin.isAgentsThread(chatId) &&
+              !_streamingManager.serverAccepted(chatId) &&
+              onSendNotAccepted != null;
+          final DateTime lostAt = linkLostAt ?? DateTime.now();
+          final bool keepTrying = linkLost && !outboxCanTakeIt
+              ? DateTime.now().difference(lostAt) < kLinkLossBudget
+              : reconnectRetries < kMaxPassReconnectRetries;
           if (isReconnectable &&
               !hostStillWorking &&
-              reconnectRetries < kMaxPassReconnectRetries &&
+              keepTrying &&
               !_isDisposed) {
+            if (linkLost) {
+              // The header says "Reconnecting" until the next stream sends
+              // its first frame; the stop button stays (the turn is open).
+              _streamingManager.setReconnecting(chatId, true);
+              onUpdateUI?.call();
+            }
             unawaited(() async {
               await _updateForegroundNotification(
                 title: 'Reconnecting...',
-                content: 'Retrying connection',
+                content: 'Waiting for the connection',
               );
-              // Exponential backoff: ~700ms, 1.4s, 2.8s, with ±10 % jitter
-              // and a cap. Gives a flapping mobile link progressively more
-              // time to recover instead of hammering it, and the jitter keeps
-              // many clients that lost the same server from retrying in step.
-              await Future<void>.delayed(reconnectBackoff(reconnectRetries));
-              if (_isDisposed) return;
+              // Exponential backoff: ~700ms, 1.4s, 2.8s, ... up to 8 s, with
+              // ±10 % jitter so many clients that lost the same server do
+              // not come back in step. The network coming back ends the wait
+              // at once.
+              await waitBeforeReconnect(
+                reconnectBackoff(reconnectRetries),
+                online: NetworkStatusService.isOnlineListenable,
+              );
+              if (_isDisposed || _cancelRequested) {
+                _streamingManager.setReconnecting(chatId, false);
+                return;
+              }
               await startStreamingPass(
                 message: message,
                 history: history,
@@ -1325,10 +1406,12 @@ class StreamingMessageHandler {
                 currentPass: currentPass,
                 reconnectRetries: reconnectRetries + 1,
                 passRequestId: requestId,
+                linkLostAt: linkLost ? lostAt : null,
               );
             }());
             return;
           }
+          _streamingManager.setReconnecting(chatId, false);
 
           finalizeStaleToolState();
 
@@ -1395,9 +1478,21 @@ class StreamingMessageHandler {
             accumulated: accumulatedText.toString(),
             finalText: stripToolCallBlocksForDisplay(interruptedPartial),
           );
+          // The reader gets one plain sentence, drawn as an error card under
+          // what the turn did write. The raw text ("WebSocket connection
+          // failed: SocketException ...") read like the answer itself. An
+          // Agents thread draws a failed turn as its own one-line row, so it
+          // keeps the plain sentence without the card markup.
+          final String friendly = userFacingStreamError(
+            errorMessage,
+            code: code,
+          );
+          final String errorNote = ChatOrigin.isAgentsThread(chatId)
+              ? friendly
+              : turnErrorNote(friendly);
           final finalizedText = salvaged.isEmpty
-              ? errorMessage
-              : '$salvaged\n\n$errorMessage';
+              ? errorNote
+              : '$salvaged\n\n$errorNote';
 
           // In content-block mode the bubble hides the flat text, so the cut
           // pass and the error need their own block (earlier passes are
@@ -1406,7 +1501,7 @@ class StreamingMessageHandler {
           final withNote = RoundContentBlockService.withInterruptionNote(
             contentBlocks,
             interruptedText: stripToolCallBlocksForDisplay(interruptedPartial),
-            errorNote: errorMessage,
+            errorNote: errorNote,
           );
           if (withNote != null) {
             contentBlocks
@@ -1430,10 +1525,8 @@ class StreamingMessageHandler {
           }
           // An Agents thread never pops a toast for a dropped link: the
           // app redials and re-sends on its own, and the thread says so.
-          if (!(code == StreamErrorCodes.connectionLost &&
-              ChatOrigin.isAgentsThread(chatId))) {
-            onShowSnackBar?.call(errorMessage);
-          }
+          // No toast on top: the card in the answer already says it, and a
+          // toast with the raw socket error said it a second time, worse.
 
           // Mark the turn continuable. Previously `interrupted` was set only
           // on user cancel / teardown, so after an error the Continue button
@@ -1457,6 +1550,9 @@ class StreamingMessageHandler {
             onStreamInterrupted?.call(chatId, placeholderIndex);
           }
           onTurnError?.call(chatId, placeholderIndex, errorMessage, code);
+          // In the background the reader learns the turn is over, and that it
+          // ended without an answer ("… stopped"), not "done".
+          _endTurn(notify: true, stopped: true);
 
           _markStreamFinalized();
           _isStreaming = false;
@@ -1721,7 +1817,11 @@ class StreamingMessageHandler {
 
   /// Check if a specific chat is streaming
   bool isChatStreaming(String chatId) {
-    return _streamingManager.isStreaming(chatId);
+    // The turn, not the current pass: between two passes (a tool running, a
+    // dropped link being redialled) no stream is open, and reading only the
+    // stream flipped the stop button to send and back on every pass.
+    return _streamingManager.isStreaming(chatId) ||
+        (_isStreaming && _turnChatId == chatId);
   }
 
   /// Get buffered content for a streaming chat
@@ -1835,6 +1935,7 @@ class StreamingMessageHandler {
   void _markStreamFinalized() {
     _streamFinalized = true;
     _clearSnapshot();
+    _endTurn();
   }
 
   // --- Periodic snapshot persistence ----------------------------------------
@@ -1948,6 +2049,7 @@ class StreamingMessageHandler {
       _markInterruptedIfStreaming();
     }
     _clearSnapshot();
+    _endTurn();
     AppLifecycleService.instance.removeOnPauseCallback(_handleAppPaused);
     _activeToolLoopFuture = null;
     unawaited(_releaseForegroundKeepAlive());

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:chuk_chat/models/chat_stream_event.dart';
+
 /// The message shown when the socket to the API cannot be opened.
 ///
 /// It is a notice about the transport, not part of the answer, but it is
@@ -24,6 +26,64 @@ const String kAnswerUnavailableNotice =
 const String kAnswerPendingNotice =
     'The server is still writing this answer. Try again in a moment.';
 
+/// The alert type of the note a failed turn ends with. The answer-block
+/// parser draws `> [!INTERRUPTED]` as an error card (`_AlertBlock`); no model
+/// writes it, so it can be found and removed again exactly.
+const String kTurnErrorAlertType = 'INTERRUPTED';
+
+/// The stored form of a turn error: an alert block, so the bubble shows a
+/// card with an icon instead of the error as if it were the answer.
+String turnErrorNote(String friendly) {
+  final String body = friendly
+      .trim()
+      .split('\n')
+      .map((String l) => '> $l')
+      .join('\n');
+  return '> [!$kTurnErrorAlertType]\n$body';
+}
+
+final RegExp _turnErrorNoteRe = RegExp(
+  r'(^|\n)> \[!' + kTurnErrorAlertType + r'\][^\n]*(\n>[^\n]*)*',
+);
+
+/// What the reader is told when a turn ends on [message] with [code].
+///
+/// The raw text of a transport failure ("WebSocket connection failed:
+/// SocketException: Failed host lookup ...") says nothing to a reader and
+/// was shown as if it were the answer. Transport failures get one plain
+/// sentence; a server message (already written for people) stays, without
+/// an "Error: " prefix.
+String userFacingStreamError(String message, {String? code}) {
+  final String lower = message.toLowerCase();
+  final bool transport =
+      code == StreamErrorCodes.connectionLost ||
+      lower.contains('socketexception') ||
+      lower.contains('websocket') ||
+      lower.contains('failed host lookup') ||
+      lower.contains('handshakeexception') ||
+      lower.contains('connection lost') ||
+      lower.contains('connection closed') ||
+      lower.contains('network is unreachable');
+  if (transport) {
+    return 'No connection to the server. The answer could not be finished. '
+        'Tap Retry when you are online again.';
+  }
+  switch (code) {
+    case StreamErrorCodes.idleTimeout:
+      return 'The server stopped answering. Tap Retry to ask again.';
+    case StreamErrorCodes.streamInterrupted:
+    case StreamErrorCodes.upstreamInterrupted:
+    case StreamErrorCodes.streamFailure:
+      return 'The answer broke off before it finished. Tap Retry to ask '
+          'again.';
+    case StreamErrorCodes.requestPending:
+      return kAnswerPendingNotice;
+  }
+  String out = message.trim();
+  if (out.startsWith('Error: ')) out = out.substring(7).trim();
+  return out.isEmpty ? 'Something went wrong. Tap Retry to ask again.' : out;
+}
+
 /// Removes the transport error notice from [text], wherever it sits.
 ///
 /// Only this exact notice is removed. A generic `Error: …` line is left
@@ -35,6 +95,7 @@ String stripStreamErrorNotice(String text) {
   // the wrapped form goes first, or the bare replacement leaves "Error: "
   // behind and the row still looks resumable.
   final String out = text
+      .replaceAll(_turnErrorNoteRe, '')
       .replaceAll('Error: $kConnectionErrorNotice', '')
       .replaceAll(kConnectionErrorNotice, '');
   return out

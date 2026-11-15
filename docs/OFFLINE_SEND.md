@@ -201,8 +201,19 @@ runs and bills each id once:
   too.
 
 A pass whose socket died (`connection_lost`) or whose answer is still
-being written (`request_pending`) is asked again under the same id, up to
-3 times with backoff, on desktop and mobile alike
+being written (`request_pending`) is asked again under the same id. On
+mobile (`StreamingMessageHandler`, CHAT-119) a lost link waits up to 15
+minutes (`kLinkLossBudget`), with a backoff of up to 8 s that ends early
+when the network comes back; the header says "Reconnecting", the stop
+button stays and no toast pops. A socket that cannot be opened at all (no
+DNS) is `connection_lost` too (`MultiplexConnection.handshakeErrorCode`).
+Only a first send the server never took goes to the outbox after 3 quick
+tries. A turn that still fails ends with an error card
+(`turnErrorNote`, `> [!INTERRUPTED]`, stripped again on Continue), not
+the raw error. The "is done" notification comes from the turn's end
+(`StreamingManagerBase.beginTurn`/`endTurn`), never from the `done` of one
+tool-loop pass. Other retryable codes: up to 3 times with backoff, on
+desktop and mobile alike
 (`ClientRequestIds.resendPassOnSameId`; never in an Agents thread; bead
 chuk_chat-074s). When the turn still ends with one of these codes, its
 base is kept for that user message (`ClientRequestIds.keepForRetry`, keyed

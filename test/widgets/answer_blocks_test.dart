@@ -399,6 +399,33 @@ void main() {
     expect(all, isNot(contains('[!NOTE]')));
   });
 
+  testWidgets('a turn error draws as a card, icon on the heading line', (
+    WidgetTester tester,
+  ) async {
+    await _pump(
+      tester,
+      'Half an answer.\n\n> [!INTERRUPTED]\n> No connection to the server.',
+    );
+    final String all = _allText(tester);
+    expect(find.byKey(const ValueKey<String>('turn-error-card')), findsOne);
+    expect(all, contains('Answer not finished'));
+    expect(all, contains('No connection to the server.'));
+    expect(all, isNot(contains('[!INTERRUPTED]')));
+    expect(all, isNot(contains('INTERRUPTED')));
+    // The icon sits centred on the heading's first line (CLAUDE.md rule).
+    final Rect icon = tester.getRect(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey<String>('turn-error-card')),
+            matching: find.byType(SizedBox),
+          )
+          .first,
+    );
+    final Rect heading = tester.getRect(find.text('Answer not finished'));
+    expect((icon.center.dy - heading.center.dy).abs(), lessThan(1.5));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('inline code keeps its monospace font in the default build', (
     WidgetTester tester,
   ) async {

@@ -25,7 +25,12 @@ enum StreamPhase {
   working,
 
   /// Answer tokens are arriving.
-  writing;
+  writing,
+
+  /// The connection to the server dropped mid-turn. The turn is not over:
+  /// the app waits for the network and sends the same request again, and the
+  /// server answers it from the run it kept going.
+  reconnecting;
 
   /// The present-tense wording shown while the phase lasts.
   String get label => switch (this) {
@@ -34,5 +39,6 @@ enum StreamPhase {
     StreamPhase.thinking => 'Thinking',
     StreamPhase.working => 'Working',
     StreamPhase.writing => 'Writing',
+    StreamPhase.reconnecting => 'Reconnecting',
   };
 }

@@ -1081,8 +1081,10 @@ class MultiplexConnection {
             e is MultiplexException ? e.detail : e.toString(),
             // Handshake failure before the request went out — nothing was
             // consumed upstream, so re-issuing the pass is exactly right.
-            code: (e is MultiplexException ? e.code : null) ??
-                StreamErrorCodes.connectionLost,
+            // A socket that could not be opened (no DNS, no route, timeout)
+            // is a lost connection like any other: the chat layer waits for
+            // the network and re-sends. Only an auth refusal keeps its code.
+            code: handshakeErrorCode(e),
           ),
         );
         controller.add(const ChatStreamEvent.done());
@@ -1158,6 +1160,22 @@ class MultiplexConnection {
         );
       }
     }
+  }
+
+  /// The stream error code for a failed [ensureReady].
+  ///
+  /// Transport failures of the handshake (`ws_connect_failed`, `ws_timeout`,
+  /// `ws_error`, `ws_closed`, `auth_timeout`, `auth_protocol`) become
+  /// [StreamErrorCodes.connectionLost], so the chat layer treats a phone
+  /// without DNS the same as a socket that died mid-answer. `auth_error` and
+  /// `no_token` keep their code: waiting for the network does not fix them.
+  @visibleForTesting
+  static String handshakeErrorCode(Object error) {
+    final String? code = error is MultiplexException ? error.code : null;
+    return switch (code) {
+      'auth_error' || 'no_token' => code ?? StreamErrorCodes.connectionLost,
+      _ => StreamErrorCodes.connectionLost,
+    };
   }
 
   void _handleTransportFailure(String reason) {

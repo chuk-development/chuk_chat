@@ -796,6 +796,7 @@ class _AlertBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (type == 'INTERRUPTED') return _buildTurnError(context);
     final Color color = switch (type) {
       'WARNING' => s.warn,
       'CAUTION' => s.bad,
@@ -823,6 +824,66 @@ class _AlertBlock extends StatelessWidget {
             ),
           ),
           if (body.isNotEmpty) s.markdown(body, color: s.secondary),
+        ],
+      ),
+    );
+  }
+
+  /// The app's note on a turn that ended on an error: a flat card with an
+  /// icon, the heading "Answer not finished" and one plain sentence. The
+  /// icon box is one text line high, so the glyph sits on the heading line.
+  Widget _buildTurnError(BuildContext context) {
+    final String body = lines.join('\n').trim();
+    final double lineHeight = s.baseFontSize * 1.35;
+    return Container(
+      key: const ValueKey<String>('turn-error-card'),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: s.bad.withValues(alpha: s.dark ? 0.12 : 0.07),
+        borderRadius: BorderRadius.circular(kRadiusSm),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SizedBox(
+            height: lineHeight,
+            child: Center(
+              child: AppIcon(
+                Icons.cloud_off_rounded,
+                size: s.baseFontSize * 1.1,
+                color: s.bad,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  'Answer not finished',
+                  style: TextStyle(
+                    color: s.bad,
+                    fontSize: s.baseFontSize,
+                    fontWeight: FontWeight.w600,
+                    height: 1.35,
+                    fontFamily: s.fontFamily,
+                  ),
+                ),
+                if (body.isNotEmpty)
+                  Text(
+                    body,
+                    style: TextStyle(
+                      color: s.secondary,
+                      fontSize: s.baseFontSize * 0.9,
+                      height: 1.4,
+                      fontFamily: s.fontFamily,
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );

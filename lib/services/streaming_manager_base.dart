@@ -11,6 +11,7 @@
 //
 // IMPORTANT: this file is compiled for web, so it must never import `dart:io`.
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
@@ -177,10 +178,80 @@ abstract class StreamingManagerBase {
   /// Read once a second by the header above the answer, so it is a plain
   /// lookup rather than a stream of its own.
   StreamPhase? phaseOf(String chatId) {
+    if (_reconnecting.contains(chatId)) return StreamPhase.reconnecting;
     final stream = activeStreams[chatId];
     if (stream == null || !stream.isActive) return null;
     return stream.phase;
   }
+
+  // ---------------------------------------------------------------------------
+  // Turns
+  //
+  // A turn is one question and its whole answer: several streams (one per
+  // tool-loop pass), and the waits between them (tools running, the network
+  // gone). A stream that ends is therefore not an answer that is ready. The
+  // owner of a turn opens it with [beginTurn] and closes it with [endTurn];
+  // while it is open, a stream's `done` does not announce the answer, and
+  // [isTurnOpen] stays true across the gaps between passes.
+  // ---------------------------------------------------------------------------
+
+  final Set<String> _openTurns = <String>{};
+  final Set<String> _reconnecting = <String>{};
+
+  /// Opens the turn of [chatId]. See the section comment.
+  void beginTurn(String chatId) {
+    _openTurns.add(chatId);
+    _reconnecting.remove(chatId);
+  }
+
+  /// Whether a turn of [chatId] is open: the answer is not finished, even
+  /// when no stream runs right now.
+  bool isTurnOpen(String chatId) => _openTurns.contains(chatId);
+
+  /// Marks the open turn of [chatId] as waiting for the network. The header
+  /// then reads "Reconnecting" instead of a phase of a stream that is gone.
+  void setReconnecting(String chatId, bool reconnecting) {
+    if (reconnecting) {
+      _reconnecting.add(chatId);
+    } else {
+      _reconnecting.remove(chatId);
+    }
+  }
+
+  /// Whether the turn of [chatId] waits for the network.
+  bool isReconnecting(String chatId) => _reconnecting.contains(chatId);
+
+  /// Closes the turn of [chatId]. With [notify], the completion notification
+  /// is shown now (when the platform shows one at all): this, not a stream's
+  /// `done`, is the moment the answer is ready. [stopped] says the turn ended
+  /// without an answer (an error the app could not recover from).
+  Future<void> endTurn(
+    String chatId, {
+    bool notify = false,
+    String contentPreview = '',
+    String? chatTitle,
+    bool stopped = false,
+  }) async {
+    final bool wasOpen = _openTurns.remove(chatId);
+    _reconnecting.remove(chatId);
+    if (!wasOpen || !notify) return;
+    final Future<void>? pending = turnNotification(
+      chatId: chatId,
+      chatTitle: chatTitle,
+      contentPreview: contentPreview,
+      stopped: stopped,
+    );
+    if (pending != null) await pending;
+  }
+
+  /// The notification for a finished turn, or null when none is shown.
+  @protected
+  Future<void>? turnNotification({
+    required String chatId,
+    required String? chatTitle,
+    required String contentPreview,
+    required bool stopped,
+  }) => null;
 
   /// When the running turn in [chatId] began — the moment the request went
   /// out, not the moment the first token arrived.
@@ -402,6 +473,8 @@ abstract class StreamingManagerBase {
     if (event is! ErrorEvent || _acceptedErrorCodes.contains(event.code)) {
       _serverAccepted.add(chatId);
     }
+    // The link is back: the header leaves "Reconnecting".
+    if (event is! ErrorEvent) _reconnecting.remove(chatId);
 
     // First-event stamp, idle-timer reset and TTFT measurement (io only).
     onEventBookkeeping(
@@ -490,11 +563,14 @@ abstract class StreamingManagerBase {
 
       // Show completion notification if app is in background
       // IMPORTANT: Await this before cleanup so foreground service stops AFTER
-      final notification = completionNotification(
-        chatId: chatId,
-        stream: activeStream,
-        contentPreview: finalContent,
-      );
+      // A pass of an open turn is not the answer: [endTurn] announces it.
+      final notification = isTurnOpen(chatId)
+          ? null
+          : completionNotification(
+              chatId: chatId,
+              stream: activeStream,
+              contentPreview: finalContent,
+            );
       if (notification != null) await notification;
 
       onComplete(finalContent, finalReasoning, tps);
@@ -549,11 +625,13 @@ abstract class StreamingManagerBase {
 
     // Show completion notification if app is in background
     // IMPORTANT: Await this before cleanup so foreground service stops AFTER
-    final notification = completionNotification(
-      chatId: chatId,
-      stream: activeStream,
-      contentPreview: finalContent,
-    );
+    final notification = isTurnOpen(chatId)
+        ? null
+        : completionNotification(
+            chatId: chatId,
+            stream: activeStream,
+            contentPreview: finalContent,
+          );
     if (notification != null) await notification;
 
     // Always call onComplete - handler will show "empty response" message if needed

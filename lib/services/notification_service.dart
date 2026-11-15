@@ -43,12 +43,14 @@ class NotificationService {
     required String chatId,
     required String chatTitle,
     required String contentPreview,
+    bool stopped = false,
   }) async {
     if (ChatOrigin.isAgentsThread(chatId)) return;
     await LocalNotifications.instance.showAnswerReady(
       sessionKey: chatId,
       threadLabel: chatTitle,
       preview: contentPreview,
+      stopped: stopped,
     );
   }
 
