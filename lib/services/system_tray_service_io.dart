@@ -6,7 +6,8 @@ import 'dart:ui' show Locale;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:tray_manager/tray_manager.dart';
-import 'package:window_manager/window_manager.dart';
+// The 0.5.x API lives in legacy.dart since window_manager 0.6.
+import 'package:window_manager/legacy.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_config.dart';
