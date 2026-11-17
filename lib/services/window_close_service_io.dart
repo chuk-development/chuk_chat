@@ -13,8 +13,7 @@
 import 'dart:io' show exit;
 
 import 'package:flutter/foundation.dart';
-// The 0.5.x API lives in legacy.dart since window_manager 0.6.
-import 'package:window_manager/legacy.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'package:chuk_chat/platform_config.dart';
 
