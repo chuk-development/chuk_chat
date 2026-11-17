@@ -133,6 +133,7 @@ from .coworker_templates import seed_persona, template_seed
 from .secrets_key import mail_key_at_rest_key, mcp_grants_at_rest_key, secrets_at_rest_key
 from .seed_skills import seed_skills_dir, seed_workspace_skills
 from .desktop_notify import DesktopNotifier
+from .avatars import AVATAR_CAPABILITY, AVATAR_SET_FRAME, AvatarStore
 from chuk_agents_runtime.automations import owner_session_key
 
 from .automations import AutomationManager
@@ -332,6 +333,9 @@ class LocalHost:
         # The names the user chose in the app (docs/WIRE_CONTRACT.md, "Agent
         # names"): own table in the roster file, own connection (any thread).
         self._coworker_names = CoworkerNameStore(self._roster_path, device_id=HOST_DEVICE_ID)
+        # Each agent's face, sent by the app (``agent_avatar_set``): the icon
+        # of the desktop toast (docs/agents/NOTIFICATIONS.md).
+        self._avatars = AvatarStore(Path(self._workspace) / "avatars")
 
         # Group rooms (§16.1). The stores are SQLite files (opened per party
         # thread, like the roster); the binding is pure-Python and thread-safe,
@@ -776,6 +780,7 @@ class LocalHost:
         self._desktop_notifier = DesktopNotifier()
         # The cloud channel (P7): a row with the user's own token, then the
         # Edge Function pushes to the user's devices. Best-effort, outboxed.
+        # The answer preview goes sealed, once per stored pairing.
         self._notifier = SupabaseNotifier(
             session_provider=lambda: self._session,
             user_id_provider=lambda: getattr(self, "_user_id", "") or "",
@@ -783,6 +788,9 @@ class LocalHost:
             db_path=self._db_path,
             desktop=self._desktop_notifier,
             logger=self._log,
+            trusts_provider=self._stored_trusts,
+            agent_id_for=self._app_agent_id,
+            avatar_for=self._avatars.icon_for,
         )
         # Automations (docs/WIRE_CONTRACT.md, "Automations"): the clock, the
         # watcher supervisor and the self-wake watchdog. Started before the
@@ -1184,6 +1192,18 @@ class LocalHost:
         gets it too. All three are ONE agent and therefore one box.
         """
         return ("", "default", self._agent.id, host_agent_id(self._device_id))
+
+    def _app_agent_id(self, session_key: str) -> str:
+        """The app's agent id for a thread: a registered agent is its own
+        session key; every other key is this host's own agent
+        (``host:<device id>``). The avatar file and the sealed preview use it."""
+        owner = owner_session_key(session_key)
+        return owner if self._is_own_coworker(owner) else host_agent_id(self._device_id)
+
+    def _stored_trusts(self) -> list[HostTrust]:
+        """Every stored pairing. The host keeps one (``paired.json``)."""
+        trust = getattr(self, "_trust", None)
+        return [trust] if trust is not None else []
 
     def _is_own_coworker(self, agent_id: str) -> bool:
         """True when the app registered this id as an agent of its own.
@@ -1968,14 +1988,11 @@ class LocalHost:
         if notifier is None:
             return
         if attached:
-            # Attached + automation: desktop only, once per run.
-            desktop = getattr(self, "_desktop_notifier", None)
-            if desktop is not None and notifier._mark_notified_once(str(summary.get("run_id") or "")):
-                from .desktop_notify import completion_text
-
-                failed = bool(summary.get("error")) or str(summary.get("reason") or "") == "failed"
-                title, body = completion_text(self._agent.name, failed=failed)
-                desktop.notify(title, body)
+            # Attached + automation: desktop only, once per run, with the
+            # answer preview and the agent's avatar.
+            notify = getattr(notifier, "notify_desktop_only", None)
+            if getattr(self, "_desktop_notifier", None) is not None and callable(notify):
+                notify(summary)
             return
         # Desktop toast + cloud push, one per run, on a background thread.
         notifier.notify_run_finished(summary)
@@ -2188,6 +2205,13 @@ class LocalHost:
             return self._on_permissions_frame(payload)
         if isinstance(payload, dict) and payload.get("type") == USER_BROWSER_RESUME_FRAME:
             return self._on_user_browser_resume()
+        if isinstance(payload, dict) and payload.get("type") == AVATAR_SET_FRAME:
+            # The agent's face for the desktop toast (docs/agents/
+            # NOTIFICATIONS.md). Answered with one small ``agent_avatar``.
+            answer = self._avatars.handle_frame(payload)
+            if not answer.get("ok"):
+                self._log(f"agent avatar {answer.get('agent_id')!r}: {answer.get('error')}")
+            return answer
         # Announce the actual API routing UUID through the authenticated
         # channel. It is NOT the crypto identity (usually "cowork-host").
         self._send_host_payload({
@@ -2202,6 +2226,8 @@ class LocalHost:
                 USER_BROWSER_RESUME_CAPABILITY,
                 # ``agent_delete`` (docs/WIRE_CONTRACT.md, "Agent names").
                 AGENT_DELETE_CAPABILITY,
+                # ``agent_avatar_set`` (docs/agents/NOTIFICATIONS.md).
+                AVATAR_CAPABILITY,
             ],
         })
         names = handle_agent_frame(self._coworker_names, payload, log=self._log)

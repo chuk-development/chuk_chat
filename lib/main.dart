@@ -54,6 +54,7 @@ import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
 import 'package:chuk_chat/services/notifications/agents_notifications.dart';
+import 'package:chuk_chat/services/notifications/unified_push_transport.dart';
 import 'package:chuk_chat/services/offline_queue_service.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/platform_specific/chat/headless_chat_turn.dart';
@@ -131,7 +132,14 @@ final GlobalKey appCaptureBoundaryKey = GlobalKey(
 );
 
 /* ---------- MAIN ---------- */
-Future<void> main() async {
+Future<void> main([List<String> args = const <String>[]]) async {
+  // The UnifiedPush service starts its own engine when a push arrives while
+  // the app is not running. That engine only shows the toast: no UI, no
+  // Supabase, no sync (docs/agents/NOTIFICATIONS.md).
+  if (args.contains(kUnifiedPushBackgroundArg)) {
+    await unifiedPushBackgroundMain();
+    return;
+  }
   WidgetsFlutterBinding.ensureInitialized();
 
   // OpenUI Lang (Thesys Inc., MIT) for the licence page.

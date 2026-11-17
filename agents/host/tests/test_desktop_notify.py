@@ -4,12 +4,16 @@ machine. Asserted on the argv it would run, with no display and no process."""
 
 from __future__ import annotations
 
+import base64
+
 from chuk_agents_host.desktop_notify import (
     PACKAGED_ICON,
     DesktopNotifier,
     completion_text,
     icon_path,
     set_labels_provider,
+    windows_toast_script,
+    windows_toast_xml,
 )
 from chuk_agents_host.notification_text import RunLabels
 
@@ -70,13 +74,84 @@ def test_no_display_means_disabled_on_linux(monkeypatch):
     assert DesktopNotifier(runner=lambda argv: None, system="Linux").enabled is False
 
 
-def test_macos_uses_osascript_and_windows_is_skipped():
+def test_macos_uses_osascript_with_the_preview_body():
     calls, runner = _capture()
     mac = DesktopNotifier(runner=runner, enabled=True, system="Darwin", background=False)
-    assert mac.notify('say "hi"', "body")
+    assert mac.notify('say "hi"', "Die Summe ist 210.")
     assert calls[0][0] == "osascript" and '\\"hi\\"' in calls[0][2]
-    win = DesktopNotifier(runner=runner, enabled=True, system="Windows", background=False)
-    assert win.notify("t", "b") is False
+    assert "Die Summe ist 210." in calls[0][2]
+
+
+def _decode_ps(argv: list[str]) -> str:
+    return base64.b64decode(argv[argv.index("-EncodedCommand") + 1]).decode("utf-16-le")
+
+
+def test_windows_shows_a_powershell_toast_with_the_avatar():
+    calls, runner = _capture()
+    win = DesktopNotifier(
+        runner=runner, enabled=True, system="Windows", background=False,
+        which=lambda name: "C:\\Windows\\powershell.exe" if name == "powershell" else None,
+    )
+    assert win.notify("Ada", "It's 210 & done <ok>", icon="C:\\ws\\avatars\\local_a.png")
+    (argv,) = calls
+    assert argv[0].endswith("powershell.exe") and "-NoProfile" in argv
+    script = _decode_ps(argv)
+    assert "ToastNotificationManager" in script
+    assert 'placement="appLogoOverride"' in script
+    assert "file:///C:/ws/avatars/local_a.png" in script
+    # XML-escaped, and the single quote doubled for the PowerShell string.
+    assert "It''s 210 &amp; done &lt;ok&gt;" in script
+
+
+def test_windows_toast_xml_falls_back_to_no_image_without_an_icon():
+    xml = windows_toast_xml("t", "b", None)
+    assert "<image" not in xml and "<text>t</text><text>b</text>" in xml
+    script = windows_toast_script("t", "\u2019q", None)
+    assert "\u2019\u2019q" in script
+
+
+def test_windows_without_powershell_runs_nothing():
+    calls, runner = _capture()
+    win = DesktopNotifier(runner=runner, enabled=True, system="Windows", background=False,
+                          which=lambda name: None)
+    assert win.notify("t", "b") is False and calls == []
+
+
+def test_windows_is_enabled_by_default(monkeypatch):
+    monkeypatch.delenv("AGENTS_DESKTOP_NOTIFY", raising=False)
+    assert DesktopNotifier(runner=lambda argv: None, system="Windows").enabled is True
+
+
+def test_a_per_call_icon_wins_over_the_app_logo_on_linux():
+    calls, runner = _capture()
+    notifier = DesktopNotifier(
+        runner=runner, enabled=True, system="Linux", which=lambda name: "/usr/bin/" + name,
+        background=False, icon="/opt/agents/logo.png",
+    )
+    notifier.notify("t", "b", icon="/ws/avatars/local_a.png")
+    assert "--icon=/ws/avatars/local_a.png" in calls[0]
+    assert "--icon=/opt/agents/logo.png" not in calls[0]
+
+
+def test_gdbus_gets_the_avatar_icon_too():
+    calls, runner = _capture()
+    notifier = DesktopNotifier(
+        runner=runner, enabled=True, system="Linux",
+        which=lambda name: "/usr/bin/gdbus" if name == "gdbus" else None, background=False,
+    )
+    notifier.notify("t", "b", icon="/ws/avatars/local_a.png")
+    argv = calls[0]
+    assert argv[argv.index("t") - 1] == "/ws/avatars/local_a.png"
+
+
+def test_the_linux_body_is_markup_escaped():
+    calls, runner = _capture()
+    notifier = DesktopNotifier(
+        runner=runner, enabled=True, system="Linux", which=lambda name: "/usr/bin/" + name,
+        background=False,
+    )
+    notifier.notify("t", "a < b & c")
+    assert calls[0][-1] == "a &lt; b &amp; c"
 
 
 def test_a_failing_runner_never_raises():

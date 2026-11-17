@@ -18,7 +18,7 @@ permissions:
 env:
   # Keep in step with every other build path; scripts/check_flutter_pins.sh
   # reads this line and fails on drift.
-  FLUTTER_VERSION: '3.47.0'
+  FLUTTER_VERSION: '3.50.0'
 
 jobs:
   analyze:

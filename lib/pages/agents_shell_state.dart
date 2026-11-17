@@ -257,8 +257,16 @@ mixin AgentsShellHost on State<MessengerShell> {
     // router keeps the target until this shell takes it, so a tap that
     // launched the app cold is picked up right after the first frame.
     NotificationRouter.instance.pending.addListener(_onNotificationTap);
-    // The toast carries the agent's name, never the answer.
+    // The toast carries the agent's name and face (CHAT-128). A push for
+    // the thread the reader has open shows no toast.
     AgentsNotifications.instance.threadLabel = _threadLabel;
+    AgentsNotifications.instance.threadAgentId = _agentIdForThread;
+    AgentsNotifications.instance.threadOnScreen = _isThreadOnScreen;
+    // The agents' faces as PNG files (notification icons) and on the host
+    // (its desktop toast): kept true on every roster or profile change.
+    _roster.addListener(_scheduleAvatarSync);
+    _agentProfiles.addListener(_scheduleAvatarSync);
+    AgentsRelayClient.hostCapabilities.addListener(_scheduleAvatarSync);
     WidgetsBinding.instance.addPostFrameCallback((_) => _onNotificationTap());
     // The host's agent names (bead cowork-817): the link fans out every
     // inbound frame of the bound controller, so this sees each `agent_list`
@@ -310,6 +318,9 @@ mixin AgentsShellHost on State<MessengerShell> {
       ignore: _deletedAgentIds,
     );
     _reannounceMissingAgents(event.agents);
+    // The host answered, so it is linked and authenticated: a good time to
+    // send the faces it has not got yet.
+    _scheduleAvatarSync();
   }
 
   /// Ids re-sent to the host this session, so a host that keeps dropping an
@@ -541,6 +552,10 @@ mixin AgentsShellHost on State<MessengerShell> {
     _hostLifecycle?.dispose();
     _flushPendingWrites();
     _roster.removeListener(_onRosterChanged);
+    _roster.removeListener(_scheduleAvatarSync);
+    _agentProfiles.removeListener(_scheduleAvatarSync);
+    AgentsRelayClient.hostCapabilities.removeListener(_scheduleAvatarSync);
+    _avatarSyncTimer?.cancel();
     if (WindowTitleService.nameResolver == _windowTitleNameFor) {
       WindowTitleService.nameResolver = null;
     }
@@ -560,6 +575,46 @@ mixin AgentsShellHost on State<MessengerShell> {
     _hasComputer.dispose();
     if (_ownsControlSource) _controlSource.dispose();
     if (_ownsThemeController) _themeController.dispose();
+  }
+
+  bool _isThreadOnScreen(String threadKey) =>
+      mounted && threadKey == _selectedThreadKey && _threadIsOnScreen;
+
+  Timer? _avatarSyncTimer;
+
+  /// Waits for a burst of roster or profile changes to end, then paints the
+  /// faces and sends the new ones to the host ([AgentAvatarSync]).
+  void _scheduleAvatarSync() {
+    _avatarSyncTimer?.cancel();
+    _avatarSyncTimer = Timer(const Duration(seconds: 2), _runAvatarSync);
+  }
+
+  void _runAvatarSync() {
+    if (!mounted) return;
+    final controller = _controller.value;
+    final String? hostId = controller?.state.value.peerDeviceId;
+    // Only a host that names the capability gets the frame; an older one
+    // would answer it with an error.
+    final bool linked =
+        controller != null &&
+        controller.state.value.isPaired &&
+        AgentsRelayClient.hostCapabilities.value.contains(
+          AgentsRelayClient.agentAvatarCapability,
+        );
+    final AgentsAvatarControl? avatarControl = switch (controller) {
+      final AgentsAvatarControl c when linked => c,
+      _ => null,
+    };
+    unawaited(
+      AgentAvatarSync.instance.sync(
+        agents: <AvatarAgent>[
+          for (final AgentsAgent agent in _roster.agents)
+            (id: agent.id, name: agent.name),
+        ],
+        control: avatarControl,
+        hostId: linked ? hostId : null,
+      ),
+    );
   }
 
   String _threadLabel(String threadKey) {
@@ -1297,6 +1352,7 @@ mixin AgentsShellHost on State<MessengerShell> {
     // Nothing of a deleted agent may survive to be inherited by a later one
     // with the same id: drop its face and its read marks.
     unawaited(_agentProfiles.forget(agentId));
+    unawaited(AgentAvatarSync.instance.forget(agentId));
     for (final thread in removed?.threads ?? const <AgentsThreadInfo>[]) {
       unawaited(_readMarks.forget(thread.key));
     }

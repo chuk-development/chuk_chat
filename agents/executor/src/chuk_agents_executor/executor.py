@@ -384,6 +384,8 @@ MCP_GRANTS_FILE = "mcp-grants.json"
 #: The agent's own model (CHAT-36): the frame that sets it, its answer, and
 #: the ``session_features`` kind that stores it.
 AGENT_MODEL_SET = "agent_model_set"
+#: App -> host: an agent's avatar PNG (docs/agents/NOTIFICATIONS.md).
+AGENT_AVATAR_SET = "agent_avatar_set"
 AGENT_MODEL_REPLY = "agent_model"
 AGENT_MODEL_FEATURE = "agent_model"
 #: The sealed connector list of each session (CHAT-37), next to the grants.
@@ -2385,6 +2387,12 @@ class Executor:
             # terminal ``agent_permissions`` frame.
             self._handle_permissions_frame(request_id, payload)
             return
+        if kind == AGENT_AVATAR_SET:
+            # The agent's face for the host's desktop toast
+            # (docs/agents/NOTIFICATIONS.md). The host keeps the PNG and
+            # answers with one terminal ``agent_avatar``.
+            self._handle_agent_avatar_set(request_id, payload)
+            return
         if kind == "user_browser_resume":
             # "Allow again" in the app (docs/WIRE_CONTRACT.md, "The user's own
             # browser"): the host lifts the Stop and answers with one terminal
@@ -3041,6 +3049,32 @@ class Executor:
             return
         if not isinstance(answer, dict) or answer.get("type") != "agent_permissions":
             answer = {**failure, "error": "agent permissions not enabled"}
+        self._terminal(request_id, answer)
+
+    def _handle_agent_avatar_set(self, request_id: str, payload: dict) -> None:
+        """Hand ``agent_avatar_set`` to the host's agent hook (the host keeps
+        the file) and send its ``agent_avatar`` as the terminal. Never a bare
+        ``error``: the app reads that as the end of a run."""
+        agent_id = payload.get("agent_id")
+        failure = {
+            "type": "agent_avatar",
+            "agent_id": agent_id if isinstance(agent_id, str) else "",
+            "ok": False,
+            "error": "agent avatars not enabled",
+        }
+        hook = self._on_agent_frame
+        if hook is None:
+            self._terminal(request_id, failure)
+            return
+        try:
+            answer = hook(payload)
+        except Exception as exc:  # noqa: BLE001 — the serve loop must survive a bad hook
+            self._terminal(
+                request_id, {**failure, "error": f"agent avatar failed: {type(exc).__name__}"}
+            )
+            return
+        if not isinstance(answer, dict) or answer.get("type") != "agent_avatar":
+            answer = failure
         self._terminal(request_id, answer)
 
     def _handle_user_browser_resume(self, request_id: str, payload: dict) -> None:

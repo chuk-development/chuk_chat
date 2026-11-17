@@ -5,6 +5,10 @@
 /// fills the whole square, a light tint of the agent's colour, and the face
 /// (the same round figure as [AgentAvatar], at rest) sits in the visible
 /// middle. An agent with a picture shows the picture edge to edge.
+///
+/// With `badge: true` the same face is drawn as a round badge for a
+/// notification icon: a circle that fills the square, transparent corners,
+/// and the figure the agent's profile picks (cube or round).
 library;
 
 import 'dart:async';
@@ -27,10 +31,17 @@ const double _kVisible = 72 / 108;
 /// The face's size inside that visible circle.
 const double _kFaceInVisible = 0.78;
 
+/// The face's size inside a notification badge.
+const double _kFaceInBadge = 0.74;
+
+/// Paints the icon as PNG bytes. [size] is the edge in pixels. [badge]
+/// selects the round notification badge (see the library comment).
 Future<Uint8List?> paintShareTargetIcon({
   required String agentId,
   required String name,
   AgentProfileStore? store,
+  double size = _kCanvas,
+  bool badge = false,
 }) async {
   final AgentProfileStore profiles = store ?? AgentProfileStore.instance;
   final AgentProfile profile = profiles.profileOf(agentId);
@@ -38,7 +49,8 @@ Future<Uint8List?> paintShareTargetIcon({
 
   final ui.PictureRecorder recorder = ui.PictureRecorder();
   final Canvas canvas = Canvas(recorder);
-  const Rect full = Rect.fromLTWH(0, 0, _kCanvas, _kCanvas);
+  final Rect full = Rect.fromLTWH(0, 0, size, size);
+  if (badge) canvas.clipPath(Path()..addOval(full));
 
   if (photo != null) {
     paintImage(
@@ -59,7 +71,9 @@ Future<Uint8List?> paintShareTargetIcon({
           const Color(0xFFFFFFFF),
         ),
     );
-    const double face = _kCanvas * _kVisible * _kFaceInVisible;
+    final double face = badge
+        ? size * _kFaceInBadge
+        : size * _kVisible * _kFaceInVisible;
     final Rect faceRect = Rect.fromCenter(
       center: full.center,
       width: face,
@@ -67,15 +81,16 @@ Future<Uint8List?> paintShareTargetIcon({
     );
     canvas.save();
     canvas.translate(faceRect.left, faceRect.top);
-    paintRoundAvatar(canvas, face, accent, const AvatarPose());
+    if (badge && profile.round != true) {
+      paintCubeAvatar(canvas, face, accent, const AvatarPose());
+    } else {
+      paintRoundAvatar(canvas, face, accent, const AvatarPose());
+    }
     canvas.restore();
   }
 
   final ui.Picture picture = recorder.endRecording();
-  final ui.Image image = await picture.toImage(
-    _kCanvas.toInt(),
-    _kCanvas.toInt(),
-  );
+  final ui.Image image = await picture.toImage(size.round(), size.round());
   picture.dispose();
   try {
     final ByteData? data = await image.toByteData(

@@ -80,6 +80,9 @@ const Map<String, String> stringsEs = {
       'Mostrar vista previa de la respuesta en las notificaciones',
   'notificationAnswerPreviewSubtitle':
       'Muestra el comienzo de la respuesta en la notificación. Desactivado: la notificación solo dice quién ha terminado.',
+  'notificationPushUnavailable': 'Sin notificaciones push en este teléfono',
+  'notificationPushUnavailableSubtitle':
+      'Este teléfono no tiene los servicios de Google Play. Para recibir notificaciones con la app cerrada, instala un distribuidor de UnifiedPush como ntfy y vuelve a abrir la app.',
   'titleGenerationPrompt': 'Prompt de generación de títulos',
   'usingCustomPrompt': 'Usando prompt personalizado',
   'usingDefaultPrompt': 'Usando prompt predeterminado',

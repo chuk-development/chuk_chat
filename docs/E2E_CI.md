@@ -17,7 +17,7 @@ Beads: `chuk_chat-xmp0` (e2e + comment), `chuk_chat-cnws` (e2e-live).
 The job `integration` does these steps on `ubuntu-latest`:
 
 1. Install the Linux build packages and Xvfb.
-2. Install Flutter 3.47.0. `scripts/check_flutter_pins.sh` checks this pin
+2. Install Flutter 3.50.0. `scripts/check_flutter_pins.sh` checks this pin
    together with the other build paths.
 3. Install the Supabase CLI 2.72.8 (`supabase/setup-cli`).
 4. `scripts/e2e_stack.sh up`. This starts Supabase in Docker, builds the DB,

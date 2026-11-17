@@ -306,7 +306,7 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.47.0'
+          flutter-version: '3.50.0'
           cache: true
 
       - name: Gradle cache
@@ -417,7 +417,7 @@ jobs:
             dpkg-dev rpm file wget fuse libfuse2
 
       - uses: subosito/flutter-action@v2
-        with: { flutter-version: '3.47.0', cache: true }
+        with: { flutter-version: '3.50.0', cache: true }
 
       - run: flutter pub get
 
@@ -659,7 +659,7 @@ jobs:
 
       - name: Install Flutter (manual ARM64)
         run: |
-          git clone https://github.com/flutter/flutter.git -b 3.47.0 --depth 1 "$HOME/flutter"
+          git clone https://github.com/flutter/flutter.git -b 3.50.0 --depth 1 "$HOME/flutter"
           echo "$HOME/flutter/bin" >> $GITHUB_PATH
 
       - name: Flutter setup
@@ -860,7 +860,7 @@ jobs:
             dpkg-dev rpm file wget fuse libfuse2
 
       - uses: subosito/flutter-action@v2
-        with: { flutter-version: '3.47.0', cache: true }
+        with: { flutter-version: '3.50.0', cache: true }
 
       - name: Apply full-Linux swap (webview_cef)
         run: bash ci/linux_full/apply.sh
@@ -1085,7 +1085,7 @@ jobs:
 
       - name: Install Flutter (manual ARM64)
         run: |
-          git clone https://github.com/flutter/flutter.git -b 3.47.0 --depth 1 "$HOME/flutter"
+          git clone https://github.com/flutter/flutter.git -b 3.50.0 --depth 1 "$HOME/flutter"
           echo "$HOME/flutter/bin" >> $GITHUB_PATH
 
       - name: Flutter setup
@@ -1248,7 +1248,7 @@ jobs:
         with: { ref: master }
 
       - uses: subosito/flutter-action@v2
-        with: { flutter-version: '3.47.0', cache: true }
+        with: { flutter-version: '3.50.0', cache: true }
 
       - run: flutter pub get
 
@@ -1423,7 +1423,7 @@ jobs:
         with: { ref: master }
 
       - uses: subosito/flutter-action@v2
-        with: { flutter-version: '3.47.0', cache: true }
+        with: { flutter-version: '3.50.0', cache: true }
 
       - run: flutter pub get
 
@@ -1505,7 +1505,7 @@ jobs:
         with: { ref: master }
 
       - uses: subosito/flutter-action@v2
-        with: { flutter-version: '3.47.0', cache: true }
+        with: { flutter-version: '3.50.0', cache: true }
 
       - run: flutter pub get
 

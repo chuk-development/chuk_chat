@@ -145,6 +145,9 @@ void main() {
   testWidgets(
     'a live done while backgrounded, preview off: one content-free toast',
     (tester) async {
+      await tester.runAsync(
+        () => LocalNotifications.setAnswerPreviewEnabled(false),
+      );
       final controller = await pumpPaired(tester);
       AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
 
@@ -158,16 +161,13 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(backend.shown, hasLength(1));
-      expect(backend.shown.single['title'], 'Chief of Staff is done');
+      expect(backend.shown.single['title'], 'Chief of Staff');
       expect(backend.shown.single['body'], LocalNotifications.defaultBody);
     },
   );
 
-  testWidgets('a live done while backgrounded, preview on: one toast with a '
-      'preview', (tester) async {
-    await tester.runAsync(
-      () => LocalNotifications.setAnswerPreviewEnabled(true),
-    );
+  testWidgets('a live done while backgrounded, preview on (default): one '
+      'toast with a preview', (tester) async {
     final controller = await pumpPaired(tester);
     AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
 
@@ -181,7 +181,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(backend.shown, hasLength(1));
-    expect(backend.shown.single['title'], 'Chief of Staff is done');
+    expect(backend.shown.single['title'], 'Chief of Staff');
     expect(
       backend.shown.single['body'],
       'Die Recherche ist fertig: drei Quellen.',

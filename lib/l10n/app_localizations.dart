@@ -176,6 +176,10 @@ class AppLocalizations {
   String get notificationAnswerPreview => _get('notificationAnswerPreview');
   String get notificationAnswerPreviewSubtitle =>
       _get('notificationAnswerPreviewSubtitle');
+  String get notificationPushUnavailable =>
+      _get('notificationPushUnavailable');
+  String get notificationPushUnavailableSubtitle =>
+      _get('notificationPushUnavailableSubtitle');
   String get usingCustomPrompt => _get('usingCustomPrompt');
   String get usingDefaultPrompt => _get('usingDefaultPrompt');
   String get titleGenInfo => _get('titleGenInfo');

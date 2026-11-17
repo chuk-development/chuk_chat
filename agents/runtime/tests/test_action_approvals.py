@@ -374,6 +374,22 @@ def test_classification_is_structural(tmp_path):
     }
 
 
+def test_every_acting_playwright_mcp_tool_is_a_browser_act():
+    """The names @playwright/mcp 0.0.85 offers that change a page. A tool that
+    runs code or drops files must ask like a click when the browser is on ask."""
+    from chuk_agents_runtime.action_policy import BROWSER_ACT_TOOLS
+
+    acting = {
+        "browser_click", "browser_drag", "browser_drop", "browser_evaluate",
+        "browser_file_upload", "browser_fill_form", "browser_handle_dialog",
+        "browser_press_key", "browser_run_code_unsafe", "browser_select_option",
+        "browser_type",
+    }
+    assert acting <= BROWSER_ACT_TOOLS
+    request = describe_browser("browser_run_code_unsafe", {}, "shop.example.com")
+    assert request.summary.startswith("Run a script on the page")
+
+
 def test_browser_act_per_site(tmp_path):
     clicked: list = []
     manager, reg = _mcp_setup(clicked)

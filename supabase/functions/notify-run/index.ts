@@ -11,12 +11,23 @@
 // with that token, so RLS scopes every read and write to the caller's own rows.
 // No service-role key is used anywhere here.
 //
-// The push carries NO answer content: title/body come from the row, which the
-// host wrote with generic text only. The app opens the thread and replays the
-// answer over the sealed channel.
+// The push carries NO readable answer content (docs/agents/NOTIFICATIONS.md):
+// title/body come from the row, which the host wrote with generic text only.
+// The answer preview is in `preview_sealed` ({channel_id: sealed}), sealed per
+// pairing with a key only the host and the paired app hold. This function
+// passes it on and cannot read it.
+//
+// Per platform:
+//   android      FCM data-only message, priority HIGH. The app's background
+//                handler opens the seal and shows the local notification.
+//   ios          FCM `notification` block (generic text), apns
+//                mutable-content 1, and the same data (for a later NSE).
+//   unifiedpush  HTTP POST of the same data object as JSON to the token
+//                (the distributor endpoint URL). For phones without Google
+//                Play. A 404 or 410 removes the token.
 //
 // Secrets (set with `supabase secrets set`):
-//   FCM_PROJECT_ID       the Firebase project id
+//   FCM_PROJECT_ID       the Firebase project id (no FCM: only UnifiedPush)
 //   FCM_SERVICE_ACCOUNT  the JSON of a service account with firebase.messaging
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -84,34 +95,90 @@ async function fcmAccessToken(): Promise<string> {
   return cachedToken.value;
 }
 
-/** Build the FCM v1 message for one device token. Generic text only. */
-export function buildFcmMessage(token: string, row: Record<string, unknown>): Record<string, unknown> {
+/** FCM allows 4 KB of data. Above this size `preview_sealed` is dropped. */
+export const MAX_DATA_BYTES = 3584;
+
+/** How long a UnifiedPush distributor keeps an undelivered message (s). */
+export const UNIFIEDPUSH_TTL_SECONDS = 86400;
+
+/** The data object of every platform: string values only (FCM rule). */
+export function buildPushData(row: Record<string, unknown>): Record<string, string> {
+  const data: Record<string, string> = {
+    run_id: String(row.run_id ?? ""),
+    session_key: String(row.session_key ?? ""),
+    agent_id: String(row.agent_id ?? ""),
+    agent_name: String(row.agent_name ?? ""),
+    notification_id: String(row.id ?? ""),
+    kind: String(row.kind ?? ""),
+    // The generic fallback for a device that cannot open the seal.
+    title: String(row.title ?? ""),
+    body: String(row.body ?? ""),
+  };
+  const sealed = row.preview_sealed;
+  if (sealed && typeof sealed === "object" && Object.keys(sealed).length > 0) {
+    const withSeal = { ...data, preview_sealed: JSON.stringify(sealed) };
+    if (new TextEncoder().encode(JSON.stringify(withSeal)).length <= MAX_DATA_BYTES) {
+      return withSeal;
+    }
+  }
+  return data;
+}
+
+/** Build the FCM v1 message for one device token. Readable text is generic;
+ * the preview is only in the sealed data field. */
+export function buildFcmMessage(
+  token: string,
+  row: Record<string, unknown>,
+  platform = "android",
+): Record<string, unknown> {
+  const data = buildPushData(row);
+  if (platform === "ios") {
+    return {
+      message: {
+        token,
+        notification: { title: data.title, body: data.body },
+        data,
+        apns: {
+          headers: { "apns-priority": "10" },
+          // A Notification Service Extension may replace the text.
+          payload: { aps: { "mutable-content": 1 } },
+        },
+      },
+    };
+  }
+  // Android: data only. The app shows the notification itself, with the
+  // opened preview and the agent's avatar.
   return {
     message: {
       token,
-      notification: { title: String(row.title ?? ""), body: String(row.body ?? "") },
-      data: {
-        run_id: String(row.run_id ?? ""),
-        session_key: String(row.session_key ?? ""),
-        agent_id: String(row.agent_id ?? ""),
-        agent_name: String(row.agent_name ?? ""),
-        notification_id: String(row.id ?? ""),
-        kind: String(row.kind ?? ""),
-      },
-      android: {
-        priority: "HIGH",
-        notification: {
-          // The channel the app creates (lib/services/notifications/
-          // local_notifications.dart). An unknown id falls back to the
-          // manifest default channel.
-          channel_id: "cowork_answer_ready",
-          // One outstanding notification per thread: a newer one replaces it.
-          tag: String(row.session_key ?? ""),
-          click_action: "FLUTTER_NOTIFICATION_CLICK",
-        },
-      },
+      data,
+      android: { priority: "HIGH" },
     },
   };
+}
+
+/** POST one push to a UnifiedPush endpoint. Returns the HTTP status. */
+async function sendUnifiedPush(endpoint: string, row: Record<string, unknown>): Promise<number> {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return 410;
+  }
+  // Only https: the token is a URL the user stored; never a plain or a local
+  // scheme.
+  if (url.protocol !== "https:") return 410;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      TTL: String(UNIFIEDPUSH_TTL_SECONDS),
+      Urgency: "high",
+    },
+    body: JSON.stringify(buildPushData(row)),
+  });
+  await resp.body?.cancel();
+  return resp.status;
 }
 
 Deno.serve(async (req) => {
@@ -142,21 +209,43 @@ Deno.serve(async (req) => {
 
   const { data: devices } = await supabase
     .from("cowork_device_tokens").select("token, platform, device_id");
-  const targets = (devices ?? []).filter((d) => d.platform === "android" || d.platform === "ios");
-  if (targets.length === 0 || !FCM_PROJECT_ID || !FCM_SERVICE_ACCOUNT) {
+  const fcmReady = FCM_PROJECT_ID !== "" && FCM_SERVICE_ACCOUNT !== "";
+  const fcmTargets = fcmReady
+    ? (devices ?? []).filter((d) => d.platform === "android" || d.platform === "ios")
+    : [];
+  const upTargets = (devices ?? []).filter((d) => d.platform === "unifiedpush");
+  if (fcmTargets.length === 0 && upTargets.length === 0) {
     await supabase.from("cowork_run_notifications").update({ pushed_at: new Date().toISOString() }).eq("id", id);
     return json(200, { sent: 0, failed: 0, already_pushed: false });
   }
 
   let sent = 0, failed = 0;
-  const google = await fcmAccessToken();
-  for (const d of targets) {
+  for (const d of upTargets) {
+    let status = 0;
+    try {
+      status = await sendUnifiedPush(String(d.token ?? ""), row);
+    } catch {
+      status = 0;
+    }
+    if (status >= 200 && status < 300) {
+      sent++;
+      continue;
+    }
+    failed++;
+    // The distributor says the endpoint is gone (app removed, unregistered).
+    if (status === 404 || status === 410) {
+      await supabase.from("cowork_device_tokens").delete().eq("device_id", d.device_id);
+    }
+  }
+
+  const google = fcmTargets.length > 0 ? await fcmAccessToken() : "";
+  for (const d of fcmTargets) {
     const resp = await fetch(
       `https://fcm.googleapis.com/v1/projects/${FCM_PROJECT_ID}/messages:send`,
       {
         method: "POST",
         headers: { Authorization: `Bearer ${google}`, "Content-Type": "application/json" },
-        body: JSON.stringify(buildFcmMessage(d.token, row)),
+        body: JSON.stringify(buildFcmMessage(d.token, row, d.platform)),
       },
     );
     if (resp.ok) {

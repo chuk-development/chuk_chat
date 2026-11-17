@@ -193,7 +193,7 @@ The directory must not survive the task. `git worktree list` shows leftovers.
 
 ## Dependency Ceilings
 
-CI runs **Flutter 3.47.0 (Dart 3.13)** on every platform (pinned in
+CI runs **Flutter 3.50.0 (Dart 3.14)** on every platform (pinned in
 `.github/workflows/*` and `codemagic.yaml`). The old re_editor 0.8.0 ceiling that
 held CI at 3.41.4 is gone — `vendor/markdraw` now uses `re_editor ^0.10.0`.
 
@@ -209,9 +209,9 @@ behind are transitive deps capped by their parents, listed in the header.
 The vendored `vendor/markdraw/pubspec.yaml` carries its own constraints (e.g.
 `file_picker <14`) — widen them there when a major lands.
 
-**Windows caveat:** the whole lock now needs Dart ≥3.13 (`tray_manager` 0.7 /
+**Windows caveat:** the whole lock now needs Dart ≥3.14 (`tray_manager` 0.9, `window_manager` 0.7 /
 `nativeapi` 0.3; `environment.sdk` says so), so every CI job (Windows included)
-must stay on Flutter ≥3.47 — an older job would fail to resolve. Flutter's Windows renderer can show a black window
+must stay on Flutter ≥3.50 — an older job would fail to resolve. Flutter's Windows renderer can show a black window
 on GPUs/VMs limited to D3D11 feature level 9_3 (ANGLE fallback, a cross-version
 issue). Test the Windows artifact on such hardware before publishing a release.
 

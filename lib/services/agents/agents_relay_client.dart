@@ -2010,6 +2010,14 @@ abstract interface class AgentsDocumentsControl {
   Future<void> requestDocuments(String sessionKey, {String? id});
 }
 
+/// Sends an agent's avatar PNG to the host (`agent_avatar_set`,
+/// docs/agents/NOTIFICATIONS.md "Avatar on the host"). The host uses it as
+/// the icon of its desktop toast.
+abstract interface class AgentsAvatarControl {
+  /// [pngBase64] is the base64 of a PNG of at most 128 KB.
+  Future<void> setAgentAvatar(String agentId, String pngBase64);
+}
+
 /// Asks the host what an agent runs on and what it has spent
 /// (docs/WIRE_CONTRACT.md, "Agent status"). Answered with one
 /// [AgentsRelayAgentStatus] on `inbound`.
@@ -2034,6 +2042,7 @@ class AgentsRelayClient
         AgentsAutomationEditControl,
         // ── end F2 ──
         AgentsDocumentsControl,
+        AgentsAvatarControl,
         AgentsAgentStatusControl,
         AgentsSkillsControl,
         McpProbeControl,
@@ -2146,6 +2155,9 @@ class AgentsRelayClient
   /// field never does, so a feature gated on it stays off there.
   /// The host capability that says it understands `agent_delete`.
   static const String agentDeleteCapability = 'agent_delete';
+
+  /// The host capability that says it keeps avatars (`agent_avatar_set`).
+  static const String agentAvatarCapability = 'agent_avatar';
 
   static final ValueNotifier<Set<String>> hostCapabilities =
       ValueNotifier<Set<String>>(const <String>{});
@@ -3100,6 +3112,18 @@ class AgentsRelayClient
       'type': 'agent_rename',
       'agent_id': agentId,
       'name': name,
+    });
+  }
+
+  @override
+  Future<void> setAgentAvatar(String agentId, String pngBase64) async {
+    // Auth first — see [createAgent].
+    await _awaitProvisionGate();
+    if (_disposed) return;
+    return _sendFramePayload(<String, dynamic>{
+      'type': 'agent_avatar_set',
+      'agent_id': agentId,
+      'png_b64': pngBase64,
     });
   }
 

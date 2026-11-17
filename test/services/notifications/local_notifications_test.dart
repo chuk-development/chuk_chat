@@ -8,17 +8,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/services/notifications/local_notifications.dart';
 import 'package:chuk_chat/services/notifications/notification_router.dart';
 
+/// The default avatar lookup, kept so a test can put it back.
+final Future<String?> Function(String agentId, String name)
+defaultAvatarPathForTest = LocalNotifications.avatarPath;
+
 /// Records every call; the platform plugin never runs in a test.
 class FakeBackend implements LocalNotificationsBackend {
   bool initOk = true;
   String? launch;
   bool permission = true;
   void Function(String? payload)? tap;
-  final List<Map<String, Object>> shown = <Map<String, Object>>[];
+  final List<Map<String, Object?>> shown = <Map<String, Object?>>[];
   final List<(int, String)> cancelled = <(int, String)>[];
 
   @override
-  Future<bool> initialize({required void Function(String? payload) onTap}) async {
+  Future<bool> initialize({
+    required void Function(String? payload) onTap,
+  }) async {
     tap = onTap;
     return initOk;
   }
@@ -30,13 +36,15 @@ class FakeBackend implements LocalNotificationsBackend {
     required String body,
     required String payload,
     required String tag,
+    String? iconPath,
   }) async {
-    shown.add(<String, Object>{
+    shown.add(<String, Object?>{
       'id': id,
       'title': title,
       'body': body,
       'payload': payload,
       'tag': tag,
+      'icon': iconPath,
     });
   }
 
@@ -57,17 +65,20 @@ void main() {
 
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    LocalNotifications.avatarPath = (String agentId, String name) async =>
+        '/avatars/$agentId.png';
     LocalNotifications.instance.reset();
     NotificationRouter.instance.reset();
     backend = FakeBackend();
   });
 
   tearDown(() {
+    LocalNotifications.avatarPath = defaultAvatarPathForTest;
     LocalNotifications.instance.reset();
     NotificationRouter.instance.reset();
   });
 
-  test('a toast says the agent is done; no answer, a plain body', () async {
+  test('a toast is titled with the agent; no answer: a plain body', () async {
     await LocalNotifications.instance.initialize(backend: backend);
     await LocalNotifications.instance.showAnswerReady(
       sessionKey: 'thread-1',
@@ -76,10 +87,11 @@ void main() {
     );
     expect(backend.shown, hasLength(1));
     final shown = backend.shown.single;
-    expect(shown['title'], 'Chief of Staff is done');
+    expect(shown['title'], 'Chief of Staff');
     expect(shown['body'], 'Your answer is ready.');
     expect(shown['tag'], 'thread-1');
     expect(shown['id'], LocalNotifications.idFor('thread-1'));
+    expect(shown['icon'], isNull, reason: 'no agent id: the app logo');
     final payload = jsonDecode(shown['payload']! as String) as Map;
     expect(payload, <String, String>{
       'session_key': 'thread-1',
@@ -87,8 +99,23 @@ void main() {
     });
   });
 
-  test('preview setting off (default): no answer text in the body', () async {
-    expect(await LocalNotifications.answerPreviewEnabled(), isFalse);
+  test('the preview is on by default: the body is the answer', () async {
+    expect(await LocalNotifications.answerPreviewEnabled(), isTrue);
+    await LocalNotifications.instance.initialize(backend: backend);
+    await LocalNotifications.instance.showAnswerReady(
+      sessionKey: 'thread-1',
+      threadLabel: 'Research',
+      preview: 'Drei Quellen gefunden.',
+      agentId: 'agent-7',
+    );
+    final shown = backend.shown.single;
+    expect(shown['title'], 'Research');
+    expect(shown['body'], 'Drei Quellen gefunden.');
+    expect(shown['icon'], '/avatars/agent-7.png');
+  });
+
+  test('preview setting off: no answer text in the body', () async {
+    await LocalNotifications.setAnswerPreviewEnabled(false);
     await LocalNotifications.instance.initialize(backend: backend);
     await LocalNotifications.instance.showAnswerReady(
       sessionKey: 'thread-1',
@@ -96,13 +123,13 @@ void main() {
       preview: 'Das Passwort ist hunter2.',
     );
     final shown = backend.shown.single;
-    expect(shown['title'], 'Research is done');
+    expect(shown['title'], 'Research');
     expect(shown['body'], LocalNotifications.defaultBody);
     expect(shown['body'], isNot(contains('hunter2')));
   });
 
   test(
-    'preview setting off: a stopped run keeps its content-free body',
+    'a stopped run keeps its plain sentence, even with the preview on',
     () async {
       await LocalNotifications.instance.initialize(backend: backend);
       await LocalNotifications.instance.showAnswerReady(
@@ -111,25 +138,33 @@ void main() {
         preview: 'partial secret',
         stopped: true,
       );
-      expect(
-        backend.shown.single['body'],
-        'Open the chat to see what happened.',
-      );
+      expect(backend.shown.single['body'], LocalNotifications.stoppedBody);
     },
   );
 
-  test('the setting round-trips through SharedPreferences', () async {
-    await LocalNotifications.setAnswerPreviewEnabled(true);
-    expect(await LocalNotifications.answerPreviewEnabled(), isTrue);
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool(LocalNotifications.showAnswerPreviewKey), isTrue);
-    await LocalNotifications.setAnswerPreviewEnabled(false);
-    expect(await LocalNotifications.answerPreviewEnabled(), isFalse);
+  test('an avatar lookup that fails leaves the app logo', () async {
+    LocalNotifications.avatarPath = (String agentId, String name) async =>
+        throw StateError('no disk');
+    await LocalNotifications.instance.initialize(backend: backend);
+    await LocalNotifications.instance.showAnswerReady(
+      sessionKey: 't',
+      threadLabel: 'Research',
+      agentId: 'agent-7',
+    );
+    expect(backend.shown.single['icon'], isNull);
   });
 
-  test('preview setting on: the body is the answer, cut short and free of '
-      'markdown', () async {
+  test('the setting round-trips through SharedPreferences', () async {
+    await LocalNotifications.setAnswerPreviewEnabled(false);
+    expect(await LocalNotifications.answerPreviewEnabled(), isFalse);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool(LocalNotifications.showAnswerPreviewKey), isFalse);
     await LocalNotifications.setAnswerPreviewEnabled(true);
+    expect(await LocalNotifications.answerPreviewEnabled(), isTrue);
+  });
+
+  test('preview: the body is the answer, cut short and free of '
+      'markdown', () async {
     await LocalNotifications.instance.initialize(backend: backend);
     await LocalNotifications.instance.showAnswerReady(
       sessionKey: 'thread-1',
@@ -157,6 +192,21 @@ void main() {
       expect(out.contains('wor\u2026'), isFalse, reason: 'no cut mid-word');
     });
 
+    test('clips to 300 characters by default (spec rule 2)', () {
+      final String long = List<String>.filled(200, 'wort').join(' ');
+      final String out = notificationPreview(long);
+      expect(out.length, lessThanOrEqualTo(301));
+      expect(out.length, greaterThan(250));
+      expect(out.endsWith('\u2026'), isTrue);
+    });
+
+    test('collapses whitespace and keeps link text', () {
+      expect(
+        notificationPreview('Hallo\n\n  *Welt*   [hier](https://a.b)\t_ok_'),
+        'Hallo Welt hier ok',
+      );
+    });
+
     test('nothing readable is empty', () {
       expect(notificationPreview('   '), '');
       expect(notificationPreview('```\nonly code\n```'), '');
@@ -166,14 +216,32 @@ void main() {
   test('Android details are private; the ticker carries no body', () {
     final AndroidNotificationDetails details =
         LocalNotifications.androidDetails(
-          title: 'Research is done',
+          title: 'Research',
           body: 'answer text',
           tag: 'thread-1',
         );
     expect(details.visibility, NotificationVisibility.private);
-    expect(details.ticker, 'Research is done');
+    expect(details.ticker, 'Research');
+    expect(details.largeIcon, isNull);
+    expect(details.icon, 'ic_notification');
     expect(details.tag, 'thread-1');
     expect(details.channelId, kAgentsNotificationChannelId);
+  });
+
+  test('Android: the avatar is the large icon, the small icon stays', () {
+    final AndroidNotificationDetails details =
+        LocalNotifications.androidDetails(
+          title: 'Research',
+          body: 'answer text',
+          tag: 'thread-1',
+          largeIconPath: '/avatars/a.png',
+        );
+    expect(details.icon, 'ic_notification');
+    expect(details.largeIcon, isA<FilePathAndroidBitmap>());
+    expect(
+      (details.largeIcon! as FilePathAndroidBitmap).data,
+      '/avatars/a.png',
+    );
   });
 
   test('id is stable per thread and non-negative', () {
@@ -188,7 +256,7 @@ void main() {
       sessionKey: 't',
       threadLabel: '   ',
     );
-    expect(backend.shown.single['title'], 'Chuk Chat is done');
+    expect(backend.shown.single['title'], 'Chuk Chat');
   });
 
   test('a tap routes the thread and clears the toast', () async {
@@ -236,14 +304,23 @@ void main() {
 
   test('NotificationTarget.fromData reads both key spellings', () {
     expect(
-      NotificationTarget.fromData(<String, Object?>{'session_key': 'a', 'run_id': 'r'}),
+      NotificationTarget.fromData(<String, Object?>{
+        'session_key': 'a',
+        'run_id': 'r',
+      }),
       const NotificationTarget(sessionKey: 'a', runId: 'r'),
     );
     expect(
-      NotificationTarget.fromData(<String, Object?>{'sessionKey': 'a', 'runId': ''}),
+      NotificationTarget.fromData(<String, Object?>{
+        'sessionKey': 'a',
+        'runId': '',
+      }),
       const NotificationTarget(sessionKey: 'a'),
     );
-    expect(NotificationTarget.fromData(<String, Object?>{'session_key': ''}), isNull);
+    expect(
+      NotificationTarget.fromData(<String, Object?>{'session_key': ''}),
+      isNull,
+    );
     expect(NotificationTarget.fromData(null), isNull);
   });
 

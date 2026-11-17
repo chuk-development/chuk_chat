@@ -30,6 +30,14 @@ import 'package:chuk_chat/services/notifications/run_notifications.dart';
 /// The shell knows the roster; the services do not.
 typedef ThreadLabelResolver = String Function(String sessionKey);
 
+/// Resolves the agent that owns a thread, for the avatar icon. Null when
+/// no agent owns it.
+typedef ThreadAgentResolver = String? Function(String sessionKey);
+
+/// Whether a thread is open on screen right now (a push for it then needs
+/// no toast).
+typedef ThreadOnScreenResolver = bool Function(String sessionKey);
+
 class AgentsNotifications {
   AgentsNotifications._();
 
@@ -37,6 +45,17 @@ class AgentsNotifications {
 
   /// Set by the shell. Default: a neutral label.
   ThreadLabelResolver threadLabel = (String sessionKey) => 'Chuk Chat';
+
+  /// Set by the shell. Default: no agent, so the toast shows the app logo.
+  ThreadAgentResolver threadAgentId = (String sessionKey) => null;
+
+  /// Set by the shell. Default: no thread is on screen.
+  ThreadOnScreenResolver threadOnScreen = (String sessionKey) => false;
+
+  /// Whether the user sees [sessionKey] now: the app is in front and the
+  /// shell shows that thread.
+  bool isThreadVisible(String sessionKey) =>
+      _inForeground && threadOnScreen(sessionKey);
 
   /// Test seam: overrides the lifecycle the rule reads.
   @visibleForTesting
@@ -64,9 +83,10 @@ class AgentsNotifications {
   }
 
   /// A live `done` reached the thread view for [sessionKey]. Toast only when
-  /// the app is not in front of the user: "Name is done". [answer] becomes
-  /// a short preview in the body only when the user turned the preview
-  /// setting on ([LocalNotifications.showAnswerPreviewKey], default off).
+  /// the app is not in front of the user. The title is the agent's name,
+  /// the icon its face. [answer] becomes a short preview in the body unless
+  /// the user turned the preview setting off
+  /// ([LocalNotifications.showAnswerPreviewKey], default on).
   /// [stopped] is a run that ended without finishing.
   Future<void> onLiveDone(
     String sessionKey, {
@@ -81,6 +101,7 @@ class AgentsNotifications {
       runId: runId,
       preview: answer,
       stopped: stopped,
+      agentId: threadAgentId(sessionKey),
     );
   }
 
@@ -113,5 +134,7 @@ class AgentsNotifications {
     _initialized = false;
     lifecycleOverride = null;
     threadLabel = (String sessionKey) => 'Chuk Chat';
+    threadAgentId = (String sessionKey) => null;
+    threadOnScreen = (String sessionKey) => false;
   }
 }

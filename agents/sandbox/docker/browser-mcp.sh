@@ -234,8 +234,13 @@ fi
 # --user-data-dir in the workspace so a login done via the VNC hand-off survives.
 # The image already installs the pinned server. Do not invoke npx here: a
 # browser reconnect must not depend on npm registry availability/cache state.
+# --no-webmcp: newer servers (0.0.85 has it, 0.0.80 not) also offer the tools a page registers
+# through the WebMCP API. Any site could then put its own tools, with its own
+# descriptions, into the agent's tool list: a prompt injection path and more
+# tokens on every turn. The agent uses only the server's own browser_* tools.
 exec python3 /usr/local/lib/agents/browser-mcp-owner.py playwright-mcp \
     --executable-path "${AGENTS_BROWSER_EXECUTABLE:-/usr/local/bin/chromium}" \
     --user-data-dir "${PROFILE}" \
     --no-sandbox \
+    --no-webmcp \
     "$@"
