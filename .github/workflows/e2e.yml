@@ -94,6 +94,26 @@ jobs:
             --reporter expanded \
             --dart-define-from-file=_scratch/e2e.defines.json
 
+      # On a failure, run the test once more with --verbose: flutter_tools
+      # then logs why the app process went away (exit code, signal). The log
+      # goes up with the screenshots.
+      - name: Integration test, verbose (failure only)
+        if: failure()
+        run: |
+          H="$RUNNER_TEMP/it_home_v"
+          mkdir -p "$H/data" "$H/cache" "$H/state" build/integration_shots
+          ulimit -c unlimited || true
+          CHUK_MULTI_INSTANCE=1 \
+          XDG_DATA_HOME="$H/data" XDG_CACHE_HOME="$H/cache" XDG_STATE_HOME="$H/state" \
+          xvfb-run -a -s "-screen 0 1440x900x24" \
+            flutter test integration_test/app_test.dart -d linux --verbose \
+            --reporter expanded \
+            --dart-define-from-file=_scratch/e2e.defines.json \
+            > build/integration_shots/verbose.log 2>&1 || true
+          grep -nEi "exit code|exited|signal|segfault|abort|lost connection|did not complete|Service protocol" \
+            build/integration_shots/verbose.log | tail -40 || true
+          lsb_release -a || true
+
       # Context for the comment workflow. It is informational only: the
       # comment workflow finds the pull request from the trusted
       # workflow_run event, not from this file.
