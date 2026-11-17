@@ -245,7 +245,7 @@ One record per agent, one page to change it, one app default.
 |---|---|---|
 | An agent's own model, provider, reasoning level | `AgentModelPage` (`lib/pages/agent_model_page.dart`), reached from the profile ("Model" row on phone and desktop), the desktop details pane and the phone "Host & activity" page. An Agents thread's composer has no model picker (CHAT-54). | `ChatModelSelectionService`, keyed by the thread key, on this device. `AgentModel` (`lib/services/agents/agent_model.dart`) resolves own-or-default. |
 | The agent default (every agent with no own model) | Fixed: DeepSeek V4 Flash (`deepseek/deepseek-v4-flash-0731`, `AgentModel.defaultConfig`). | Code constant. |
-| The app default (plain chats) | Settings → Model Selection (`ModelSelectorPage` unscoped): the Fast / Thinking cards. | `ChatModeService`, account-wide mode. |
+| The app default (plain chats) | Settings → Model Selection (`ModelSelectorPage` unscoped): the Standard card (model and providers from the server, only the reasoning level is the reader's). | `ChatModeService`, account-wide mode. |
 | What the last run really used | Read only: "Last run" on the model page and in the details pane. | The host's status frame (`AgentModelChoice`). |
 
 The relay send resolves the own record again at send time, reasoning level

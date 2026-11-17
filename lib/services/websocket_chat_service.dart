@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/prompt_cache/image_budget.dart';
 import 'package:chuk_chat/services/prompt_cache/prompt_context.dart';
 import 'package:chuk_chat/services/multiplex_connection.dart';
 import 'package:chuk_chat/services/provider_cache_affinity.dart';
+import 'package:chuk_chat/services/chat_profile_service.dart';
 import 'package:chuk_chat/services/provider_resolution_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
@@ -292,10 +293,15 @@ class WebSocketChatService {
 
     final registry = ToolResultCacheRegistry.instance;
 
+    // Standard: the marker slug becomes `profile`, and the server picks
+    // model and providers (ChatProfileService). The model id stays as the
+    // fallback for a server that does not know the profile.
+    final String? profileId = ChatProfileService.profileIdOf(providerSlug);
     final payload = <String, dynamic>{
       'message': message,
       'model_id': modelId,
-      'provider_slug': providerSlug,
+      'profile': ?profileId,
+      if (profileId == null) 'provider_slug': providerSlug,
       'max_tokens': maxTokens,
       'temperature': temperature,
       // Request metadata for the server (cache affinity, logs). The server

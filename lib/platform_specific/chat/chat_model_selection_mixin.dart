@@ -26,6 +26,7 @@ import 'package:chuk_chat/pages/agent_model_page.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/services/agents/agent_model.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
+import 'package:chuk_chat/services/chat_profile_service.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/model_prefetch_service.dart';
@@ -64,9 +65,20 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
   List<ChatModelChoice> pickedModels = const <ChatModelChoice>[];
 
   /// Human name of the model Custom last ran, remembered across mode switches
-  /// so the third point in the mode menu names it even under Fast or Thinking.
+  /// so the Custom point in the mode menu names it even under Standard.
   /// Null until Custom has been used at least once.
   String? customModelName;
+
+  /// What Standard runs now, for the line under Standard in the mode menu:
+  /// `DeepSeek V4.1 Flash 1017 · Wafer → inference.net → Ionstream`. Null
+  /// until the server's profile is known.
+  String? get standardDetail {
+    final ChatProfile? profile = ChatProfileService.standard.value;
+    if (profile == null) return null;
+    final String model = ChatModeSelector.stripLabPrefix(profile.modelName);
+    final String chain = profile.providerChainLabel;
+    return chain.isEmpty ? model : '$model · $chain';
+  }
 
   // --- Hooks the host State may override ---------------------------------
 
@@ -127,6 +139,7 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
   void initState() {
     super.initState();
     ChatModelSelectionService.instance.addListener(_onAgentModelChanged);
+    ChatProfileService.standard.addListener(_onStandardProfileChanged);
     _modelSettingsSubscription = ModelSelectionEventBus().refreshStream.listen(
       (_) => unawaited(onModelSettingsChanged().catchError((Object _) {})),
     );
@@ -167,7 +180,23 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
   void dispose() {
     _modelSettingsSubscription?.cancel();
     ChatModelSelectionService.instance.removeListener(_onAgentModelChanged);
+    ChatProfileService.standard.removeListener(_onStandardProfileChanged);
     super.dispose();
+  }
+
+  /// The server changed Standard (new model or providers). In Standard the
+  /// composer follows at once; the next send already goes by profile.
+  void _onStandardProfileChanged() {
+    if (!mounted) return;
+    if (chatMode != ChatMode.standard || modelSelectionChatId != null) {
+      setState(() {}); // the menu's Standard line
+      return;
+    }
+    unawaited(
+      ChatModeService.loadConfig(ChatMode.standard)
+          .then((config) => applyModeConfig(ChatMode.standard, config))
+          .catchError((Object _) {}),
+    );
   }
 
   void _onAgentModelChanged() {
@@ -276,8 +305,8 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
     });
   }
 
-  /// Resolve the name of the model Custom last ran, so the third point in the
-  /// mode menu can name it even while Fast or Thinking is active. Stays null
+  /// Resolve the name of the model Custom last ran, so the Custom point in the
+  /// mode menu can name it even while Standard is active. Stays null
   /// until Custom has a stored config (has been used at least once), so a fresh
   /// install shows the neutral "Choose model" instead of the seed default.
   Future<void> refreshCustomModelName() async {
@@ -327,9 +356,8 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
   /// Turn provider preferences into the menu's model list.
   Future<void> applyPickedModels(Map<String, String> prefs) async {
     final ids = <String>{
-      // Each mode's own default model, so both stay reachable in the menu.
-      ChatModeService.defaultConfig(ChatMode.fast).modelId,
-      ChatModeService.defaultConfig(ChatMode.thinking).modelId,
+      // Standard's model, so it stays reachable as a Custom pick too.
+      ChatModeService.defaultConfig(ChatMode.standard).modelId,
       if (selectedModelId.isNotEmpty) selectedModelId,
       // Only models that still have a provider pinned. An empty slug means
       // the pin was taken away, and the model is no longer picked.
@@ -382,7 +410,7 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
       return;
     }
     // Only a genuinely new pick should flip the composer into Custom. Merely
-    // browsing the screen — pinning a provider, retuning Fast/Thinking — must
+    // browsing the screen — pinning a provider, retuning Standard — must
     // leave the active mode untouched, so compare against the model in use.
     final String before = selectedModelId;
     await presentModelScreen();
@@ -400,8 +428,8 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
   /// Switch mode, swapping in that mode's own model, provider and reasoning
   /// level. The next send uses them.
   ///
-  /// In an agent's thread, Fast and Thinking are the app defaults: picking
-  /// one drops the agent's own model, so it follows that default.
+  /// In an agent's thread, Standard is the app default: picking it drops
+  /// the agent's own model, so it follows that default.
   Future<void> setChatMode(ChatMode mode) async {
     final String? chatId = modelSelectionChatId;
     if (chatId != null) {
@@ -465,10 +493,9 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
       );
 
   /// Apply a model the reader picked directly. Picking a specific model IS the
-  /// Custom mode — an arbitrary model at its own reasoning level. Fast and
-  /// Thinking keep the models set on the model screen and are never
-  /// overwritten from here, so the pick records against Custom and switches to
-  /// it. Reload the pinned provider so model and provider cannot drift apart on
+  /// Custom mode — an arbitrary model at its own reasoning level. Standard's
+  /// model is the server's and is never overwritten from here, so the pick
+  /// records against Custom and switches to it. Reload the pinned provider so model and provider cannot drift apart on
   /// the next send.
   ///
   /// In an agent's thread the pick is the agent's own model instead; the
@@ -535,9 +562,8 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
       config.modelId,
       skipIfUnchanged: skipRepeatedModelSave,
     );
-    // Fast and Thinking keep their own provider, which the lookup below
-    // prefers; the per-model pin applies only in custom mode or when the mode
-    // pins nothing. Awaited so it cannot race the unawaited read the
+    // Standard keeps its profile marker, which the lookup below prefers; the
+    // per-model pin applies only in custom mode or when the mode pins nothing. Awaited so it cannot race the unawaited read the
     // model-selection listener starts from the notifier above.
     if (!mounted) return;
     await loadProviderSlugForModel(config.modelId, forceFromPrefs: true);

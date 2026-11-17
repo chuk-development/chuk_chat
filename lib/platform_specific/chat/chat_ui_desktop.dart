@@ -3276,6 +3276,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               selectedModelName ??
               (selectedModelId.isEmpty ? null : selectedModelId),
           customModelLabel: customModelName,
+          standardDetail: standardDetail,
           pickedModels: pickedModels,
           reasoningEffort: ChatModeService.sanitizeReasoningForModel(
             reasoningEffort,

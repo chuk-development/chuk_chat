@@ -467,12 +467,11 @@ class _AgentModelPageState extends State<AgentModelPage> {
 
   List<Widget> _modelSection(BuildContext context, AgentModelState state) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    // The model in use, the two app defaults and the models the reader
-    // enabled — the same short list the composer's menu offers.
+    // The model in use, the app's Standard model, the agent default and the
+    // models the reader enabled — the same short list the composer offers.
     final List<String> ids = <String>[
       state.modelId,
-      ChatModeService.defaultConfig(ChatMode.fast).modelId,
-      ChatModeService.defaultConfig(ChatMode.thinking).modelId,
+      ChatModeService.defaultConfig(ChatMode.standard).modelId,
       state.defaultConfig.modelId,
       ..._pinned,
     ];
@@ -671,11 +670,11 @@ class _AgentModelPageState extends State<AgentModelPage> {
       ExpressiveInfoCard(
         text: state.followsDefault
             ? '${_capitalised(_name)} follows the app default, the same '
-                  'Fast / Thinking choice a new chat uses. Pick a model, '
+                  'default a new chat uses. Pick a model, '
                   'provider or reasoning level above to give it its own. '
                   'Saved on this device.'
             : 'Every message to $_name runs on this model, from the next '
-                  'one on. Picking Fast or Thinking in the chat goes back to '
+                  'one on. Picking Standard in the chat goes back to '
                   'the app default. Saved on this device.',
       ),
     ];

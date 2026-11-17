@@ -1,40 +1,38 @@
 // lib/services/chat_mode_service.dart
 //
-// The two modes a reader picks between — the way ChatGPT and Grok present
-// it. The concrete model sits one level deeper, in the model picker.
+// The two modes a reader picks between.
 //
-// Each mode now carries its OWN config: a model, the provider it is pinned
-// to, and a reasoning level. Switching mode swaps all three. Fast leans on a
-// quick model with reasoning off; Thinking leans on a stronger model that
-// reasons before it answers. The reader can retune either mode by hand — the
-// config is per-mode memory, so a change to one mode never leaks into the
-// other.
+// Standard: we pick model and providers on the server (best value: fast first
+// token, >= 100 tok/s, low price) and change them when the market moves. The
+// reader only chooses the reasoning level. See [ChatProfileService].
+//
+// Custom: any model the reader picks, on the provider they pin.
+//
+// Each mode carries its own config (model, provider, reasoning level), so a
+// change to one never leaks into the other.
 
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/services/chat_profile_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/retired_model_fallback.dart';
 
 enum ChatMode {
-  /// Answers right away. Fast means fast — a light model, reasoning off.
-  fast,
+  /// Model and provider chain chosen by the server ([ChatProfileService]).
+  /// The reader picks only the reasoning level.
+  standard,
 
-  /// Thinks hard before answering — a stronger model, reasoning on.
-  thinking,
-
-  /// A free slot: any model the reader picks, at any reasoning level. Unlike
-  /// Fast and Thinking — whose models are set on the model screen and never
-  /// overwritten by a composer pick — Custom's model is whatever the reader
-  /// last chose in the composer. Picking a model there switches to this mode.
+  /// Any model the reader picks, at any reasoning level. Picking a model in
+  /// the composer switches to this mode.
   custom,
 }
 
 /// One mode's independent settings: which model, on which provider, at which
-/// reasoning level. Persisted per mode, so Fast and Thinking never share.
+/// reasoning level. Persisted per mode, so Standard and Custom never share.
 @immutable
 class ModeConfig {
   const ModeConfig({
@@ -115,8 +113,8 @@ class ChatModeService {
   static const String _prefsKey = 'chat_mode_v1';
 
   /// The general-purpose fallback model, and the provider it is pinned to.
-  /// Matches Fast's config so the broad "make sure a model is selected"
-  /// path and a fresh Fast mode land on the same place.
+  /// Custom's seed; also where the broad "make sure a model is selected"
+  /// path lands.
   static const String defaultModelId = 'z-ai/glm-5.3-flash';
   static const String defaultProviderSlug = 'fireworks/serverless';
 
@@ -166,45 +164,25 @@ class ChatModeService {
 
   /// What each mode starts on, and what a failed load falls back to.
   ///
-  /// Both modes run the direct Fireworks provider (`fireworks/serverless`).
-  /// Fast pairs a quick model with a low reasoning pass; Thinking pairs a
-  /// stronger model with a high reasoning pass (`high`, not `medium`: the
-  /// default models' ladders have no `medium`, and the server answers an
-  /// unsupported effort with no reasoning at all). Both are changeable in
-  /// settings.
-  static const Map<ChatMode, ModeConfig> _defaults = <ChatMode, ModeConfig>{
-    // Fast's default is the general fallback — derived from the constants
-    // so the "these must match" invariant is enforced, not just documented.
-    ChatMode.fast: ModeConfig(
-      modelId: defaultModelId,
-      providerSlug: defaultProviderSlug,
+  /// Standard's model is the server's choice ([ChatProfileService]); its
+  /// provider is the profile marker, which the send turns into
+  /// `profile: "standard"`. Custom starts on the general fallback with
+  /// reasoning off; it is only a seed, replaced by the reader's first pick.
+  static ModeConfig defaultConfig(ChatMode mode) => switch (mode) {
+    ChatMode.standard => ModeConfig(
+      modelId: ChatProfileService.standardModelId,
+      providerSlug: ChatProfileService.standardMarker,
       reasoningEffort: 'low',
     ),
-    ChatMode.thinking: ModeConfig(
-      modelId: 'deepseek/deepseek-v4-pro-0813',
-      providerSlug: defaultProviderSlug,
-      reasoningEffort: 'high',
-    ),
-    // Custom starts on the general fallback with reasoning off. It is only a
-    // seed: the reader replaces the model the moment they pick one, so the
-    // exact starting model matters less than that it is always valid.
-    ChatMode.custom: ModeConfig(
+    ChatMode.custom => const ModeConfig(
       modelId: defaultModelId,
       providerSlug: defaultProviderSlug,
       reasoningEffort: reasoningOff,
     ),
   };
 
-  /// What a fresh install starts with. Fast, because most questions are
-  /// answered well without a reasoning pass, and waiting for a long one that
-  /// adds nothing is the worse first impression.
-  static const ChatMode fallbackMode = ChatMode.fast;
-
-  /// Whether [mode] is the deep one.
-  static bool isDeepThinking(ChatMode mode) => mode == ChatMode.thinking;
-
-  /// The baked-in config for [mode] — the starting point and the safety net.
-  static ModeConfig defaultConfig(ChatMode mode) => _defaults[mode]!;
+  /// What a fresh install and a new account start with.
+  static const ChatMode fallbackMode = ChatMode.standard;
 
   // ─── Reasoning levels ─────────────────────────────────────────────────
 
@@ -397,6 +375,10 @@ class ChatModeService {
   /// what the stored provider allows, so an invalid pairing can never be
   /// sent.
   static Future<ModeConfig> loadConfig(ChatMode mode) async {
+    if (mode == ChatMode.standard) {
+      // Model and provider are the server's; only the level is the reader's.
+      await ChatProfileService.load();
+    }
     final fallback = defaultConfig(mode);
     try {
       // Hydrate capabilities first: the sync lookups below default to "true"
@@ -412,14 +394,13 @@ class ChatModeService {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) return fallback;
 
-      final config = await _replaceRetiredModel(
-        mode,
-        ModeConfig.fromJson(
-          Map<String, dynamic>.from(decoded),
-          fallback: fallback,
-        ),
-        fallback,
+      final ModeConfig stored = ModeConfig.fromJson(
+        Map<String, dynamic>.from(decoded),
+        fallback: fallback,
       );
+      final config = mode == ChatMode.standard
+          ? fallback.copyWith(reasoningEffort: stored.reasoningEffort)
+          : await _replaceRetiredModel(mode, stored, fallback);
       return config.copyWith(
         reasoningEffort: sanitizeReasoningForModel(
           config.reasoningEffort,
@@ -517,6 +498,8 @@ class ChatModeService {
     required String providerSlug,
   }) async {
     final current = await loadConfig(mode);
+    // Standard's model and provider are the server's: nothing to store.
+    if (mode == ChatMode.standard) return current;
     // An empty slug means "not resolved yet", not "no provider". Storing it
     // would make the next load fall back to the default provider, pairing
     // the new model with a provider it was never pinned to — so keep the
@@ -563,7 +546,9 @@ class ChatModeService {
     String providerSlug,
   ) async {
     final current = await loadConfig(mode);
-    if (providerSlug.isEmpty || providerSlug == current.providerSlug) {
+    if (mode == ChatMode.standard ||
+        providerSlug.isEmpty ||
+        providerSlug == current.providerSlug) {
       return current;
     }
     final updated = current.copyWith(
@@ -607,6 +592,7 @@ class ChatModeService {
   }
 
   /// Map a stored string back to a mode, tolerating anything unexpected.
+  /// The old `fast` and `thinking` modes (before 2026-11-17) become Standard.
   static ChatMode parse(String? raw) {
     for (final mode in ChatMode.values) {
       if (mode.name == raw) return mode;

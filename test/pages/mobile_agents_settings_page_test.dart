@@ -411,7 +411,9 @@ void main() {
       expect(
         find.descendant(
           of: row,
-          matching: find.text('App default (Fast) · Fireworks · Reasoning low'),
+          matching: find.text(
+            'App default (Standard) · Fireworks · Reasoning low',
+          ),
         ),
         findsOneWidget,
       );

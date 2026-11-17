@@ -25,6 +25,7 @@ import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
+import 'package:chuk_chat/services/chat_profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart'
     show ChatModeSelector, prettyModelId;
@@ -276,16 +277,16 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
   // search filter, never replacing it.
   _ModelListFilter _listFilter = _ModelListFilter.all;
 
-  // Which model each chat mode uses. Editable here so the reader can assign a
-  // model to Fast and a model to Thinking without going through the composer.
-  ModeConfig? _fastConfig;
-  ModeConfig? _thinkingConfig;
+  // What Standard runs (the server's model) and the reader's reasoning level
+  // for it. Only the level is editable here.
+  ModeConfig? _standardConfig;
 
   @override
   void initState() {
     super.initState();
     // "Auto · X" follows the provider the server names, live.
     ProviderCacheAffinity.instance.addListener(_onAutoProviderChanged);
+    ChatProfileService.standard.addListener(_onStandardProfileChanged);
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.toLowerCase();
@@ -304,55 +305,14 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
   }
 
   Future<void> _loadModeConfigs() async {
-    var fast = await ChatModeService.loadConfig(ChatMode.fast);
-    final thinking = await ChatModeService.loadConfig(ChatMode.thinking);
-
-    // Fast mode is flash-only now. A stored non-flash pick (e.g. a stale
-    // V4 Pro that leaked in) is invalid — heal it to GLM 5.3 Flash, or any
-    // flash model the catalogue carries, pinned to its real provider.
-    if (!_isFlashModelId(fast.modelId) && _models.isNotEmpty) {
-      final healed = await _healFastToFlash();
-      if (healed != null) fast = healed;
-    }
-
+    final standard = await ChatModeService.loadConfig(ChatMode.standard);
     if (!mounted) return;
-    setState(() {
-      _fastConfig = fast;
-      _thinkingConfig = thinking;
-    });
+    setState(() => _standardConfig = standard);
   }
 
-  bool _isFlashModelId(String id) => id.toLowerCase().contains('flash');
-
-  /// Pick a flash model for Fast — prefer the default GLM 5.3 Flash, else the
-  /// first flash model in the catalogue — and store it against Fast with its
-  /// pinned or cheapest provider.
-  Future<ModeConfig?> _healFastToFlash() async {
-    CustomModelInfo? target;
-    for (final m in _models) {
-      if (m.id == ChatModeService.defaultModelId) {
-        target = m;
-        break;
-      }
-    }
-    target ??= () {
-      for (final m in _models) {
-        if (_isFlashModelId(m.id) || m.name.toLowerCase().contains('flash')) {
-          return m;
-        }
-      }
-      return null;
-    }();
-    if (target == null) return null;
-    final provider =
-        _selectedProviders[target.id]?.slug ??
-        _cheapestProvider(target)?.slug ??
-        '';
-    return ChatModeService.setModelForMode(
-      ChatMode.fast,
-      modelId: target.id,
-      providerSlug: provider,
-    );
+  /// The server changed Standard while the page is open.
+  void _onStandardProfileChanged() {
+    if (mounted) unawaited(_loadModeConfigs());
   }
 
   /// Human name for a model id, from the loaded catalogue, falling back to a
@@ -364,79 +324,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
     return prettyModelId(modelId);
   }
 
-  /// Assign [modelId] to [mode]. The provider is the one the reader already
-  /// pinned for that model, or its cheapest, so mode and provider never drift.
-  Future<void> _pickModelForMode(ChatMode mode, String modelId) async {
-    CustomModelInfo? model;
-    for (final m in _models) {
-      if (m.id == modelId) {
-        model = m;
-        break;
-      }
-    }
-    final String providerSlug =
-        _selectedProviders[modelId]?.slug ??
-        (model != null ? _cheapestProvider(model)?.slug ?? '' : '');
-    final updated = await ChatModeService.setModelForMode(
-      mode,
-      modelId: modelId,
-      providerSlug: providerSlug,
-    );
-    if (!mounted) return;
-    setState(() {
-      if (mode == ChatMode.fast) {
-        _fastConfig = updated;
-      } else {
-        _thinkingConfig = updated;
-      }
-    });
-  }
-
-  /// The catalogue entry for [modelId], or null when it is unknown / unset.
-  CustomModelInfo? _modelById(String? modelId) {
-    if (modelId == null || modelId.isEmpty) return null;
-    for (final m in _models) {
-      if (m.id == modelId) return m;
-    }
-    return null;
-  }
-
-  /// Pin [mode] to a new provider, keeping its model. The service re-clamps the
-  /// mode's reasoning level to the new provider's allowed set.
-  Future<void> _setProviderForMode(ChatMode mode, String providerSlug) async {
-    final updated = await ChatModeService.setProviderForMode(
-      mode,
-      providerSlug,
-    );
-    if (!mounted) return;
-    setState(() {
-      if (mode == ChatMode.fast) {
-        _fastConfig = updated;
-      } else {
-        _thinkingConfig = updated;
-      }
-    });
-  }
-
-  /// Models the reader can assign to a mode: those they have enabled (pinned a
-  /// provider for). These are the recommended set. Falls back to the whole
-  /// catalogue when nothing is enabled yet.
-  List<CustomModelInfo> get _enabledModels {
-    final enabled = _models
-        .where((m) => _selectedProviders[m.id] != null)
-        .toList();
-    final list = enabled.isNotEmpty
-        ? enabled
-        : List<CustomModelInfo>.from(_models);
-    list.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    return list;
-  }
-
-  /// Reasoning levels the mode's current model supports — straight from the
-  /// server's `supported_efforts` contract (derived list as a cold-start
-  /// fallback), so the picker can never offer a level the model lacks.
-  List<String> _reasoningLevelsForMode(ChatMode mode) {
-    final config = mode == ChatMode.fast ? _fastConfig : _thinkingConfig;
+  /// Reasoning levels Standard's model supports — straight from the server's
+  /// `supported_efforts` contract (derived list as a cold-start fallback).
+  List<String> get _standardReasoningLevels {
+    final ModeConfig? config = _standardConfig;
     if (config == null) return const <String>[ChatModeService.reasoningOff];
     return ChatModeService.reasoningLevelsForModel(
       modelId: config.modelId,
@@ -444,19 +335,14 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
     );
   }
 
-  Future<void> _setReasoningForMode(ChatMode mode, String level) async {
-    final current = (mode == ChatMode.fast ? _fastConfig : _thinkingConfig)
-        ?.reasoningEffort;
-    if (level == current) return;
-    final updated = await ChatModeService.setReasoningForMode(mode, level);
+  Future<void> _setStandardReasoning(String level) async {
+    if (level == _standardConfig?.reasoningEffort) return;
+    final updated = await ChatModeService.setReasoningForMode(
+      ChatMode.standard,
+      level,
+    );
     if (!mounted) return;
-    setState(() {
-      if (mode == ChatMode.fast) {
-        _fastConfig = updated;
-      } else {
-        _thinkingConfig = updated;
-      }
-    });
+    setState(() => _standardConfig = updated);
   }
 
   List<CustomModelInfo> get _filteredModels {
@@ -915,59 +801,35 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
                 itemCount: _displayModels.length + 2,
                 itemBuilder: (context, index) {
                   if (index == 0) {
+                    final ChatProfile? profile =
+                        ChatProfileService.standard.value;
                     final Widget panel = _ModePickerPanel(
-                        buildIconWidget: _buildIconWidget,
-                        models: _enabledModels,
-                        fast: _ModeRowData(
-                          icon: Icons.bolt,
-                          title: l.fastMode,
-                          modelId: _fastConfig?.modelId ?? '',
-                          modelName: _fastConfig == null
-                              ? null
-                              : _modelNameFor(_fastConfig!.modelId),
-                          reasoningEffort:
-                              _fastConfig?.reasoningEffort ??
-                              ChatModeService.reasoningOff,
-                          reasoningLevels: _reasoningLevelsForMode(
-                            ChatMode.fast,
-                          ),
-                          providerSlug: _fastConfig?.providerSlug ?? '',
-                          providers:
-                              _modelById(_fastConfig?.modelId)?.providers ??
-                              const <ModelProviderInfo>[],
-                          onPickModel: (id) =>
-                              _pickModelForMode(ChatMode.fast, id),
-                          onPickReasoning: (lvl) =>
-                              _setReasoningForMode(ChatMode.fast, lvl),
-                          onPickProvider: (slug) =>
-                              _setProviderForMode(ChatMode.fast, slug),
-                        ),
-                        thinking: _ModeRowData(
-                          icon: Icons.psychology_outlined,
-                          title: l.thinkingMode,
-                          modelId: _thinkingConfig?.modelId ?? '',
-                          modelName: _thinkingConfig == null
-                              ? null
-                              : _modelNameFor(_thinkingConfig!.modelId),
-                          reasoningEffort:
-                              _thinkingConfig?.reasoningEffort ??
-                              ChatModeService.reasoningOff,
-                          reasoningLevels: _reasoningLevelsForMode(
-                            ChatMode.thinking,
-                          ),
-                          providerSlug: _thinkingConfig?.providerSlug ?? '',
-                          providers:
-                              _modelById(_thinkingConfig?.modelId)?.providers ??
-                              const <ModelProviderInfo>[],
-                          onPickModel: (id) =>
-                              _pickModelForMode(ChatMode.thinking, id),
-                          onPickReasoning: (lvl) =>
-                              _setReasoningForMode(ChatMode.thinking, lvl),
-                          onPickProvider: (slug) =>
-                              _setProviderForMode(ChatMode.thinking, slug),
-                        ),
-                      );
-                    // In the Agents build these two modes are also what
+                      buildIconWidget: _buildIconWidget,
+                      standard: _ModeRowData(
+                        icon: Icons.bolt,
+                        title: 'Standard',
+                        modelId: _standardConfig?.modelId ?? '',
+                        modelName: profile?.modelName ??
+                            switch (_standardConfig) {
+                              final ModeConfig config =>
+                                _modelNameFor(config.modelId),
+                              null => null,
+                            },
+                        modelIconUrl: profile?.modelIconUrl,
+                        providerLabel: profile?.providerChainLabel,
+                        reasoningEffort:
+                            _standardConfig?.reasoningEffort ??
+                            ChatModeService.reasoningOff,
+                        reasoningLevels: _standardReasoningLevels,
+                        onPickReasoning: _setStandardReasoning,
+                        note:
+                            'We pick the model and providers for the best '
+                            'value (fast answers, low price) and update them '
+                            'when the market moves. Pick "Custom model" in '
+                            'the chat to choose your own.',
+                      ),
+                    );
+                    // In the Agents build this mode is also what
                     // every agent without a model of its own runs on.
                     if (!agentsChatCore) return panel;
                     return Column(
@@ -1038,6 +900,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
   @override
   void dispose() {
     ProviderCacheAffinity.instance.removeListener(_onAutoProviderChanged);
+    ChatProfileService.standard.removeListener(_onStandardProfileChanged);
     stopApiAvailabilityPolling();
     _refreshSubscription?.cancel();
     _refreshSubscription = null;
@@ -1612,18 +1475,16 @@ class _ModeRowData {
   final String title;
   final String modelId;
   final String? modelName;
+  final String? modelIconUrl;
+
+  /// The provider chain, read-only (`Wafer → inference.net`).
+  final String? providerLabel;
   final String reasoningEffort;
   final List<String> reasoningLevels;
-
-  /// The provider slug the mode's model is currently pinned to.
-  final String providerSlug;
-
-  /// The providers the mode's currently-selected model offers.
-  final List<ModelProviderInfo> providers;
-
-  final ValueChanged<String> onPickModel;
   final ValueChanged<String> onPickReasoning;
-  final ValueChanged<String> onPickProvider;
+
+  /// One line under the rows that says who picks what.
+  final String? note;
 
   const _ModeRowData({
     required this.icon,
@@ -1632,88 +1493,32 @@ class _ModeRowData {
     required this.modelName,
     required this.reasoningEffort,
     required this.reasoningLevels,
-    required this.providerSlug,
-    required this.providers,
-    required this.onPickModel,
     required this.onPickReasoning,
-    required this.onPickProvider,
+    this.modelIconUrl,
+    this.providerLabel,
+    this.note,
   });
 }
 
-/// The panel at the top of the model screen that assigns a model, a provider
-/// AND a reasoning level to each chat mode. Fast and Thinking each get their
-/// own card, laid out side by side when there is room, using the same anchored
-/// dropdown menu as the provider picker on the cards below.
+/// The card at the top of the model screen: what Standard runs. Model and
+/// providers are the server's choice and only shown; the reasoning level is
+/// the reader's.
 class _ModePickerPanel extends StatelessWidget {
-  final List<CustomModelInfo> models;
-  final _ModeRowData fast;
-  final _ModeRowData thinking;
+  final _ModeRowData standard;
   final Widget Function(String?, IconData, {double size}) buildIconWidget;
 
-  /// Below this available width the two cards stack instead of sitting side
-  /// by side — the narrow settings pane never squeezes them into a strip.
-  static const double _sideBySideMinWidth = 760;
-
   const _ModePickerPanel({
-    required this.models,
-    required this.fast,
-    required this.thinking,
+    required this.standard,
     required this.buildIconWidget,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final double availableWidth = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : MediaQuery.of(context).size.width;
-        final bool sideBySide = availableWidth >= _sideBySideMinWidth;
-        final Widget fastCard = _modeCard(context, fast);
-        final Widget thinkingCard = _modeCard(context, thinking);
-        if (sideBySide) {
-          // IntrinsicHeight bounds the Row's (otherwise unbounded, inside a
-          // ListView) cross-axis extent, so `stretch` matches both card
-          // heights instead of forcing an infinite height on their children.
-          return IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(child: fastCard),
-                const SizedBox(width: 12),
-                Expanded(child: thinkingCard),
-              ],
-            ),
-          );
-        }
-        return Column(
-          children: [fastCard, const SizedBox(height: 12), thinkingCard],
-        );
-      },
-    );
-  }
+  Widget build(BuildContext context) => _modeCard(context, standard);
 
   Widget _modeCard(BuildContext context, _ModeRowData data) {
     final theme = Theme.of(context);
     final m3 = theme.m3;
     final bool canReason = data.reasoningLevels.length > 1;
-    final bool hasProviderChoice = data.providers.length > 1;
-    final bool hasSingleProvider = data.providers.length == 1;
-
-    CustomModelInfo? model;
-    for (final m in models) {
-      if (m.id == data.modelId) {
-        model = m;
-        break;
-      }
-    }
-    ModelProviderInfo? provider;
-    for (final p in data.providers) {
-      if (p.slug == data.providerSlug) {
-        provider = p;
-        break;
-      }
-    }
 
     final Widget divider = Divider(
       height: 1,
@@ -1725,83 +1530,24 @@ class _ModePickerPanel extends StatelessWidget {
         context,
         icon: Icons.psychology_alt_outlined,
         label: 'Model',
-        value: data.modelName == null
-            ? 'Loading…'
-            : ChatModeSelector.stripLabPrefix(data.modelName!),
-        valueLeading: model == null
+        value: switch (data.modelName) {
+          final String name => ChatModeSelector.stripLabPrefix(name),
+          null => 'Loading…',
+        },
+        valueLeading: data.modelIconUrl == null
             ? null
-            : buildIconWidget(model.iconUrl, Icons.psychology_alt, size: 16),
-        onTap: (anchor) => _pick<String>(
-          anchor,
-          hintText: 'Search models',
-          title: '${data.title} · Model',
-          onSelected: data.onPickModel,
-          options: [
-            for (final m in models)
-              PickerOption<String>(
-                value: m.id,
-                label: ChatModeSelector.stripLabPrefix(m.name),
-                selected: m.id == data.modelId,
-                leading: buildIconWidget(
-                  m.iconUrl,
-                  Icons.psychology_alt,
-                  size: 18,
-                ),
-              ),
-          ],
-        ),
+            : buildIconWidget(data.modelIconUrl, Icons.psychology_alt, size: 16),
+        // The server's choice: shown, not a control.
+        onTap: null,
       ),
-      if (hasProviderChoice || hasSingleProvider)
+      if (data.providerLabel case final String providers
+          when providers.isNotEmpty)
         _settingRow(
           context,
           icon: Icons.dns_outlined,
-          label: 'Provider',
-          value: provider?.name ??
-              (hasSingleProvider
-                  ? data.providers.first.name
-                  : () {
-                      final ModelProviderInfo? now = autoProviderAmong(
-                        data.providers,
-                        data.modelId,
-                      );
-                      return now == null ? 'Auto' : 'Auto · ${now.name}';
-                    }()),
-          valueLeading: () {
-            final ModelProviderInfo? shown =
-                provider ??
-                (hasSingleProvider
-                    ? data.providers.first
-                    : autoProviderAmong(data.providers, data.modelId));
-            return shown == null
-                ? null
-                : buildIconWidget(shown.iconUrl, Icons.business, size: 16);
-          }(),
-          // One provider: nothing to choose, so the row is not a control.
-          onTap: !hasProviderChoice
-              ? null
-              : (anchor) => _pick<String>(
-                  anchor,
-                  hintText: 'Search providers',
-                  title: '${data.title} · Provider',
-                  onSelected: data.onPickProvider,
-                  options: [
-                    for (final p in providersByTurnCost(data.providers))
-                      PickerOption<String>(
-                        value: p.slug,
-                        label: p.name,
-                        // The price is what tells two providers apart.
-                        subtitle:
-                            '${p.pricing.formatTokenPrice(p.pricing.prompt)} in · '
-                            '${p.pricing.formatTokenPrice(p.pricing.completion)} out',
-                        selected: p.slug == data.providerSlug,
-                        leading: buildIconWidget(
-                          p.iconUrl,
-                          Icons.business,
-                          size: 18,
-                        ),
-                      ),
-                  ],
-                ),
+          label: 'Providers',
+          value: providers,
+          onTap: null,
         ),
       if (canReason)
         _settingRow(
@@ -1853,6 +1599,18 @@ class _ModePickerPanel extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           for (int i = 0; i < rows.length; i++) ...[divider, rows[i]],
+          if (data.note case final String note) ...[
+            divider,
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                note,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: m3.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

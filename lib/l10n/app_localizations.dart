@@ -809,8 +809,6 @@ class AppLocalizations {
   String get modelProvider => _get('modelProvider');
   String get chooseProvider => _get('chooseProvider');
   String get modelPromptCustom => _get('modelPromptCustom');
-  String get fastMode => _get('fastMode');
-  String get thinkingMode => _get('thinkingMode');
   String availableModels(int count) =>
       (count == 1 ? _get('availableModelsOne') : _get('availableModelsMany'))
           .replaceAll('{count}', count.toString());

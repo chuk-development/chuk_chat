@@ -715,7 +715,7 @@ List<_Screen> _screens() => <_Screen>[
         Align(
           alignment: Alignment.topLeft,
           child: ChatModeSelector(
-            mode: ChatMode.thinking,
+            mode: ChatMode.custom,
             onModeChanged: (_) {},
             onModelSelected: (_) {},
             onOpenModelScreen: () {},

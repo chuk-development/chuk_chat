@@ -112,14 +112,14 @@ void main() {
     expect(composer.selectedProviderSlug, 'cheap/one');
     expect(composer.reasoningEffort, 'high');
     // The account-wide mode is not touched by showing it.
-    expect(await ChatModeService.load(), ChatMode.fast);
+    expect(await ChatModeService.load(), ChatMode.standard);
   });
 
   testWidgets('a model picked in the composer becomes the agent s own', (
     tester,
   ) async {
     final composer = await mount(tester);
-    expect(composer.chatMode, ChatMode.fast);
+    expect(composer.chatMode, ChatMode.standard);
 
     await composer.applyModelSelection(_pro);
     await tester.pump();
@@ -130,7 +130,7 @@ void main() {
     expect(composer.selectedModelId, _pro);
     expect(composer.chatMode, ChatMode.custom);
     // Not written to the account-wide Custom slot or mode.
-    expect(await ChatModeService.load(), ChatMode.fast);
+    expect(await ChatModeService.load(), ChatMode.standard);
     expect(await ChatModeService.hasStoredConfig(ChatMode.custom), isFalse);
   });
 
@@ -138,7 +138,7 @@ void main() {
     tester,
   ) async {
     final composer = await mount(tester);
-    final before = await ChatModeService.loadConfig(ChatMode.fast);
+    final before = await ChatModeService.loadConfig(ChatMode.standard);
 
     await composer.setReasoningEffort('high');
     await tester.pump();
@@ -149,12 +149,12 @@ void main() {
     expect(own.reasoningEffort, 'high');
     expect(composer.reasoningEffort, 'high');
     expect(
-      (await ChatModeService.loadConfig(ChatMode.fast)).reasoningEffort,
+      (await ChatModeService.loadConfig(ChatMode.standard)).reasoningEffort,
       before.reasoningEffort,
     );
   });
 
-  testWidgets('Fast in an agent s composer goes back to the app default', (
+  testWidgets('Standard in an agent s composer goes back to the app default', (
     tester,
   ) async {
     await ChatModelSelectionService.instance.save(
@@ -164,14 +164,14 @@ void main() {
     final composer = await mount(tester);
     expect(composer.chatMode, ChatMode.custom);
 
-    await composer.setChatMode(ChatMode.fast);
+    await composer.setChatMode(ChatMode.standard);
     await tester.pump();
 
     expect(await ChatModelSelectionService.instance.load(_chat), isNull);
-    expect(composer.chatMode, ChatMode.fast);
+    expect(composer.chatMode, ChatMode.standard);
     expect(
       composer.selectedModelId,
-      (await ChatModeService.loadConfig(ChatMode.fast)).modelId,
+      (await ChatModeService.loadConfig(ChatMode.standard)).modelId,
     );
   });
 
@@ -188,7 +188,7 @@ void main() {
     await composer.syncChatScopedModel();
     await tester.pump();
 
-    expect(composer.chatMode, ChatMode.fast);
+    expect(composer.chatMode, ChatMode.standard);
     expect(composer.selectedModelId, isNot(_pro));
   });
 

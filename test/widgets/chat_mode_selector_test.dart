@@ -11,6 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/chat_mode_service.dart';
+import 'package:chuk_chat/services/chat_profile_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
 import 'package:chuk_chat/widgets/icons/model_logo.dart';
@@ -23,7 +24,7 @@ const _fireworksLevels = <String>['none', 'low', 'high'];
 
 Future<void> _pump(
   WidgetTester tester, {
-  ChatMode mode = ChatMode.thinking,
+  ChatMode mode = ChatMode.custom,
   ValueChanged<ChatMode>? onModeChanged,
   ValueChanged<String>? onModelSelected,
   String reasoningEffort = 'none',
@@ -33,6 +34,7 @@ Future<void> _pump(
   String? selectedModelId,
   String? modelLabel,
   List<ChatModelChoice> pickedModels = const <ChatModelChoice>[],
+  String? standardDetail,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -49,6 +51,7 @@ Future<void> _pump(
             selectedModelId: selectedModelId,
             modelLabel: modelLabel,
             pickedModels: pickedModels,
+            standardDetail: standardDetail,
           ),
         ),
       ),
@@ -58,32 +61,38 @@ Future<void> _pump(
 
 void main() {
   group('mode semantics', () {
-    test('fast answers straight, thinking takes the deep pass', () {
-      expect(ChatModeService.isDeepThinking(ChatMode.fast), isFalse);
-      expect(ChatModeService.isDeepThinking(ChatMode.thinking), isTrue);
-    });
-
-    test('a fresh install starts on fast', () {
-      expect(ChatModeService.fallbackMode, ChatMode.fast);
+    test('a fresh install starts on standard', () {
+      expect(ChatModeService.fallbackMode, ChatMode.standard);
     });
 
     test('each mode carries its own model, provider and reasoning', () {
-      final fast = ChatModeService.defaultConfig(ChatMode.fast);
-      expect(fast.modelId, 'z-ai/glm-5.3-flash');
-      expect(fast.providerSlug, 'fireworks/serverless');
-      expect(fast.reasoningEffort, 'low');
+      ChatProfileService.resetForTest();
+      final standard = ChatModeService.defaultConfig(ChatMode.standard);
+      expect(standard.modelId, ChatProfileService.standardModelId);
+      expect(standard.providerSlug, 'profile:standard');
+      expect(standard.reasoningEffort, 'low');
 
-      final thinking = ChatModeService.defaultConfig(ChatMode.thinking);
-      expect(thinking.modelId, 'deepseek/deepseek-v4-pro-0813');
-      expect(thinking.providerSlug, 'fireworks/serverless');
-      expect(thinking.reasoningEffort, 'high');
+      final custom = ChatModeService.defaultConfig(ChatMode.custom);
+      expect(custom.modelId, 'z-ai/glm-5.3-flash');
+      expect(custom.providerSlug, 'fireworks/serverless');
+      expect(custom.reasoningEffort, 'none');
     });
 
     test('an unknown stored value falls back instead of throwing', () {
-      expect(ChatModeService.parse('fast'), ChatMode.fast);
-      expect(ChatModeService.parse('thinking'), ChatMode.thinking);
+      expect(ChatModeService.parse('fast'), ChatMode.standard);
+      expect(ChatModeService.parse('thinking'), ChatMode.standard);
+      expect(ChatModeService.parse('custom'), ChatMode.custom);
       expect(ChatModeService.parse('turbo'), ChatModeService.fallbackMode);
       expect(ChatModeService.parse(null), ChatModeService.fallbackMode);
+    });
+
+    test('labels and descriptions', () {
+      expect(ChatModeSelector.labelFor(ChatMode.standard), 'Standard');
+      expect(ChatModeSelector.labelFor(ChatMode.custom), 'Custom model');
+      expect(
+        ChatModeSelector.descriptionFor(ChatMode.standard),
+        'Best value, picked by us',
+      );
     });
   });
 
@@ -95,11 +104,11 @@ void main() {
     });
 
     test('a saved mode comes back', () async {
-      await ChatModeService.save(ChatMode.fast);
-      expect(await ChatModeService.load(), ChatMode.fast);
+      await ChatModeService.save(ChatMode.custom);
+      expect(await ChatModeService.load(), ChatMode.custom);
 
-      await ChatModeService.save(ChatMode.thinking);
-      expect(await ChatModeService.load(), ChatMode.thinking);
+      await ChatModeService.save(ChatMode.standard);
+      expect(await ChatModeService.load(), ChatMode.standard);
     });
   });
 
@@ -136,34 +145,62 @@ void main() {
 
   group('level 1: the mode', () {
     testWidgets('shows the current mode', (tester) async {
-      await _pump(tester, mode: ChatMode.fast);
+      await _pump(tester, mode: ChatMode.standard);
 
-      expect(find.text('Fast'), findsOneWidget);
+      expect(find.text('Standard'), findsOneWidget);
       expect(findIcon(Icons.bolt), findsOneWidget);
-      expect(find.text('Thinking'), findsNothing);
+      expect(find.text('Custom model'), findsNothing);
     });
 
-    testWidgets('opens a menu listing both modes, current ticked', (
-      tester,
-    ) async {
-      await _pump(tester, mode: ChatMode.thinking);
+    testWidgets('opens a menu with Standard and the Custom point, current '
+        'ticked', (tester) async {
+      await _pump(
+        tester,
+        mode: ChatMode.standard,
+        onModelSelected: (_) {},
+        onOpenModelScreen: () {},
+      );
 
-      await tester.tap(find.text('Thinking'));
+      await tester.tap(find.text('Standard'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Fast'), findsOneWidget);
-      expect(find.text('Thinking'), findsNWidgets(2)); // pill + menu row
+      expect(find.text('Standard'), findsNWidgets(2)); // pill + menu row
+      expect(find.text('Choose model'), findsOneWidget);
       expect(findIcon(Icons.check), findsOneWidget);
+    });
+
+    testWidgets('shows the standard detail line only when given', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        mode: ChatMode.standard,
+        onOpenModelScreen: () {},
+        standardDetail: 'DeepSeek V4.1 Flash · Wafer → Ionstream',
+      );
+      await tester.tap(find.text('Standard'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('DeepSeek V4.1 Flash · Wafer → Ionstream'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('has no detail line without standardDetail', (tester) async {
+      await _pump(tester, mode: ChatMode.standard, onOpenModelScreen: () {});
+      await tester.tap(find.text('Standard'));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('·'), findsNothing);
     });
 
     testWidgets('has no reasoning row at level 1', (tester) async {
       await _pump(
         tester,
-        mode: ChatMode.fast,
+        mode: ChatMode.standard,
         onReasoningEffortChanged: (_) {},
       );
 
-      await tester.tap(find.text('Fast'));
+      await tester.tap(find.text('Standard'));
       await tester.pumpAndSettle();
 
       // Reasoning lives one level deeper now, not on the pill menu.
@@ -171,47 +208,57 @@ void main() {
       expect(find.text('Low'), findsNothing);
     });
 
-    testWidgets('picking the other mode reports it once', (tester) async {
+    testWidgets('picking Standard from Custom reports it once', (tester) async {
       final picked = <ChatMode>[];
-      await _pump(tester, mode: ChatMode.thinking, onModeChanged: picked.add);
+      await _pump(
+        tester,
+        mode: ChatMode.custom,
+        onModeChanged: picked.add,
+        onOpenModelScreen: () {},
+      );
 
-      await tester.tap(find.text('Thinking'));
+      await tester.tap(find.text('Custom model'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Fast'));
+      await tester.tap(find.text('Standard'));
       await tester.pumpAndSettle();
 
-      expect(picked, [ChatMode.fast]);
+      expect(picked, [ChatMode.standard]);
     });
 
     testWidgets('picking the mode already active changes nothing', (
       tester,
     ) async {
       final picked = <ChatMode>[];
-      await _pump(tester, mode: ChatMode.fast, onModeChanged: picked.add);
+      await _pump(
+        tester,
+        mode: ChatMode.standard,
+        onModeChanged: picked.add,
+        onOpenModelScreen: () {},
+      );
 
-      await tester.tap(find.text('Fast'));
+      await tester.tap(find.text('Standard'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Fast').last);
+      await tester.tap(find.text('Standard').last);
       await tester.pumpAndSettle();
 
       expect(picked, isEmpty);
     });
 
-    testWidgets('under Fast the third point stays neutral, not the model', (
+    testWidgets('under Standard the third point stays neutral, not the model', (
       tester,
     ) async {
       await _pump(
         tester,
-        mode: ChatMode.fast,
+        mode: ChatMode.standard,
         selectedModelId: 'deepseek/deepseek-v4-flash',
         modelLabel: 'DeepSeek: V4 Flash',
         onModelSelected: (_) {},
       );
 
-      await tester.tap(find.text('Fast'));
+      await tester.tap(find.text('Standard'));
       await tester.pumpAndSettle();
-      // Fast runs the model set in the model screen — the composer never
-      // surfaces it. The third point is the neutral Custom entry.
+      // Standard runs what the server picked — the composer never surfaces
+      // the model here. The third point is the neutral Custom entry.
       expect(find.text('Choose model'), findsOneWidget);
       expect(find.text('V4 Flash'), findsNothing);
     });
@@ -237,9 +284,9 @@ void main() {
     testWidgets('with no deeper handlers there is no opener row', (
       tester,
     ) async {
-      await _pump(tester, mode: ChatMode.fast);
+      await _pump(tester, mode: ChatMode.standard);
 
-      await tester.tap(find.text('Fast'));
+      await tester.tap(find.text('Standard'));
       await tester.pumpAndSettle();
 
       expect(find.text('Choose model'), findsNothing);
@@ -253,13 +300,13 @@ void main() {
       final levels = <String>[];
       await _pump(
         tester,
-        mode: ChatMode.thinking,
+        mode: ChatMode.custom,
         reasoningEffort: 'high',
         onReasoningEffortChanged: levels.add,
         onOpenModelScreen: () {},
       );
 
-      await tester.tap(find.text('Thinking'));
+      await tester.tap(find.text('Custom model'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Choose model'));
       await tester.pumpAndSettle();
@@ -287,13 +334,13 @@ void main() {
       final levels = <String>[];
       await _pump(
         tester,
-        mode: ChatMode.thinking,
+        mode: ChatMode.custom,
         reasoningEffort: 'high',
         onReasoningEffortChanged: levels.add,
         onOpenModelScreen: () {},
       );
 
-      await tester.tap(find.text('Thinking'));
+      await tester.tap(find.text('Custom model'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Choose model'));
       await tester.pumpAndSettle();
@@ -311,7 +358,7 @@ void main() {
       final picked = <String>[];
       await _pump(
         tester,
-        mode: ChatMode.fast,
+        mode: ChatMode.standard,
         // No reasoning handler here, to keep this menu about models only.
         reasoningLevels: const ['none'],
         selectedModelId: 'deepseek/deepseek-v4-flash',
@@ -327,7 +374,7 @@ void main() {
         onOpenModelScreen: () {},
       );
 
-      await tester.tap(find.text('Fast'));
+      await tester.tap(find.text('Standard'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Choose model')); // third point → deeper menu
       await tester.pumpAndSettle();
@@ -416,7 +463,7 @@ void main() {
       var opened = 0;
       await _pump(
         tester,
-        mode: ChatMode.fast,
+        mode: ChatMode.standard,
         reasoningLevels: const ['none'],
         selectedModelId: 'a/b',
         modelLabel: 'Model B',
@@ -425,7 +472,7 @@ void main() {
         onOpenModelScreen: () => opened++,
       );
 
-      await tester.tap(find.text('Fast'));
+      await tester.tap(find.text('Standard'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Choose model')); // third point → deeper menu
       await tester.pumpAndSettle();
@@ -441,14 +488,14 @@ void main() {
         var opened = 0;
         await _pump(
           tester,
-          mode: ChatMode.fast,
+          mode: ChatMode.standard,
           reasoningLevels: const ['none'], // off only → no reasoning choice
           modelLabel: 'Model B',
           onModelSelected: (_) {},
           onOpenModelScreen: () => opened++,
         );
 
-        await tester.tap(find.text('Fast'));
+        await tester.tap(find.text('Standard'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Choose model'));
         await tester.pumpAndSettle();

@@ -488,8 +488,6 @@ const Map<String, String> stringsEs = {
   'modelProvider': 'Proveedor',
   'chooseProvider': 'Elegir',
   'modelPromptCustom': 'Personalizado',
-  'fastMode': 'Modo rápido',
-  'thinkingMode': 'Modo razonamiento',
   'availableModelsOne': 'Disponibles · {count} modelo',
   'availableModelsMany': 'Disponibles · {count} modelos',
   'modelsFoundOne': '{count} modelo encontrado',

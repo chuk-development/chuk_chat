@@ -132,7 +132,7 @@ void main() {
       'default, and picking a provider gives it its own', (tester) async {
     await _pump(tester);
 
-    expect(find.text('App default · Fast'), findsOneWidget);
+    expect(find.text('App default · Standard'), findsOneWidget);
     expect(find.textContaining('follows the app default'), findsOneWidget);
     expect(find.text('Use the app default'), findsNothing);
     // The provider list names providers and prices, never raw slugs.
@@ -188,16 +188,25 @@ void main() {
   testWidgets('a model picked on the page starts on its cheapest provider', (
     tester,
   ) async {
+    // The agent runs V4 Pro, so V4.1 Flash is a different model to pick.
+    await ChatModelSelectionService.instance.save(
+      _chat,
+      const ChatModelSelection(
+        modelId: 'deepseek/deepseek-v4-pro-0813',
+        providerSlug: 'fireworks/serverless',
+      ),
+    );
     await _pump(tester);
     await _tapVisible(
       tester,
       find.byKey(
-        const ValueKey<String>('agent_model_deepseek/deepseek-v4-pro-0813'),
+        const ValueKey<String>('agent_model_deepseek/deepseek-v4.1-flash-1017'),
       ),
     );
     final own = await ChatModelSelectionService.instance.load(_chat);
-    expect(own!.modelId, 'deepseek/deepseek-v4-pro-0813');
-    expect(own.providerSlug, 'fireworks/serverless');
+    expect(own!.modelId, 'deepseek/deepseek-v4.1-flash-1017');
+    // RunAnywhere is the cheaper of its two providers.
+    expect(own.providerSlug, 'runanywhere/serverless');
   });
 
   testWidgets('use the app default drops the own model', (tester) async {
@@ -218,7 +227,7 @@ void main() {
     );
 
     expect(await ChatModelSelectionService.instance.load(_chat), isNull);
-    expect(find.text('App default · Fast'), findsOneWidget);
+    expect(find.text('App default · Standard'), findsOneWidget);
   });
 
   testWidgets('the last run is shown, and a change not yet run says when it '

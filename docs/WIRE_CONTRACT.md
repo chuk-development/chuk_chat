@@ -62,7 +62,7 @@ unlocked to transfer pairing; a successful JWT login alone does not unlock it.
 
 | type | fields | notes |
 |---|---|---|
-| `task` | `prompt`, `session_key`, `task_id`? (NEW), `model`?, `provider`?, `reasoning_effort`?, `mcp_servers`?, `herenow`?, `debug`?, `regenerate`?, `plan`? (see "Plan mode") | Existing. Field names are `model` and `provider` (NOT `model_id` / `provider_slug`). There is no `fast_mode` field; Fast mode is a model + `reasoning_effort` chosen by the app. `task_id` is NEW and optional — see "Task acknowledgement". |
+| `task` | `prompt`, `session_key`, `task_id`? (NEW), `model`?, `provider`?, `reasoning_effort`?, `mcp_servers`?, `herenow`?, `debug`?, `regenerate`?, `plan`? (see "Plan mode") | Existing. Field names are `model` and `provider` (NOT `model_id` / `provider_slug`). There is no `fast_mode` field. `provider` may be the app's Standard marker `profile:standard`; the API server then picks model and providers. `task_id` is NEW and optional — see "Task acknowledgement". |
 | `stop` | `session_key` | Existing. It is sent ONLY for an explicit user stop (bead cowork-gnr8). A stream subscription that is merely cancelled — the reader leaves the thread, the chat page is rebuilt or disposed, the app goes to the background, one stream replaces the next — must NOT produce a `stop`: a controller that goes away leaves its runs going and the results wait in the store. The executor answers with a `stop_ack` listing the run request ids it fired at (`[]` = nothing matched); that frame carries no `session_key`, so the app cannot route it per thread and does not surface it. The terminal `done` with `reason: "interrupted"` is what ends the run for the app. |
 | `replay` | `session_key`, `after_id`? (int, default 0), `before_id`? (int), `limit`? (int) | `after_id` is NEW. Replay only the messages with `mid > after_id`. `0` replays the full history (fresh install). `limit` / `before_id`: see "Replay paging" (Bead cowork-axx). |
 | `run_ack` | `run_id` | NEW. The app sends it after it rendered a live `done`. The host marks the run as seen (`runs.seen_at`), so a later replay does not flag it `while_away`, and it can skip a push notification. The host waits for it at most 15 s (`AGENTS_RUN_ACK_TIMEOUT_SECONDS`) after a `done` that ended with an app attached; no ack in that window and the run is announced as finished while away (desktop toast + cloud push, once per run) — Bead cowork-sq3. |
@@ -2391,6 +2391,24 @@ in this session are skipped). Host: `chuk_agents_host/coworker_names.py`
 (`CoworkerNameStore` on `roster.db`, `handle_agent_frame`), wired as the
 executor's `on_agent_frame`; payload helpers `agent_create_payload`,
 `agent_rename_payload`, `agent_list_request_payload`, `agent_list_payload`.
+
+### Agent avatar (CHAT-128)
+
+Additive. App -> host, sealed:
+
+```json
+{"type": "agent_avatar_set", "agent_id": "local:...", "png_b64": "<PNG, at most 128 KB>"}
+```
+
+Sent only to a host that names `agent_avatar` in `host_route.capabilities`.
+The host checks the PNG signature and the size, and keeps the file as
+`<workspace>/avatars/<agent_id>.png` (`:` becomes `_`). The desktop toast of
+the host uses it as its icon. The answer is one terminal frame:
+`{"type": "agent_avatar", "agent_id": "...", "ok": true}`, or `"ok": false`
+and an `error`. The app sends it when an agent is created, renamed or gets a
+new photo, and once per agent after pairing. Contract:
+`docs/agents/NOTIFICATIONS.md`. Host: `chuk_agents_host/avatars.py`, through
+the executor's `on_agent_frame` hook.
 
 ## Agent templates (bead chuk_chat-dsh0)
 

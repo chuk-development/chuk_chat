@@ -10,7 +10,7 @@
 ///   resolves it again at send time, so what the profile shows is what runs.
 /// * **The agent default** ([AgentModel.defaultConfig], DeepSeek V4 Flash)
 ///   is what an agent with no model of its own runs on. A plain chat keeps
-///   the composer's mode — Fast, Thinking or Custom ([ChatModeService]).
+///   the composer's mode — Standard or Custom ([ChatModeService]).
 ///
 /// Nothing else picks an agent's model. Every change is also sent to the
 /// host (`agent_model_set`, docs/agents/AGENT_MODEL.md), which stores it per
@@ -172,10 +172,9 @@ class AgentModelState {
     providerSlug: providerSlug,
   );
 
-  /// `Fast`, `Thinking` or `Custom`: the name of the default it follows.
+  /// `Standard` or `Custom`: the name of the default it follows.
   String get defaultLabel => switch (defaultMode) {
-    ChatMode.fast => 'Fast',
-    ChatMode.thinking => 'Thinking',
+    ChatMode.standard => 'Standard',
     ChatMode.custom => 'Custom',
   };
 }
@@ -209,7 +208,7 @@ class AgentModel {
     providerSlug: ChatModeService.defaultProviderSlug,
     reasoningEffort: 'low',
   );
-  static const ChatMode defaultMode = ChatMode.fast;
+  static const ChatMode defaultMode = ChatMode.standard;
 
   /// [defaultConfig] as the record the relay send resolves to.
   static ChatModelSelection get defaultSelection => ChatModelSelection(

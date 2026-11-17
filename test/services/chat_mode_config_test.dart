@@ -7,25 +7,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/chat_mode_service.dart';
+import 'package:chuk_chat/services/chat_profile_service.dart';
 
 void main() {
-  group('baked defaults', () {
-    test('Fast is glm-5.3-flash on fireworks/serverless, reasoning low', () {
-      final fast = ChatModeService.defaultConfig(ChatMode.fast);
-      expect(fast.modelId, 'z-ai/glm-5.3-flash');
-      expect(fast.providerSlug, 'fireworks/serverless');
-      expect(fast.reasoningEffort, 'low');
-      expect(fast.reasoningOn, isTrue);
-    });
+  setUp(ChatProfileService.resetForTest);
 
-    test('Thinking is pro-0813 on fireworks/serverless, reasoning high', () {
-      final thinking = ChatModeService.defaultConfig(ChatMode.thinking);
-      expect(thinking.modelId, 'deepseek/deepseek-v4-pro-0813');
-      expect(thinking.providerSlug, 'fireworks/serverless');
-      // Not `medium`: pro-0813's ladder is none/low/high/max and the server
-      // answers an unsupported effort with no reasoning at all.
-      expect(thinking.reasoningEffort, 'high');
-      expect(thinking.reasoningOn, isTrue);
+  group('baked defaults', () {
+    test('Standard is the profile model and marker, reasoning low', () {
+      ChatProfileService.resetForTest();
+      final standard = ChatModeService.defaultConfig(ChatMode.standard);
+      expect(standard.modelId, ChatProfileService.standardModelId);
+      expect(standard.modelId, 'deepseek/deepseek-v4.1-flash-1017');
+      expect(standard.providerSlug, ChatProfileService.standardMarker);
+      expect(standard.providerSlug, 'profile:standard');
+      expect(standard.reasoningEffort, 'low');
+      expect(standard.reasoningOn, isTrue);
     });
 
     test('the cold-cache ladders never offer medium', () {
@@ -52,7 +48,7 @@ void main() {
       );
     });
 
-    test('the general fallback matches Fast', () {
+    test('the general fallback matches Custom', () {
       expect(ChatModeService.defaultModelId, 'z-ai/glm-5.3-flash');
       expect(ChatModeService.defaultProviderSlug, 'fireworks/serverless');
     });
@@ -70,9 +66,9 @@ void main() {
     setUp(() => SharedPreferences.setMockInitialValues({}));
 
     test('re-pins the provider and re-clamps reasoning', () async {
-      // Thinking on a non-Fireworks provider at xhigh.
+      // Custom on a non-Fireworks provider at xhigh.
       await ChatModeService.saveConfig(
-        ChatMode.thinking,
+        ChatMode.custom,
         const ModeConfig(
           modelId: 'deepseek/deepseek-v4-pro-0813',
           providerSlug: 'openai',
@@ -80,7 +76,7 @@ void main() {
         ),
       );
       final updated = await ChatModeService.setProviderForMode(
-        ChatMode.thinking,
+        ChatMode.custom,
         'fireworks/serverless',
       );
       expect(updated.providerSlug, 'fireworks/serverless');
@@ -88,12 +84,12 @@ void main() {
       expect(updated.modelId, 'deepseek/deepseek-v4-pro-0813');
       // xhigh is not valid on Fireworks → high.
       expect(updated.reasoningEffort, 'high');
-      expect(await ChatModeService.loadConfig(ChatMode.thinking), updated);
+      expect(await ChatModeService.loadConfig(ChatMode.custom), updated);
     });
 
     test('an empty slug is a no-op', () async {
-      final before = await ChatModeService.loadConfig(ChatMode.fast);
-      final updated = await ChatModeService.setProviderForMode(ChatMode.fast, '');
+      final before = await ChatModeService.loadConfig(ChatMode.standard);
+      final updated = await ChatModeService.setProviderForMode(ChatMode.standard, '');
       expect(updated, before);
     });
   });
@@ -103,12 +99,12 @@ void main() {
 
     test('a fresh install returns the baked default for each mode', () async {
       expect(
-        await ChatModeService.loadConfig(ChatMode.fast),
-        ChatModeService.defaultConfig(ChatMode.fast),
+        await ChatModeService.loadConfig(ChatMode.standard),
+        ChatModeService.defaultConfig(ChatMode.standard),
       );
       expect(
-        await ChatModeService.loadConfig(ChatMode.thinking),
-        ChatModeService.defaultConfig(ChatMode.thinking),
+        await ChatModeService.loadConfig(ChatMode.custom),
+        ChatModeService.defaultConfig(ChatMode.custom),
       );
     });
 
@@ -119,63 +115,100 @@ void main() {
         providerSlug: 'openai',
         reasoningEffort: 'high',
       );
-      await ChatModeService.saveConfig(ChatMode.thinking, custom);
-      expect(await ChatModeService.loadConfig(ChatMode.thinking), custom);
+      await ChatModeService.saveConfig(ChatMode.custom, custom);
+      expect(await ChatModeService.loadConfig(ChatMode.custom), custom);
     });
 
     test('the two modes never bleed into each other', () async {
-      const custom = ModeConfig(
+      const picked = ModeConfig(
         modelId: 'a/b',
         providerSlug: 'openai',
         reasoningEffort: 'high',
       );
-      await ChatModeService.saveConfig(ChatMode.fast, custom);
+      await ChatModeService.saveConfig(ChatMode.custom, picked);
 
-      // Fast changed; Thinking is untouched, so still its default.
-      expect(await ChatModeService.loadConfig(ChatMode.fast), custom);
+      // Custom changed; Standard is untouched, so still its default.
+      expect(await ChatModeService.loadConfig(ChatMode.custom), picked);
       expect(
-        await ChatModeService.loadConfig(ChatMode.thinking),
-        ChatModeService.defaultConfig(ChatMode.thinking),
+        await ChatModeService.loadConfig(ChatMode.standard),
+        ChatModeService.defaultConfig(ChatMode.standard),
       );
+    });
+
+    test('Standard ignores a stored model and provider, keeps the level',
+        () async {
+      ChatProfileService.resetForTest();
+      SharedPreferences.setMockInitialValues({
+        'chat_mode_config_v1_standard':
+            '{"model":"other/model","provider":"openai","reasoning":"high"}',
+      });
+      final loaded = await ChatModeService.loadConfig(ChatMode.standard);
+      expect(loaded.modelId, ChatProfileService.standardModelId);
+      expect(loaded.providerSlug, ChatProfileService.standardMarker);
+      expect(loaded.reasoningEffort, 'high');
+    });
+
+    test('Standard takes the model from the stored server profile', () async {
+      ChatProfileService.resetForTest();
+      SharedPreferences.setMockInitialValues({
+        'chat_profile_standard_v1':
+            '{"id":"standard","name":"Standard","description":"",'
+            '"model":{"id":"vendor/new-model","name":"New"},"providers":[]}',
+        'chat_mode_config_v1_standard':
+            '{"model":"other/model","provider":"openai","reasoning":"low"}',
+      });
+      final loaded = await ChatModeService.loadConfig(ChatMode.standard);
+      expect(loaded.modelId, 'vendor/new-model');
+      expect(loaded.providerSlug, 'profile:standard');
+      expect(loaded.reasoningEffort, 'low');
+    });
+
+    test('the old fast and thinking modes parse as Standard', () {
+      expect(ChatModeService.parse('fast'), ChatMode.standard);
+      expect(ChatModeService.parse('thinking'), ChatMode.standard);
+      expect(ChatModeService.parse('standard'), ChatMode.standard);
+      expect(ChatModeService.parse('custom'), ChatMode.custom);
+      expect(ChatModeService.parse(null), ChatMode.standard);
+      expect(ChatModeService.parse('garbage'), ChatMode.standard);
     });
 
     test('a corrupt stored record falls back to the default', () async {
       SharedPreferences.setMockInitialValues({
-        'chat_mode_config_v1_fast': 'not json at all',
+        'chat_mode_config_v1_standard': 'not json at all',
       });
       expect(
-        await ChatModeService.loadConfig(ChatMode.fast),
-        ChatModeService.defaultConfig(ChatMode.fast),
+        await ChatModeService.loadConfig(ChatMode.standard),
+        ChatModeService.defaultConfig(ChatMode.standard),
       );
     });
 
     test('a partial record takes missing fields from the default', () async {
       // Only the model is stored; provider and reasoning come from default.
       SharedPreferences.setMockInitialValues({
-        'chat_mode_config_v1_fast': '{"model":"x/y"}',
+        'chat_mode_config_v1_custom': '{"model":"x/y"}',
       });
-      final loaded = await ChatModeService.loadConfig(ChatMode.fast);
+      final loaded = await ChatModeService.loadConfig(ChatMode.custom);
       expect(loaded.modelId, 'x/y');
       expect(loaded.providerSlug, 'fireworks/serverless');
-      expect(loaded.reasoningEffort, 'low');
+      expect(loaded.reasoningEffort, 'none');
     });
 
     test('an invalid stored reasoning level is clamped on load', () async {
       // xhigh is not valid on Fireworks; it must come back as high.
       SharedPreferences.setMockInitialValues({
-        'chat_mode_config_v1_thinking':
+        'chat_mode_config_v1_custom':
             '{"model":"deepseek/deepseek-v4-pro-0813",'
             '"provider":"fireworks/serverless","reasoning":"xhigh"}',
       });
-      final loaded = await ChatModeService.loadConfig(ChatMode.thinking);
+      final loaded = await ChatModeService.loadConfig(ChatMode.custom);
       expect(loaded.reasoningEffort, 'high');
     });
 
     test('setModelForMode swaps model+provider and re-clamps reasoning',
         () async {
-      // Start Thinking on a non-Fireworks provider at xhigh.
+      // Start Custom on a non-Fireworks provider at xhigh.
       await ChatModeService.saveConfig(
-        ChatMode.thinking,
+        ChatMode.custom,
         const ModeConfig(
           modelId: 'a/b',
           providerSlug: 'openai',
@@ -184,21 +217,21 @@ void main() {
       );
       // Move it to a Fireworks provider — xhigh must drop to high.
       final updated = await ChatModeService.setModelForMode(
-        ChatMode.thinking,
+        ChatMode.custom,
         modelId: 'deepseek/deepseek-v4-pro-0813',
         providerSlug: 'fireworks/serverless',
       );
       expect(updated.modelId, 'deepseek/deepseek-v4-pro-0813');
       expect(updated.providerSlug, 'fireworks/serverless');
       expect(updated.reasoningEffort, 'high');
-      expect(await ChatModeService.loadConfig(ChatMode.thinking), updated);
+      expect(await ChatModeService.loadConfig(ChatMode.custom), updated);
     });
 
     test('setModelForMode keeps the current provider when given none',
         () async {
-      // Thinking starts pinned to a real provider.
+      // Custom starts pinned to a real provider.
       await ChatModeService.saveConfig(
-        ChatMode.thinking,
+        ChatMode.custom,
         const ModeConfig(
           modelId: 'deepseek/deepseek-v4-pro-0813',
           providerSlug: 'fireworks/serverless',
@@ -207,7 +240,7 @@ void main() {
       );
       // An unresolved pin ('') must not be stored: keep the prior provider.
       final updated = await ChatModeService.setModelForMode(
-        ChatMode.thinking,
+        ChatMode.custom,
         modelId: 'other/model',
         providerSlug: '',
       );
@@ -220,10 +253,10 @@ void main() {
       // Documents the fromJson substitution; the store never writes '' via
       // setModelForMode, but a hand-edited record must still resolve sanely.
       SharedPreferences.setMockInitialValues({
-        'chat_mode_config_v1_fast':
+        'chat_mode_config_v1_custom':
             '{"model":"x/y","provider":"","reasoning":"high"}',
       });
-      final loaded = await ChatModeService.loadConfig(ChatMode.fast);
+      final loaded = await ChatModeService.loadConfig(ChatMode.custom);
       expect(loaded.modelId, 'x/y');
       expect(loaded.providerSlug, 'fireworks/serverless');
       expect(loaded.reasoningEffort, 'high');
@@ -231,7 +264,7 @@ void main() {
 
     test('setReasoningForMode clamps to the current provider', () async {
       await ChatModeService.saveConfig(
-        ChatMode.fast,
+        ChatMode.custom,
         const ModeConfig(
           modelId: 'deepseek/deepseek-v4-flash-0731',
           providerSlug: 'fireworks/serverless',
@@ -239,7 +272,7 @@ void main() {
         ),
       );
       final updated =
-          await ChatModeService.setReasoningForMode(ChatMode.fast, 'xhigh');
+          await ChatModeService.setReasoningForMode(ChatMode.custom, 'xhigh');
       // Fireworks tops out at high.
       expect(updated.reasoningEffort, 'high');
     });

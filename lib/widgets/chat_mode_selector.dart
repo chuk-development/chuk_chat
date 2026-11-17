@@ -1,13 +1,13 @@
 // lib/widgets/chat_mode_selector.dart
 //
-// The composer's primary control: Fast or Thinking, as the same dropdown
-// the model selector has always used.
+// The composer's primary control: Standard or a model of the reader's own.
 //
-// Level 1 (the pill menu) shows only the two modes plus a way one level
-// deeper. Level 2 (the model-and-reasoning menu) configures the mode that is
-// active: the reasoning level (Off plus the levels the model+provider
-// supports), a quick pick from the models the reader has picked, and the way
-// out to the full model screen where the whole catalogue lives.
+// Level 1 (the pill menu) shows Standard (with the model and providers the
+// server picked for it, read-only) and the Custom point one level deeper.
+// Level 2 (the model-and-reasoning menu) configures the mode that is active:
+// the reasoning level (Off plus the levels the model supports), a quick pick
+// from the models the reader has picked, and the way out to the full model
+// screen where the whole catalogue lives.
 
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/widgets/menu_tile_group.dart'
@@ -37,7 +37,12 @@ class ChatModeSelector extends StatelessWidget {
     this.onReasoningEffortChanged,
     this.height = MobileLayout.minTouchTarget,
     this.menuAbove = false,
+    this.standardDetail,
   });
+
+  /// What Standard runs now, e.g. `DeepSeek V4.1 Flash · Wafer → inference.net`.
+  /// Shown under the Standard row; the server picks it, so it is not a control.
+  final String? standardDetail;
 
   final ChatMode mode;
   final ValueChanged<ChatMode> onModeChanged;
@@ -60,7 +65,7 @@ class ChatModeSelector extends StatelessWidget {
   final String? modelLabel;
 
   /// Human name of the model Custom last ran, remembered across mode switches.
-  /// The third point (the Custom entry) shows this even while Fast or Thinking
+  /// The Custom point shows this even while Standard
   /// is active, so the reader sees which model a tap on it will bring back.
   /// Null when Custom has never been used — the point then reads "Choose model".
   final String? customModelLabel;
@@ -90,44 +95,26 @@ class ChatModeSelector extends StatelessWidget {
   /// row underneath.
   static const int kMaxModelsInMenu = 40;
 
-  static IconData iconFor(ChatMode mode) {
-    switch (mode) {
-      case ChatMode.fast:
-        return Icons.bolt;
-      case ChatMode.thinking:
-        return Icons.psychology_outlined;
-      case ChatMode.custom:
-        return Icons.tune;
-    }
-  }
+  static IconData iconFor(ChatMode mode) => switch (mode) {
+    ChatMode.standard => Icons.bolt,
+    ChatMode.custom => Icons.tune,
+  };
 
-  static String labelFor(ChatMode mode) {
-    switch (mode) {
-      case ChatMode.fast:
-        return 'Fast';
-      case ChatMode.thinking:
-        return 'Thinking';
-      case ChatMode.custom:
-        return 'Custom model';
-    }
-  }
+  static String labelFor(ChatMode mode) => switch (mode) {
+    ChatMode.standard => 'Standard',
+    ChatMode.custom => 'Custom model',
+  };
 
-  static String descriptionFor(ChatMode mode) {
-    switch (mode) {
-      case ChatMode.fast:
-        return 'Answers right away';
-      case ChatMode.thinking:
-        return 'Thinks first, then answers';
-      case ChatMode.custom:
-        return 'Any model you pick';
-    }
-  }
+  static String descriptionFor(ChatMode mode) => switch (mode) {
+    ChatMode.standard => 'Best value, picked by us',
+    ChatMode.custom => 'Any model you pick',
+  };
 
   /// The mode glyph, sized from the pill instead of pinned: the composer
   /// runs a short pill, and a 19px glyph in a 36px pill leaves no ring.
   double get _glyphSize => (height * 0.42).clamp(15.0, 20.0);
 
-  /// The label for the third point (Custom). When Custom is active it names
+  /// The label for the Custom point. When Custom is active it names
   /// the running model; otherwise it names the model Custom last ran; only when
   /// Custom has never been used does it fall back to "Choose model".
   String get _customPointLabel {
@@ -153,9 +140,9 @@ class ChatModeSelector extends StatelessWidget {
     final theme = Theme.of(context);
     final Color iconFg = theme.resolvedIconColor;
 
-    // Fast and Thinking name the mode. Custom names the model it runs — that
-    // is the whole point of the mode, so the pill shows the chosen model
-    // rather than the bare word "Custom".
+    // Standard names the mode. Custom names the model it runs — that is the
+    // whole point of the mode, so the pill shows the chosen model rather than
+    // the bare word "Custom".
     final String pillLabel = mode == ChatMode.custom
         ? (modelLabel == null || modelLabel!.isEmpty
               ? labelFor(mode)
@@ -216,27 +203,28 @@ class ChatModeSelector extends StatelessWidget {
     final choice = await _showAnchoredMenu<_MenuChoice>(
       context,
       items: <PopupMenuEntry<_MenuChoice>>[
-        // Exactly three points. Fast and Thinking run the models set on the
-        // model screen, so their rows never surface a model name. The third
-        // point is Custom: an arbitrary model at its own reasoning level,
-        // reached through the model-and-reasoning menu.
-        for (final option in const <ChatMode>[ChatMode.fast, ChatMode.thinking])
-          _menuRow<_MenuChoice>(
-            value: _MenuChoice.mode(option),
-            iconFg: iconFg,
-            icon: iconFor(option),
-            label: labelFor(option),
-            isSelected: option == mode,
-          ),
+        // Two points. Standard runs what the server picked; the line under
+        // it says what that is. The second point is Custom: an arbitrary
+        // model at its own reasoning level, reached through the
+        // model-and-reasoning menu.
+        _menuRow<_MenuChoice>(
+          value: const _MenuChoice.mode(ChatMode.standard),
+          iconFg: iconFg,
+          icon: iconFor(ChatMode.standard),
+          label: labelFor(ChatMode.standard),
+          isSelected: mode == ChatMode.standard,
+        ),
+        if (standardDetail case final String detail when detail.isNotEmpty)
+          _detailRow<_MenuChoice>(iconFg: iconFg, text: detail),
         if (_hasDeeperMenu)
           _menuRow<_MenuChoice>(
             value: const _MenuChoice.openModelMenu(),
             iconFg: iconFg,
             icon: iconFor(ChatMode.custom),
-            // The third point names the Custom model: the active one when
+            // The Custom point names the Custom model: the active one when
             // Custom is running, otherwise the one it last ran (remembered
             // across mode switches). It stays "Choose model" only until Custom
-            // has ever been used. Fast/Thinking models are never surfaced here.
+            // has ever been used.
             label: _customPointLabel,
             isSelected: mode == ChatMode.custom,
             trailing: AppIcon(
@@ -378,6 +366,29 @@ class ChatModeSelector extends StatelessWidget {
   }
 
   // ─── Shared menu look ─────────────────────────────────────────────────
+
+  /// A non-interactive line of small text under a row, indented to the
+  /// row's label: what Standard runs right now.
+  PopupMenuItem<T> _detailRow<T>({
+    required Color iconFg,
+    required String text,
+  }) {
+    return PopupMenuItem<T>(
+      enabled: false,
+      height: 24,
+      padding: const EdgeInsets.fromLTRB(16 + kMenuRowInset + 28, 0, 16, 6),
+      child: Text(
+        text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: iconFg.withValues(alpha: 0.6),
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+    );
+  }
 
   /// A non-interactive section header, dimmer and lighter than a choice.
   PopupMenuItem<T> _headerRow<T>({

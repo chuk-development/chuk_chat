@@ -481,8 +481,6 @@ const Map<String, String> stringsPt = {
   'modelProvider': 'Provedor',
   'chooseProvider': 'Escolher',
   'modelPromptCustom': 'Personalizado',
-  'fastMode': 'Modo rápido',
-  'thinkingMode': 'Modo de raciocínio',
   'availableModelsOne': 'Disponíveis · {count} modelo',
   'availableModelsMany': 'Disponíveis · {count} modelos',
   'modelsFoundOne': '{count} modelo encontrado',

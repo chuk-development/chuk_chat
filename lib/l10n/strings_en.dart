@@ -777,8 +777,6 @@ const Map<String, String> stringsEn = {
   'modelProvider': 'Provider',
   'chooseProvider': 'Choose',
   'modelPromptCustom': 'Custom',
-  'fastMode': 'Fast mode',
-  'thinkingMode': 'Thinking mode',
   'availableModelsOne': 'Available · {count} model',
   'availableModelsMany': 'Available · {count} models',
   'modelsFoundOne': '{count} model found',

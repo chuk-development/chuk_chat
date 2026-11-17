@@ -1,6 +1,7 @@
-// The provider picked for Fast or Thinking must be the one a send uses, even
-// when the same model carries a different per-model pin. The per-model pin
-// used to overwrite the mode's provider on every mode switch.
+// Under Standard the provider a send uses is the profile marker (the server
+// picks), even when the same model carries a different per-model pin or an
+// old stored provider. The per-model pin used to overwrite the mode's
+// provider on every mode switch.
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
+import 'package:chuk_chat/services/chat_profile_service.dart';
 
 class _Host extends StatefulWidget {
   const _Host();
@@ -24,29 +26,33 @@ class _HostState extends State<_Host> with ModelProviderResolutionMixin<_Host> {
   String? selectedProviderSlug;
 
   @override
-  ChatMode chatMode = ChatMode.fast;
+  ChatMode chatMode = ChatMode.standard;
 
   @override
   Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
-const String _model = 'z-ai/glm-5.3-flash';
-const String _modeProvider = 'wafer';
+const String _model = 'deepseek/deepseek-v4.1-flash-1017';
+const String _modeProvider = ChatProfileService.standardMarker;
+const String _storedProvider = 'wafer';
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() {
+    ChatProfileService.resetForTest();
+    SharedPreferences.setMockInitialValues({});
+  });
 
   Future<_HostState> pumpHost(WidgetTester tester) async {
     await tester.pumpWidget(const _Host());
     return tester.state<_HostState>(find.byType(_Host));
   }
 
-  testWidgets('Fast mode resolves to its own provider', (tester) async {
+  testWidgets('Standard mode resolves to the profile marker', (tester) async {
     await tester.runAsync(() async {
       await ChatModeService.setModelForMode(
-        ChatMode.fast,
+        ChatMode.standard,
         modelId: _model,
-        providerSlug: _modeProvider,
+        providerSlug: _storedProvider,
       );
     });
     final host = await pumpHost(tester);
@@ -63,9 +69,9 @@ void main() {
   testWidgets('send-time lookup replaces a stale cached slug', (tester) async {
     await tester.runAsync(() async {
       await ChatModeService.setModelForMode(
-        ChatMode.fast,
+        ChatMode.standard,
         modelId: _model,
-        providerSlug: _modeProvider,
+        providerSlug: _storedProvider,
       );
     });
     final host = await pumpHost(tester);
@@ -85,9 +91,9 @@ void main() {
   ) async {
     await tester.runAsync(() async {
       await ChatModeService.setModelForMode(
-        ChatMode.fast,
+        ChatMode.standard,
         modelId: _model,
-        providerSlug: _modeProvider,
+        providerSlug: _storedProvider,
       );
     });
     final host = await pumpHost(tester);
@@ -99,21 +105,21 @@ void main() {
         _model,
         forceFromPrefs: true,
       );
-      host.chatMode = ChatMode.thinking;
+      host.chatMode = ChatMode.custom;
       await lookup;
     });
 
     expect(host.selectedProviderSlug, 'fireworks/serverless');
   });
 
-  testWidgets('the mode provider is ignored for another model', (
+  testWidgets('the Standard marker is ignored for another model', (
     tester,
   ) async {
     await tester.runAsync(() async {
       await ChatModeService.setModelForMode(
-        ChatMode.fast,
+        ChatMode.standard,
         modelId: _model,
-        providerSlug: _modeProvider,
+        providerSlug: _storedProvider,
       );
     });
     final host = await pumpHost(tester);
@@ -125,12 +131,12 @@ void main() {
     expect(slug, isNull);
   });
 
-  testWidgets('custom mode keeps the per-model pin path', (tester) async {
+  testWidgets('Custom mode keeps the per-model pin path', (tester) async {
     await tester.runAsync(() async {
       await ChatModeService.setModelForMode(
         ChatMode.custom,
         modelId: _model,
-        providerSlug: _modeProvider,
+        providerSlug: _storedProvider,
       );
     });
     final host = await pumpHost(tester);

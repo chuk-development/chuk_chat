@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/chat_profile_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -49,6 +50,9 @@ class ModelPrefetchService {
   }
 
   static Future<void> _prefetch({required bool force}) async {
+    // Standard's model and providers come from the server; small and public,
+    // so it runs beside the catalogue check, never blocking it.
+    unawaited(ChatProfileService.refresh());
     try {
       // Check if we have valid cached models - skip fetch if so
       final cacheValid = !force && await ModelCacheService.isCacheValid();

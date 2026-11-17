@@ -4902,6 +4902,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               selectedModelName ??
               (selectedModelId.isEmpty ? null : selectedModelId),
           customModelLabel: customModelName,
+          standardDetail: standardDetail,
           pickedModels: pickedModels,
           reasoningEffort: ChatModeService.sanitizeReasoningForModel(
             reasoningEffort,

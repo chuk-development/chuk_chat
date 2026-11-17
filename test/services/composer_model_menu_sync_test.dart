@@ -24,6 +24,7 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
 import '../support/kv_cache_test_env.dart';
 
 const String _flash = 'deepseek/deepseek-v4.1-flash-1017';
+const String _glm = 'z-ai/glm-5.3-flash';
 
 class _Composer extends StatefulWidget {
   const _Composer({super.key});
@@ -135,10 +136,11 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: _RealMenu(key: key)));
 
     await tester.runAsync(
-      () => key.currentState!.applyPickedModels(<String, String>{_flash: ''}),
+      () => key.currentState!.applyPickedModels(<String, String>{_glm: ''}),
     );
     await tester.pump();
 
-    expect(key.currentState!.pickedModels.any((m) => m.id == _flash), isFalse);
+    // Not Standard's model: that one always stays reachable.
+    expect(key.currentState!.pickedModels.any((m) => m.id == _glm), isFalse);
   });
 }

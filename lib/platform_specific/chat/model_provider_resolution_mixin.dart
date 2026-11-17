@@ -40,12 +40,13 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
   /// back, so the composer never shows a model the send will not use.
   void onChatScopedModelMismatch() {}
 
-  /// The provider the active Fast or Thinking mode pins for [modelId], or
-  /// null when the mode is custom, runs another model, or pins nothing.
+  /// The provider the active Standard mode carries for [modelId] (the
+  /// profile marker, see `ChatProfileService`), or null when the mode is
+  /// custom, runs another model, or pins nothing.
   ///
-  /// A mode's own provider wins over the per-model pin: Fast and Thinking
-  /// can run the same model through different providers, and the per-model
-  /// pin would otherwise silently replace the one picked for the mode.
+  /// A mode's own provider wins over the per-model pin: otherwise a pin the
+  /// reader set for the same model under Custom would silently replace the
+  /// server's choice.
   Future<String?> modeProviderSlugFor(String modelId) async {
     final ChatMode mode = chatMode;
     if (mode == ChatMode.custom || modelId.isEmpty) return null;
@@ -136,7 +137,9 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
 
   /// Resolve the provider slug to actually send with, falling back through the
   /// cache, prefs, and the model catalogue, and resolving the "auto cheapest"
-  /// marker at send time. Never returns the marker. Returns null only if no
+  /// marker at send time. Never returns the Auto marker. In Standard it
+  /// returns the profile marker `profile:standard`, which the WebSocket frame
+  /// turns into `profile` (see `ChatProfileService`). Returns null only if no
   /// provider at all is known for the model.
   Future<String?> ensureProviderSlugForCurrentModel() async {
     final chatId = modelSelectionChatId;
