@@ -154,6 +154,16 @@ void main() {
       ),
     );
     await _drain();
+    // CHAT-123: nothing of the pass shows while it is written.
+    expect(out.seen.whereType<ContentEvent>(), isEmpty);
+    controller.emit(
+      debugRouteAgentsRelay(
+        const AgentsRelayDone(reason: 'finished', sessionKey: sessionKey),
+        sessionKey: sessionKey,
+        runId: 'run-new',
+      ),
+    );
+    await _drain();
     final List<String> text = <String>[
       for (final ChatStreamEvent e in out.seen)
         if (e is ContentEvent) e.text,
@@ -161,6 +171,46 @@ void main() {
     expect(text.join(), 'mine');
     expect(AgentsRunLedger.instance.runFor(sessionKey)?.runId, 'run-new');
     await out.cancel();
+  });
+
+  test('a Sidekick pass shows as one whole message when it is over, not '
+      'token by token (CHAT-123)', () async {
+    final out = send();
+    await _drain();
+    controller.emit(
+      AgentsRelayTaskAck(
+        taskId: controller.taskIds.single!,
+        status: 'accepted',
+        sessionKey: sessionKey,
+      ),
+    );
+    controller.emit(const AgentsRelayDelta('Let me '));
+    controller.emit(const AgentsRelayDelta('look.'));
+    controller.emit(const AgentsRelayHeartbeat(seq: 1));
+    await _drain();
+    expect(out.seen.whereType<ContentEvent>(), isEmpty);
+
+    // A tool ends the pass: its text shows in one piece.
+    controller.emit(const AgentsRelayTool('shell', status: 'done'));
+    await _drain();
+    expect(out.seen.whereType<ContentEvent>().map((e) => e.text), <String>[
+      'Let me look.',
+    ]);
+
+    controller.emit(const AgentsRelayDelta('Found '));
+    controller.emit(const AgentsRelayDelta('it.'));
+    await _drain();
+    expect(out.seen.whereType<ContentEvent>(), hasLength(1));
+    controller.emit(
+      const AgentsRelayDone(reason: 'finished', sessionKey: sessionKey),
+    );
+    await _drain();
+    expect(out.seen.whereType<ContentEvent>().map((e) => e.text), <String>[
+      'Let me look.',
+      'Found it.',
+    ]);
+    expect(out.seen.last, isA<DoneEvent>());
+    expect(out.closedFn(), isTrue);
   });
 
   test('a task sent across a host restart arrives exactly once', () async {

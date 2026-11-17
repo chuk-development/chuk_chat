@@ -18,6 +18,7 @@ import 'package:chuk_chat/services/agents/agent_model.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 
 import '../support/fake_relay_controller.dart';
+
 import 'package:chuk_chat/models/content_block.dart';
 
 /// Every inbound variant the relay can produce, so the "never a ToolCallsEvent"
@@ -182,29 +183,26 @@ void main() {
     },
   );
 
-  test(
-    'an agent with its own reasoning level runs at it, one without runs '
-    'on the agent default',
-    () async {
-      await ChatModelSelectionService.instance.save(
-        'own',
-        const ChatModelSelection(
-          modelId: 'own-model',
-          providerSlug: 'own-provider',
-          reasoningEffort: 'high',
-        ),
-      );
-      await run(const [AgentsRelayDone(reason: 'finished')], chatId: 'own');
-      await run(const [AgentsRelayDone(reason: 'finished')], chatId: 'plain');
-      final ChatModelSelection agentDefault = AgentModel.defaultSelection;
-      expect(controller.taskModelIds, ['own-model', agentDefault.modelId]);
-      expect(controller.taskProviderSlugs, [
-        'own-provider',
-        agentDefault.providerSlug,
-      ]);
-      expect(controller.taskReasoning, ['high', agentDefault.reasoningEffort]);
-    },
-  );
+  test('an agent with its own reasoning level runs at it, one without runs '
+      'on the agent default', () async {
+    await ChatModelSelectionService.instance.save(
+      'own',
+      const ChatModelSelection(
+        modelId: 'own-model',
+        providerSlug: 'own-provider',
+        reasoningEffort: 'high',
+      ),
+    );
+    await run(const [AgentsRelayDone(reason: 'finished')], chatId: 'own');
+    await run(const [AgentsRelayDone(reason: 'finished')], chatId: 'plain');
+    final ChatModelSelection agentDefault = AgentModel.defaultSelection;
+    expect(controller.taskModelIds, ['own-model', agentDefault.modelId]);
+    expect(controller.taskProviderSlugs, [
+      'own-provider',
+      agentDefault.providerSlug,
+    ]);
+    expect(controller.taskReasoning, ['high', agentDefault.reasoningEffort]);
+  });
 
   test('chat switch after send cannot redirect the captured request', () async {
     final store = ChatModelSelectionService.instance;
@@ -336,14 +334,28 @@ void main() {
       await _drain();
     }
     expect(seen.whereType<DoneEvent>(), isEmpty);
-    expect(
-      seen.whereType<ContentEvent>().map((e) => e.text).toList(),
-      <String>['Looking now.\n\n', 'mine'],
+    // CHAT-123: 'mine' is a pass still being written; it shows whole when
+    // the pass is over, not token by token.
+    expect(seen.whereType<ContentEvent>().map((e) => e.text).toList(), <String>[
+      'Looking now.\n\n',
+    ]);
+    controller.emit(
+      debugRouteAgentsRelay(
+        const AgentsRelayDone(reason: 'finished', sessionKey: sessionKey),
+        sessionKey: sessionKey,
+        runId: 'run-mine',
+      ),
     );
+    await _drain();
+    expect(seen.whereType<ContentEvent>().map((e) => e.text).toList(), <String>[
+      'Looking now.\n\n',
+      'mine',
+    ]);
     await sub.cancel();
   });
 
-  test('deltas become content events', () async {
+  test('the deltas of a pass become one content event at its end '
+      '(CHAT-123)', () async {
     final seen = await run(const <AgentsRelayInbound>[
       AgentsRelayDelta('Hel'),
       AgentsRelayDelta('lo'),
@@ -351,27 +363,22 @@ void main() {
     ]);
 
     final content = seen.whereType<ContentEvent>().map((e) => e.text).toList();
-    expect(content, <String>['Hel', 'lo']);
+    expect(content, <String>['Hello']);
   });
 
-  test(
-    'terminal answer replaces a truncated streamed prefix before done',
-    () async {
-      const answer =
-          'Spotify: [Search](https://open.spotify.com/search/song/tracks)\nShazam: complete';
-      final seen = await run(const <AgentsRelayInbound>[
-        AgentsRelayDelta(
-          'Spotify: [Search](https://open.spotify.com/search/so',
-        ),
-        AgentsRelayDone(reason: 'finished', finalAnswer: answer),
-      ]);
-      expect(seen.whereType<FinalContentEvent>().single.text, answer);
-      expect(
-        seen.indexWhere((event) => event is FinalContentEvent),
-        lessThan(seen.indexWhere((event) => event is DoneEvent)),
-      );
-    },
-  );
+  test('terminal answer replaces a truncated streamed prefix before done', () async {
+    const answer =
+        'Spotify: [Search](https://open.spotify.com/search/song/tracks)\nShazam: complete';
+    final seen = await run(const <AgentsRelayInbound>[
+      AgentsRelayDelta('Spotify: [Search](https://open.spotify.com/search/so'),
+      AgentsRelayDone(reason: 'finished', finalAnswer: answer),
+    ]);
+    expect(seen.whereType<FinalContentEvent>().single.text, answer);
+    expect(
+      seen.indexWhere((event) => event is FinalContentEvent),
+      lessThan(seen.indexWhere((event) => event is DoneEvent)),
+    );
+  });
 
   test('a heartbeat is proof of life and nothing else', () async {
     // It carries no text, so it must add no text; it is not output, so it must
@@ -437,6 +444,7 @@ void main() {
         AgentsRelayReasoning('let me '),
         AgentsRelayReasoning('think'),
         AgentsRelayDelta('answer'),
+        AgentsRelayDone(reason: 'finished'),
       ]);
 
       final ordered = seen
@@ -636,9 +644,9 @@ void main() {
       const AgentsRelayDelta('today'),
     ]);
 
-    expect(seen.whereType<ContentEvent>().map((e) => e.text), <String>[
-      'today',
-    ]);
+    // Nothing of yesterday is content. 'today' is a pass still being
+    // written: it shows whole when the pass is over (CHAT-123).
+    expect(seen.whereType<ContentEvent>(), isEmpty);
     expect(AgentsRunLedger.instance.runFor(sessionKey)!.toolCalls, isEmpty);
     expect(AgentsRunLedger.instance.runFor(sessionKey)!.blocks, isEmpty);
     // A replayed terminal is not this run's terminal.
@@ -760,37 +768,39 @@ void main() {
     expect(controller.stopCalls, 0);
   });
 
-  test('a failed send keeps "Run anyway" armed; a sent one uses it up',
-      () async {
-    AgentsBudgetOverride.reset();
-    addTearDown(AgentsBudgetOverride.reset);
-    AgentsBudgetOverride.arm(sessionKey);
-    controller.taskError = StateError('Not paired');
-    final failed = AgentsChatTransport.sendStreamingChat(
-      accessToken: 'token',
-      message: 'do the thing',
-      modelId: 'gpt-5',
-      providerSlug: 'openai',
-      chatId: sessionKey,
-    ).listen((_) {});
-    await _drain();
-    await failed.cancel();
-    expect(controller.taskBudgetOverrides, <bool>[true]);
-    expect(AgentsBudgetOverride.isArmed(sessionKey), isTrue);
+  test(
+    'a failed send keeps "Run anyway" armed; a sent one uses it up',
+    () async {
+      AgentsBudgetOverride.reset();
+      addTearDown(AgentsBudgetOverride.reset);
+      AgentsBudgetOverride.arm(sessionKey);
+      controller.taskError = StateError('Not paired');
+      final failed = AgentsChatTransport.sendStreamingChat(
+        accessToken: 'token',
+        message: 'do the thing',
+        modelId: 'gpt-5',
+        providerSlug: 'openai',
+        chatId: sessionKey,
+      ).listen((_) {});
+      await _drain();
+      await failed.cancel();
+      expect(controller.taskBudgetOverrides, <bool>[true]);
+      expect(AgentsBudgetOverride.isArmed(sessionKey), isTrue);
 
-    controller.taskError = null;
-    final sent = AgentsChatTransport.sendStreamingChat(
-      accessToken: 'token',
-      message: 'do the thing',
-      modelId: 'gpt-5',
-      providerSlug: 'openai',
-      chatId: sessionKey,
-    ).listen((_) {});
-    await _drain();
-    await sent.cancel();
-    expect(controller.taskBudgetOverrides, <bool>[true, true]);
-    expect(AgentsBudgetOverride.isArmed(sessionKey), isFalse);
-  });
+      controller.taskError = null;
+      final sent = AgentsChatTransport.sendStreamingChat(
+        accessToken: 'token',
+        message: 'do the thing',
+        modelId: 'gpt-5',
+        providerSlug: 'openai',
+        chatId: sessionKey,
+      ).listen((_) {});
+      await _drain();
+      await sent.cancel();
+      expect(controller.taskBudgetOverrides, <bool>[true, true]);
+      expect(AgentsBudgetOverride.isArmed(sessionKey), isFalse);
+    },
+  );
 
   group('a prompt the host could not take', () {
     late Map<String, String> disk;

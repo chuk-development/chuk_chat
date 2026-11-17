@@ -238,6 +238,19 @@ class AgentsChatTransport {
       if (!out.isClosed) out.add(event);
     }
 
+    // CHAT-123: a Sidekick answer is not streamed token by token. The tokens
+    // of one pass collect here, and the pass shows as one whole message when
+    // it is over: at the next tool, note, file or the run's end. Until then
+    // the bubble shows only the run's status. The plain chat still streams.
+    final StringBuffer pendingPass = StringBuffer();
+
+    void flushPass() {
+      if (pendingPass.isEmpty) return;
+      final String text = pendingPass.toString();
+      pendingPass.clear();
+      emit(ContentEvent(text));
+    }
+
     /// Watches the ledger while the stream is open, for a run the ledger
     /// ends on its own (see [out.onListen]). Null once removed.
     VoidCallback? ledgerWatch;
@@ -283,6 +296,7 @@ class AgentsChatTransport {
         ledger.finish(ledgerKey, reason: 'lost');
         run.outcome = outcome;
       }
+      flushPass();
       emit(
         ErrorEvent(
           agentsRunEndNotice(outcome, error: error) ??
@@ -332,6 +346,7 @@ class AgentsChatTransport {
       );
       // Token delivery is provisional: the host's terminal answer is the
       // complete canonical response, even after missing/filtered tail deltas.
+      flushPass();
       if (finalAnswer != null) emit(FinalContentEvent(finalAnswer));
       emit(DoneEvent());
       closeOut();
@@ -531,6 +546,13 @@ class AgentsChatTransport {
         ledger.taskAcknowledged(ledgerKey, taskId: wireTaskId, runId: frameRun);
       }
 
+      // A pass is over when anything but its own tokens arrives.
+      if (event is! AgentsRelayDelta &&
+          event is! AgentsRelayHeartbeat &&
+          event is! AgentsRelayTaskAck) {
+        flushPass();
+      }
+
       switch (event) {
         case AgentsRelayHeartbeat():
           // The host says the run is alive. It is not output: the ceiling
@@ -641,7 +663,7 @@ class AgentsChatTransport {
               wireTaskId,
             ).catchError((Object _) {}),
           );
-          if (text.isNotEmpty) emit(ContentEvent(text));
+          if (text.isNotEmpty) pendingPass.write(text);
 
         case AgentsRelayMessage(:final text):
           // CHAT-79: the agent's note while it works ("I am going through
@@ -917,6 +939,7 @@ class AgentsChatTransport {
               if (outcome == AgentsRunOutcome.answered) {
                 // Answered with the text it streamed into this turn.
                 terminated = true;
+                flushPass();
                 emit(const DoneEvent());
                 closeOut();
                 return;
@@ -959,6 +982,7 @@ class AgentsChatTransport {
             if (terminated) return;
             terminated = true;
             ledger.finish(ledgerKey, reason: 'error');
+            flushPass();
             // `connectionLost`, not `streamFailure`: what raised here is the
             // SOCKET under the stream, not the run. The run belongs to the
             // host process and survives the drop, so the turn must not be
