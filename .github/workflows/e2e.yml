@@ -79,7 +79,9 @@ jobs:
       - name: Start the offline stack
         run: scripts/e2e_stack.sh up
 
-      # Same command as docs/INTEGRATION_TESTS.md. The XDG directories give
+      # Same command as docs/INTEGRATION_TESTS.md. --reporter expanded: with
+      # Flutter 3.50 the default GitHub reporter lists the passed test and then
+      # reports "No tests were found" (exit 79). The XDG directories give
       # the app an empty data directory, so the first screen is sign-in.
       - name: Integration test (Xvfb)
         run: |
@@ -89,6 +91,7 @@ jobs:
           XDG_DATA_HOME="$H/data" XDG_CACHE_HOME="$H/cache" XDG_STATE_HOME="$H/state" \
           xvfb-run -a -s "-screen 0 1440x900x24" \
             flutter test integration_test/app_test.dart -d linux \
+            --reporter expanded \
             --dart-define-from-file=_scratch/e2e.defines.json
 
       # Context for the comment workflow. It is informational only: the
