@@ -43,7 +43,7 @@ Remote-only verbs: `health`, `projects`, `sync [ref]`, `clone <git-url>`,
 `shot [out.png]`.
 
 Run `flutter analyze` and `flutter test` locally on `claudecode` — it has the
-same pinned Flutter 3.47.0 and far more cores. Only the *running app* needs the
+same pinned Flutter 3.50.0 and far more cores. Only the *running app* needs the
 laptop.
 
 ## Screenshots are window-only, by construction

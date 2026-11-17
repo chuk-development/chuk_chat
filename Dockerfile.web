@@ -3,7 +3,7 @@
 # The base image holds the Flutter SDK, the web artifacts and a warm pub cache
 # (Dockerfile.web-base, published by .github/workflows/web-base-image.yml).
 # Bump FLUTTER_VERSION here only; the workflow builds the matching base tag.
-ARG FLUTTER_VERSION=3.47.0
+ARG FLUTTER_VERSION=3.50.0
 FROM ghcr.io/chuk-development/chuk-chat-web-base:${FLUTTER_VERSION} AS build
 
 WORKDIR /app
