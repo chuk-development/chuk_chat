@@ -263,6 +263,11 @@ BROWSER_ACT_TOOLS = frozenset(
         "browser_handle_dialog",
         "browser_evaluate",
         "browser_run_code",
+        # The name @playwright/mcp uses for it (0.0.80 and later). It runs any
+        # Playwright code, so it can click and type like the tools above.
+        "browser_run_code_unsafe",
+        # Drops files or data onto an element, like an upload.
+        "browser_drop",
         "browser_mouse_click_xy",
         "browser_mouse_drag_xy",
     }
@@ -636,6 +641,8 @@ _BROWSER_VERBS = {
     "browser_handle_dialog": "Answer a dialog",
     "browser_evaluate": "Run a script on the page",
     "browser_run_code": "Run a script on the page",
+    "browser_run_code_unsafe": "Run a script on the page",
+    "browser_drop": "Drop files onto",
     "browser_mouse_click_xy": "Click",
     "browser_mouse_drag_xy": "Drag",
     "browser_navigate": "Open",

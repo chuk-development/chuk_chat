@@ -44,7 +44,7 @@ FROM ${BASE_IMAGE}
 
 # Pinned like every other tool in the base image, so two builds install the same
 # Chromium. Playwright's revision is a function of its own version.
-ARG PLAYWRIGHT_VERSION=1.62.0
+ARG PLAYWRIGHT_VERSION=1.65.2
 
 # Outside the user's home so the browser is shared, readable by any uid the
 # entrypoint remaps `agents` to, and not lost when a home directory is remapped.
@@ -77,6 +77,9 @@ USER root
 RUN set -eux; \
     mkdir -p "${PLAYWRIGHT_BROWSERS_PATH}"; \
     apt-get update; \
+    # Playwright 1.65's bundled Node links against libatomic.so.1, which the
+    # base image does not have ("error while loading shared libraries").
+    apt-get install -y --no-install-recommends libatomic1; \
     uvx --from "playwright==${PLAYWRIGHT_VERSION}" playwright install chromium --with-deps --no-shell; \
     rm -rf /var/lib/apt/lists/* /root/.cache/uv; \
     chrome="$(find "${PLAYWRIGHT_BROWSERS_PATH}" -type f -name chrome -path '*chrome-linux*' | sort | tail -n 1)"; \
@@ -118,10 +121,10 @@ ENV ANONYMIZED_TELEMETRY=false \
 # Node.js — the runtime for the official Playwright MCP server (`@playwright/mcp`,
 # a Node package the agent drives over stdio, §9.1). It doubles as the general
 # JavaScript runtime in the box, the way Python is already here. NodeSource LTS
-# (22.x) rather than the older apt nodejs, so npm and node agree. (Node, not Bun:
+# (26.x) rather than the older apt nodejs, so npm and node agree. (Node, not Bun:
 # @playwright/mcp, playwright-core and the MCP SDK are built and tested against
 # Node; Bun buys only faster cold start, irrelevant for a long-lived server.)
-ARG NODE_MAJOR=22
+ARG NODE_MAJOR=26
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
@@ -140,7 +143,7 @@ RUN set -eux; \
 # cold `npx` download. Driven over stdio, headed by default → it renders to the
 # Xvfb display the user watches over VNC, using the single Chromium installed
 # above (via `--executable-path` in the seeded mcp.json). See §9.1.
-ARG PLAYWRIGHT_MCP_VERSION=0.0.80
+ARG PLAYWRIGHT_MCP_VERSION=0.0.85
 RUN set -eux; \
     npm install -g "@playwright/mcp@${PLAYWRIGHT_MCP_VERSION}"; \
     npm cache clean --force; \
@@ -192,8 +195,9 @@ RUN chmod 0755 /usr/local/bin/agents-browser-mcp /usr/local/bin/agents-vnc-up
 # when this number differs from the one on the box (only when nothing runs in
 # it). Bump it when browser-mcp.sh, vnc-up.sh or what the box needs at
 # creation (the GPU) changes. 1 = work area, GPU WebGL, fake media devices,
-# native Accept-Language (2026-10-29).
-LABEL dev.chuk.agents.browser-revision="1"
+# native Accept-Language (2026-10-29). 2 = --no-webmcp, @playwright/mcp 0.0.85
+# (2026-11-17).
+LABEL dev.chuk.agents.browser-revision="2"
 
 WORKDIR /workspace
 ENTRYPOINT ["/usr/local/bin/agents-entrypoint"]

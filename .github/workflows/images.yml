@@ -39,6 +39,12 @@ on:
   push:
     tags:
       - "image-v*"
+  # Weekly rebuild, so Chrome stable, Playwright and @playwright/mcp stay
+  # current without anyone bumping a pin (CHAT-126). A scheduled run builds
+  # with the newest Playwright and @playwright/mcp (step "Browser tools");
+  # manual and tag runs keep the pins in Dockerfile.browser.
+  schedule:
+    - cron: "17 4 * * 1"
 
 env:
   REGISTRY: ghcr.io
@@ -67,6 +73,21 @@ jobs:
           fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
+      - name: Browser tools
+        id: tools
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "schedule" ]; then
+            pw="$(curl -fsSL https://pypi.org/pypi/playwright/json | jq -r .info.version)"
+            mcp="$(npm view @playwright/mcp version)"
+            test -n "${pw}" && test -n "${mcp}"
+            {
+              echo "args<<EOF"
+              echo "PLAYWRIGHT_VERSION=${pw}"
+              echo "PLAYWRIGHT_MCP_VERSION=${mcp}"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            echo "playwright ${pw}, @playwright/mcp ${mcp}"
+          fi
       - uses: docker/setup-qemu-action@v3
         if: contains(inputs.platforms, 'arm64')
 
@@ -105,6 +126,7 @@ jobs:
           push: true
           build-args: |
             BASE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_NAME }}@${{ steps.base.outputs.digest }}
+            ${{ steps.tools.outputs.args }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.BROWSER_NAME }}:${{ steps.version.outputs.version }}
             ${{ env.REGISTRY }}/${{ env.BROWSER_NAME }}:latest
