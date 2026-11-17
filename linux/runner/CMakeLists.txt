@@ -20,6 +20,16 @@ apply_standard_settings(${BINARY_NAME})
 add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
 
 # Add dependency libraries. Add any application-specific dependencies here.
+# Flutter 3.50 workaround (flutter/flutter#196402): libflutter_linux_gtk.so
+# exports the _Unwind_* symbols of its own static libunwind. A C++ exception
+# that a plugin throws and catches itself then unwinds through that copy, no
+# handler is found and the app aborts ("terminate called after throwing").
+# flutter_secure_storage_linux does exactly that when there is no unlocked
+# keyring, so the app died right after sign-in on such machines. Linking
+# libgcc_s first puts its unwinder ahead of the engine's in the lookup order.
+# Remove once the engine hides those symbols again.
+target_link_options(${BINARY_NAME} PRIVATE
+  "LINKER:--push-state,--no-as-needed,-lgcc_s,--pop-state")
 target_link_libraries(${BINARY_NAME} PRIVATE flutter)
 target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GTK)
 
