@@ -462,6 +462,144 @@ void main() {
       await out.cancel();
     },
   );
+
+  group('a turn whose done was missed (app in the background) — CHAT-122', () {
+    /// Sends, has the host accept it, and makes the run older than the idle
+    /// header grace, as it is after minutes in the background.
+    Future<
+      ({
+        List<ChatStreamEvent> seen,
+        Future<void> Function() cancel,
+        bool Function() closedFn,
+      })
+    >
+    sentAndAway() async {
+      final out = send();
+      await _drain();
+      controller.emit(
+        AgentsRelayTaskAck(
+          taskId: controller.taskIds.single!,
+          status: 'accepted',
+          sessionKey: sessionKey,
+        ),
+      );
+      await _drain();
+      AgentsRunLedger.instance.runFor(sessionKey)!.startedAt = DateTime.now()
+          .subtract(const Duration(minutes: 5));
+      return out;
+    }
+
+    test(
+      'the replay after the idle header ends the turn with the answer',
+      () async {
+        final out = await sentAndAway();
+        controller.emit(
+          const AgentsRelayRunState(sessionKey: sessionKey, state: 'idle'),
+        );
+        await _drain();
+        // The idle header alone does not end it as lost: the answer follows.
+        expect(out.closedFn(), isFalse);
+        expect(AgentsRunLedger.instance.isRunning(sessionKey), isTrue);
+
+        controller.emit(const AgentsRelayUser('do the thing', mid: 7));
+        controller.emit(
+          const AgentsRelayDelta('First pass.', replay: true, mid: 8),
+        );
+        controller.emit(
+          const AgentsRelayDelta('Here is the answer.', replay: true, mid: 9),
+        );
+        controller.emit(
+          const AgentsRelayDone(
+            replay: true,
+            reason: 'replay',
+            sessionKey: sessionKey,
+          ),
+        );
+        await _drain();
+
+        final FinalContentEvent fin = out.seen
+            .whereType<FinalContentEvent>()
+            .single;
+        expect(fin.text, 'First pass.\n\nHere is the answer.');
+        expect(out.seen.whereType<ErrorEvent>(), isEmpty);
+        expect(out.seen.last, isA<DoneEvent>());
+        expect(out.closedFn(), isTrue);
+        final run = AgentsRunLedger.instance.runFor(sessionKey)!;
+        expect(run.running, isFalse);
+        expect(run.outcome, AgentsRunOutcome.answered);
+      },
+    );
+
+    test(
+      'a replay with no answer for the turn ends it with the lost line',
+      () async {
+        final out = await sentAndAway();
+        controller.emit(
+          const AgentsRelayRunState(sessionKey: sessionKey, state: 'idle'),
+        );
+        controller.emit(const AgentsRelayUser('do the thing', mid: 7));
+        controller.emit(
+          const AgentsRelayDone(
+            replay: true,
+            reason: 'replay',
+            sessionKey: sessionKey,
+          ),
+        );
+        await _drain();
+        final ErrorEvent error = out.seen.whereType<ErrorEvent>().single;
+        expect(error.message, agentsRunEndNotice(AgentsRunOutcome.lost));
+        // No retryable code: a retry would send the task a second time.
+        expect(error.code, isNull);
+        expect(out.closedFn(), isTrue);
+      },
+    );
+
+    test('another thread\'s replay does not end this turn', () async {
+      final out = await sentAndAway();
+      controller.emit(
+        const AgentsRelayRunState(sessionKey: 'other', state: 'idle'),
+      );
+      controller.emit(const AgentsRelayDelta('not mine', replay: true));
+      controller.emit(
+        const AgentsRelayDone(
+          replay: true,
+          reason: 'replay',
+          sessionKey: 'other',
+        ),
+      );
+      await _drain();
+      expect(out.seen, isEmpty);
+      expect(out.closedFn(), isFalse);
+      await out.cancel();
+    });
+
+    test('a run the ceiling gives up on ends the open stream', () async {
+      final out = await sentAndAway();
+      final AgentsRunLedger ledger = AgentsRunLedger.instance;
+      ledger.markLost(sessionKey);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await _drain();
+      final ErrorEvent error = out.seen.whereType<ErrorEvent>().single;
+      expect(error.message, agentsRunEndNotice(AgentsRunOutcome.lost));
+      expect(out.closedFn(), isTrue);
+    });
+
+    test('an answer the thread view saw ends the stream with it', () async {
+      final out = await sentAndAway();
+      AgentsRunLedger.instance.finish(
+        sessionKey,
+        finalAnswer: 'seen by the thread view',
+        reason: 'finished',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await _drain();
+      expect(
+        out.seen.whereType<FinalContentEvent>().single.text,
+        'seen by the thread view',
+      );
+      expect(out.closedFn(), isTrue);
+    });
+  });
 }
 
 /// Lets the adapter's internal handler chain settle.

@@ -249,6 +249,12 @@ class AgentsRun {
   /// True between [AgentsRunLedger.begin] and [AgentsRunLedger.finish].
   bool running = false;
 
+  /// True while a chat stream ([AgentsChatTransport]) is open on this run.
+  /// That stream ends the run itself when the host's idle header comes: it
+  /// reads the run's answer out of the replay that follows the header
+  /// (CHAT-122). [AgentsRunLedger.reconcileIdle] leaves such a run alone.
+  bool streamOpen = false;
+
   /// A host running header confirmed this turn; distinguishes it from a newly
   /// submitted local request racing an older replay's idle header.
   bool hostObserved = false;
@@ -1001,6 +1007,10 @@ class AgentsRunLedger extends ChangeNotifier {
   void reconcileIdle(String sessionKey) {
     final run = _runs[sessionKey];
     if (run == null || !run.running) return;
+    // CHAT-122: an open chat stream owns this run. Its answer is in the
+    // replay this header opens, and the stream ends the run with it. Ended
+    // here as `lost`, the stream stayed open and typed for ever.
+    if (run.streamOpen) return;
     if (!run.hostObserved &&
         DateTime.now().difference(run.startedAt) < idleHeaderGrace) {
       return;

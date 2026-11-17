@@ -110,6 +110,11 @@ class AgentsChatTransport {
   }
 
   /// Consumes the declared intent for [sessionKey], if it is still fresh.
+  /// How long an open turn waits for the replay that follows the host's idle
+  /// header before it ends with the "lost" line (CHAT-122).
+  @visibleForTesting
+  static Duration replayCatchUpTimeout = const Duration(seconds: 20);
+
   static bool _takeStopIntent(String sessionKey) {
     final at = _stopIntents.remove(sessionKey);
     if (at == null) return false;
@@ -244,9 +249,49 @@ class AgentsChatTransport {
       ledger.removeListener(watch);
     }
 
+    /// The ledger's run of this stream, from [out.onListen] on.
+    AgentsRun? ownRun;
+
+    // CHAT-122: the run ended while this stream was not listening (the app
+    // was in the background, the socket died), so its `done` never came
+    // here. The host's idle header says so, and the replay it opens carries
+    // the answer: these collect it, one entry per pass, as the replay loader
+    // folds the same rows into one answer row.
+    var catchingUp = false;
+    var replayIsMine = false;
+    final List<String> replayPasses = <String>[];
+    String? replayLastUser;
+    Timer? catchUpTimer;
+
     void closeOut() {
       stopWatchingLedger();
+      catchUpTimer?.cancel();
+      catchUpTimer = null;
+      ownRun?.streamOpen = false;
       if (!out.isClosed) unawaited(out.close());
+    }
+
+    /// Ends the turn without an answer, with the run's one quiet line. No
+    /// code: none of the retryable codes applies, and a retry would send the
+    /// task to the host a second time.
+    void endWithNotice(AgentsRunOutcome outcome, {String? error}) {
+      if (terminated) return;
+      terminated = true;
+      final run = ledger.runFor(ledgerKey);
+      if (run != null && identical(run, ownRun) && run.running) {
+        ownRun?.streamOpen = false;
+        ledger.finish(ledgerKey, reason: 'lost');
+        run.outcome = outcome;
+      }
+      emit(
+        ErrorEvent(
+          agentsRunEndNotice(outcome, error: error) ??
+              agentsRunEndNotice(AgentsRunOutcome.lost) ??
+              '',
+        ),
+      );
+      emit(const DoneEvent());
+      closeOut();
     }
 
     /// Ends the run: `done` on the wire, ledger closed, stream closed.
@@ -371,8 +416,100 @@ class AgentsChatTransport {
       if (overBudget) AgentsBudgetOverride.disarm(sessionKey);
     }
 
+    /// CHAT-122: the host's idle header for this thread, and the replay rows
+    /// after it while this stream is open. Returns true for a frame it used
+    /// up. The replay loader still sees every one of them: it listens on its
+    /// own.
+    bool catchUpFrame(AgentsRelayInbound event) {
+      switch (event) {
+        case AgentsRelayRunState():
+          replayIsMine = event.sessionKey == sessionKey;
+          replayPasses.clear();
+          replayLastUser = null;
+          if (!replayIsMine) return false;
+          if (event.isRunning) {
+            // The host is still on it: the live frames go on as before.
+            catchingUp = false;
+            catchUpTimer?.cancel();
+            catchUpTimer = null;
+            return false;
+          }
+          final AgentsRun? run = ownRun;
+          // The same race [AgentsRunLedger.reconcileIdle] waits out: a
+          // header computed before this task reached the host.
+          final bool fresh =
+              run == null ||
+              (!run.hostObserved &&
+                  DateTime.now().difference(run.startedAt) <
+                      AgentsRunLedger.idleHeaderGrace);
+          if (!catchingUp && !fresh) {
+            catchingUp = true;
+            // A replay that never closes still must not type for ever.
+            catchUpTimer = Timer(replayCatchUpTimeout, () {
+              chain = chain.then((_) {
+                if (terminated) return;
+                endWithNotice(AgentsRunOutcome.lost);
+              });
+            });
+          }
+          return false;
+        case AgentsRelayUser(:final replay, :final text)
+            when catchingUp && replayIsMine:
+          if (replay) {
+            replayPasses.clear();
+            replayLastUser = text;
+          }
+          return true;
+        case AgentsRelayMessage(:final replay) when catchingUp && replayIsMine:
+          // A note is its own bubble; the answer is what comes after it.
+          if (replay) replayPasses.clear();
+          return replay;
+        case AgentsRelayDelta(:final replay, :final text)
+            when catchingUp && replayIsMine:
+          if (!replay) return false;
+          if (text.trim().isNotEmpty) replayPasses.add(text);
+          return true;
+        case AgentsRelayDone(:final replay) when catchingUp && replayIsMine:
+          if (!replay) return false;
+          if (event.sessionKey != null && event.sessionKey != sessionKey) {
+            return true;
+          }
+          replayIsMine = false;
+          // An older page of a paged replay: the answer is on the newest.
+          if (event.pageBeforeId != null) return true;
+          final String answer = joinReplayPasses(replayPasses);
+          replayPasses.clear();
+          final String? lastUser = replayLastUser;
+          replayLastUser = null;
+          if (lastUser != null && lastUser.trim() != message.trim()) {
+            // The newest turn the host has is another question: this one's
+            // answer is not in it. The timer decides.
+            return true;
+          }
+          if (answer.isEmpty) {
+            // The host has nothing for this turn: say so, once.
+            endWithNotice(AgentsRunOutcome.lost);
+            return true;
+          }
+          if (ledger.runFor(ledgerKey) == null ||
+              !identical(ledger.runFor(ledgerKey), ownRun)) {
+            // The ledger moved on to another run; end only the stream.
+            terminated = true;
+            emit(FinalContentEvent(answer));
+            emit(const DoneEvent());
+            closeOut();
+            return true;
+          }
+          endRun(finalAnswer: answer, reason: 'finished');
+          return true;
+        default:
+          return false;
+      }
+    }
+
     Future<void> handle(AgentsRelayInbound event) async {
       if (terminated) return;
+      if (catchUpFrame(event)) return;
       // The replay loader owns history. A replayed frame must never enter a
       // live run's stream: it would append yesterday's answer to today's.
       if (_isReplay(event)) return;
@@ -746,6 +883,7 @@ class AgentsChatTransport {
 
     out.onListen = () {
       final AgentsRun thisRun = ledger.begin(ledgerKey);
+      ownRun = thisRun..streamOpen = true;
       // The ledger can end this run with no frame from the host: the task got
       // no `task_ack` in three ack windows, so it never arrived
       // ([AgentsRunOutcome.notDelivered]). Nothing then reaches [handle], and
@@ -756,8 +894,39 @@ class AgentsChatTransport {
         if (terminated || out.isClosed) return;
         final AgentsRun? run = ledger.runFor(ledgerKey);
         if (!identical(run, thisRun)) return;
-        if (thisRun.running ||
-            thisRun.outcome != AgentsRunOutcome.notDelivered) {
+        if (thisRun.running) return;
+        final AgentsRunOutcome? outcome = thisRun.outcome;
+        if (outcome != AgentsRunOutcome.notDelivered) {
+          // CHAT-122: the run ended somewhere else (the thread view saw the
+          // terminal, the ceiling gave up on it). Looked at after a short
+          // timer and then behind the frames already queued: the same
+          // `done` may still be on its way into this stream's own chain, and
+          // that one, with its cursor and its meta, wins.
+          Timer(const Duration(milliseconds: 50), () {
+            chain = chain.then((_) {
+              if (terminated || out.isClosed) return;
+              final String? answer = thisRun.finalAnswer;
+              if (answer != null && answer.trim().isNotEmpty) {
+                terminated = true;
+                emit(FinalContentEvent(answer));
+                emit(const DoneEvent());
+                closeOut();
+                return;
+              }
+              if (catchingUp) return; // the replay brings the answer
+              if (outcome == AgentsRunOutcome.answered) {
+                // Answered with the text it streamed into this turn.
+                terminated = true;
+                emit(const DoneEvent());
+                closeOut();
+                return;
+              }
+              endWithNotice(
+                outcome ?? AgentsRunOutcome.lost,
+                error: thisRun.error,
+              );
+            });
+          });
           return;
         }
         terminated = true;
@@ -961,6 +1130,28 @@ class AgentsChatTransport {
     }
     return exit != null ? ' ✓ exit $exit\n' : ' ✓ done\n';
   }
+}
+
+/// The answer text of one turn from its replayed passes, joined the way the
+/// replay loader joins them into one row, so the turn this stream finalizes
+/// and the row the replay writes are the same text (CHAT-122).
+@visibleForTesting
+String joinReplayPasses(List<String> passes) {
+  final StringBuffer out = StringBuffer();
+  for (final String pass in passes) {
+    if (pass.trim().isEmpty) continue;
+    if (out.isEmpty) {
+      out.write(pass);
+      continue;
+    }
+    final String prior = out.toString().trimRight();
+    out
+      ..clear()
+      ..write(prior)
+      ..write(agentsPassBreak)
+      ..write(pass.trimLeft());
+  }
+  return out.toString().trim().isEmpty ? '' : out.toString();
 }
 
 /// The value a failed [AgentsPendingTasks.record] falls back to.

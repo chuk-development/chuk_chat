@@ -2157,6 +2157,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       if (run.reason == kAgentsQueuedReason) return;
       final notice = agentsRunEndNotice(outcome, error: run.error);
       if (notice == null) return;
+      // An open chat stream ends its own turn with this line (CHAT-122);
+      // writing it here as well would put it in the thread twice.
+      if (StreamingManager().isStreaming(key)) return;
       // Appended to what is on disk. If the imported screen saves the turn it
       // was drawing a moment later, its save wins and the line is simply not
       // there — the host's own copy of it comes back with the next replay,
