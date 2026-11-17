@@ -6,9 +6,9 @@
 // a stream completes while chuk's root wrapper reported the app as
 // backgrounded. Agents keeps the signatures and routes them into its own
 // notification layer (services/notifications/**, WS-7): one plugin, one
-// channel, one toast per thread. Answer text goes into a toast only when the
-// user turned on "Show answer preview in notifications" (default off); the
-// preview is then made on the device.
+// channel, one toast per thread. Answer text goes into a toast unless the
+// user turned off "Show answer preview in notifications" (default on); the
+// preview is made on the device.
 
 import 'package:flutter/material.dart';
 
@@ -31,8 +31,8 @@ class NotificationService {
   static Future<bool> requestPermissions() => requestPermission();
 
   /// chuk's completion toast: the chat's title, and a short preview of the
-  /// answer (built on this device) only when the user turned the preview
-  /// setting on ([LocalNotifications.showAnswerPreviewKey], default off).
+  /// answer (built on this device) unless the user turned the preview
+  /// setting off ([LocalNotifications.showAnswerPreviewKey], default on).
   ///
   /// Not for an Agents thread: its toast comes from the thread view's live
   /// `done` ([AgentsNotifications.onLiveDone]), which knows the agent's

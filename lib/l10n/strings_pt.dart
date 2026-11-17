@@ -76,6 +76,9 @@ const Map<String, String> stringsPt = {
       'Mostrar prévia da resposta nas notificações',
   'notificationAnswerPreviewSubtitle':
       'Mostra o início da resposta na notificação. Desativado: a notificação só diz quem terminou.',
+  'notificationPushUnavailable': 'Sem push neste telefone',
+  'notificationPushUnavailableSubtitle':
+      'Este telefone não tem os serviços do Google Play. Para receber notificações com o app fechado, instale um distribuidor UnifiedPush como o ntfy e abra o app de novo.',
   'titleGenerationPrompt': 'Prompt de Geração de Título',
   'usingCustomPrompt': 'Usando prompt personalizado',
   'usingDefaultPrompt': 'Usando prompt padrão',

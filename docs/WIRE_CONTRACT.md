@@ -2392,6 +2392,24 @@ in this session are skipped). Host: `chuk_agents_host/coworker_names.py`
 executor's `on_agent_frame`; payload helpers `agent_create_payload`,
 `agent_rename_payload`, `agent_list_request_payload`, `agent_list_payload`.
 
+### Agent avatar (CHAT-128)
+
+Additive. App -> host, sealed:
+
+```json
+{"type": "agent_avatar_set", "agent_id": "local:...", "png_b64": "<PNG, at most 128 KB>"}
+```
+
+Sent only to a host that names `agent_avatar` in `host_route.capabilities`.
+The host checks the PNG signature and the size, and keeps the file as
+`<workspace>/avatars/<agent_id>.png` (`:` becomes `_`). The desktop toast of
+the host uses it as its icon. The answer is one terminal frame:
+`{"type": "agent_avatar", "agent_id": "...", "ok": true}`, or `"ok": false`
+and an `error`. The app sends it when an agent is created, renamed or gets a
+new photo, and once per agent after pairing. Contract:
+`docs/agents/NOTIFICATIONS.md`. Host: `chuk_agents_host/avatars.py`, through
+the executor's `on_agent_frame` hook.
+
 ## Agent templates (bead chuk_chat-dsh0)
 
 Host and app side IMPLEMENTED 2026-10-05 (`_createOnHost` in

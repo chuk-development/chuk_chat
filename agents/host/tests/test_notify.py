@@ -361,3 +361,141 @@ def test_a_dead_connector_sign_in_sends_one_named_notice(tmp_path):
     assert row["run_id"] == "mcp-auth:" + "g" * 32
     # No reason, no token, no URL in the push.
     assert "invalid_grant" not in json.dumps(row)
+
+
+# -- answer preview, sealed per pairing, avatar icon (docs/agents/NOTIFICATIONS.md)
+
+
+def _trust(channel_id: str, key: bytes):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(channel_id=channel_id, channel_key=key)
+
+
+def test_the_row_carries_the_preview_only_sealed_per_pairing(tmp_path):
+    from chuk_agents_host.push_preview import open_preview
+
+    cloud = _Cloud()
+    key_a, key_b = bytes(range(32)), bytes(32)
+    toasts: list[tuple] = []
+
+    class _Desktop:
+        def notify(self, title, body, *, icon=None):
+            toasts.append((title, body, icon))
+            return True
+
+    notifier = SupabaseNotifier(
+        session_provider=lambda: _session(cloud),
+        user_id_provider=lambda: "user-1",
+        agent_provider=lambda: ("agent-1", "ivory-lynx"),
+        db_path=str(tmp_path / "state.db"),
+        desktop=_Desktop(),
+        http_client=httpx.Client(transport=httpx.MockTransport(cloud.handler)),
+        background=False, ntfy_topic="", webhook_url="",
+        trusts_provider=lambda: [_trust("ch-a", key_a), _trust("ch-b", key_b)],
+        agent_id_for=lambda key: "local:" + key,
+        avatar_for=lambda agent_id: f"/ws/avatars/{agent_id.replace(':', '_')}.png",
+    )
+    summary = _finished_run(tmp_path)
+    summary["final_answer"] = "## Done\nThe **total** is 210."
+    notifier.notify_run_finished(summary)
+
+    row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
+    # The readable columns stay generic.
+    assert row["body"] == "The answer is ready. Open the app to read it."
+    assert "total" not in row["title"] + row["body"]
+    assert sorted(row["preview_sealed"]) == ["ch-a", "ch-b"]
+    for channel_id, key in (("ch-a", key_a), ("ch-b", key_b)):
+        opened = json.loads(open_preview(key, row["preview_sealed"][channel_id]))
+        assert opened == {
+            "v": 1, "title": row["title"], "body": "Done The total is 210.",
+            "agent_id": "local:thread-1", "session_key": "thread-1", "run_id": "run-1",
+        }
+    # The local toast shows the preview with the agent's avatar.
+    assert toasts == [(row["title"], "Done The total is 210.", "/ws/avatars/local_thread-1.png")]
+
+
+def test_no_pairing_means_no_sealed_column(tmp_path):
+    cloud = _Cloud()
+    notifier = _notifier(tmp_path, cloud, _session(cloud))
+    notifier.notify_run_finished(_finished_run(tmp_path))
+    assert "preview_sealed" not in cloud.bodies("/rest/v1/cowork_run_notifications")[0]
+
+
+def test_keyless_sinks_get_the_generic_text_never_the_preview(tmp_path):
+    cloud = _Cloud()
+    sink_requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host in ("ntfy.sh", "hook.example"):
+            sink_requests.append(request)
+            return httpx.Response(200)
+        return cloud.handler(request)
+
+    notifier = SupabaseNotifier(
+        session_provider=lambda: _session(cloud),
+        user_id_provider=lambda: "user-1",
+        agent_provider=lambda: ("agent-1", "Ada"),
+        db_path=str(tmp_path / "state.db"),
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+        background=False, ntfy_topic="topic", webhook_url="https://hook.example/x",
+        trusts_provider=lambda: [_trust("ch-a", bytes(32))],
+    )
+    notifier.notify_run_finished(_finished_run(tmp_path))
+    assert len(sink_requests) == 2
+    for request in sink_requests:
+        assert b"210" not in request.content
+    assert sink_requests[0].content == b"The answer is ready. Open the app to read it."
+
+
+def test_a_missing_preview_column_still_sends_the_push(tmp_path):
+    """The host can run before the migration: PostgREST refuses the unknown
+    column, the host sends the row again without it."""
+    cloud = _Cloud()
+    original = cloud.handler
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/rest/v1/cowork_run_notifications") and b"preview_sealed" in request.content:
+            cloud.requests.append(request)
+            return httpx.Response(
+                400, json={"code": "PGRST204", "message": "Could not find the 'preview_sealed' column"}
+            )
+        return original(request)
+
+    notifier = SupabaseNotifier(
+        session_provider=lambda: _session(cloud),
+        user_id_provider=lambda: "user-1",
+        agent_provider=lambda: ("agent-1", "Ada"),
+        db_path=str(tmp_path / "state.db"),
+        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+        background=False, ntfy_topic="", webhook_url="",
+        trusts_provider=lambda: [_trust("ch-a", bytes(32))],
+    )
+    notifier.notify_run_finished(_finished_run(tmp_path))
+    assert notifier.delivered == 1
+    rows = cloud.bodies("/rest/v1/cowork_run_notifications")
+    assert "preview_sealed" in rows[0] and "preview_sealed" not in rows[1]
+
+
+def test_the_desktop_only_path_shows_the_preview_once(tmp_path):
+    cloud = _Cloud()
+    calls, runner = [], lambda argv: calls.append(list(argv))
+    desktop = DesktopNotifier(runner=runner, enabled=True, system="Linux", which=lambda n: "/x", background=False)
+    notifier = SupabaseNotifier(
+        session_provider=lambda: _session(cloud),
+        user_id_provider=lambda: "user-1",
+        agent_provider=lambda: ("agent-1", "Ada"),
+        db_path=str(tmp_path / "state.db"),
+        desktop=desktop,
+        http_client=httpx.Client(transport=httpx.MockTransport(cloud.handler)),
+        background=False, ntfy_topic="", webhook_url="",
+        avatar_for=lambda agent_id: "/ws/avatars/a.png",
+    )
+    summary = _finished_run(tmp_path)
+    assert notifier.notify_desktop_only(summary) is True
+    assert notifier.notify_desktop_only(summary) is False
+    assert len(calls) == 1
+    assert calls[0][-1] == "the total is 210"
+    assert "--icon=/ws/avatars/a.png" in calls[0]
+    # No cloud row: the app is attached.
+    assert cloud.requests == []

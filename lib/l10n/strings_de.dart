@@ -158,6 +158,9 @@ const Map<String, String> stringsDe = {
       'Antwortvorschau in Benachrichtigungen',
   'notificationAnswerPreviewSubtitle':
       'Zeigt den Anfang der Antwort in der Benachrichtigung. Aus: Die Benachrichtigung sagt nur, wer fertig ist.',
+  'notificationPushUnavailable': 'Kein Push auf diesem Telefon',
+  'notificationPushUnavailableSubtitle':
+      'Dieses Telefon hat keine Google-Play-Dienste. Für Benachrichtigungen bei geschlossener App installiere einen UnifiedPush-Verteiler wie ntfy und öffne die App dann erneut.',
   'titleGenerationPrompt': 'Titelgenerierungs-Prompt',
   'usingCustomPrompt': 'Benutzerdefinierter Prompt aktiv',
   'usingDefaultPrompt': 'Standard-Prompt aktiv',

@@ -153,6 +153,9 @@ const Map<String, String> stringsEn = {
       'Show answer preview in notifications',
   'notificationAnswerPreviewSubtitle':
       'Puts the start of the answer in the notification. Off: the notification only says who is done.',
+  'notificationPushUnavailable': 'No push on this phone',
+  'notificationPushUnavailableSubtitle':
+      'This phone has no Google Play services. To get notifications when the app is closed, install a UnifiedPush distributor such as ntfy, then open the app again.',
   'titleGenerationPrompt': 'Title Generation Prompt',
   'usingCustomPrompt': 'Using custom prompt',
   'usingDefaultPrompt': 'Using default prompt',

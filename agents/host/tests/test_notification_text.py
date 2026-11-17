@@ -141,3 +141,39 @@ def test_a_blocked_goal_says_the_agent_needs_you():
     assert title == "Ada needs you" and "goal is blocked" in body
     assert "review the plan" in approval_text(labels, action_class="plan_review")[1]
     assert "answer a question" in approval_text(labels, action_class="ask_user")[1]
+
+
+# -- the answer preview (docs/agents/NOTIFICATIONS.md, rule 2) -----------------
+
+
+def test_a_completed_run_shows_the_answer_preview():
+    from chuk_agents_host.notification_text import answer_preview
+
+    answer = "# Result\n\nThe **total** is `210`.\nSee [the doc](https://x.y/z) and _this_."
+    title, body = completion_text(RunLabels(coworker="Nova"), answer=answer)
+    assert title == "Nova"
+    assert body == "Result The total is 210. See the doc and this."
+    assert answer_preview("```python\nprint(1)\n```\n> quoted") == "print(1) quoted"
+    # snake_case keeps its underscore.
+    assert answer_preview("set file_name now") == "set file_name now"
+
+
+def test_a_long_preview_is_clipped_to_300_characters():
+    from chuk_agents_host.notification_text import answer_preview
+
+    preview = answer_preview("word " * 200)
+    assert len(preview) == 300 and preview.endswith("…")
+
+
+def test_no_answer_text_keeps_the_generic_sentence():
+    _, body = completion_text(RunLabels(coworker="Nova"), answer="  **  ")
+    assert body == "The answer is ready. Open the app to read it."
+    _, body = completion_text(RunLabels(coworker="Nova"), answer=None)
+    assert body == "The answer is ready. Open the app to read it."
+
+
+def test_failed_and_blocked_runs_keep_their_sentence_even_with_an_answer():
+    _, failed = completion_text(RunLabels(coworker="Nova"), failed=True, answer="partial")
+    assert failed == "The run did not finish. Open the app to see what happened."
+    _, blocked = completion_text(RunLabels(coworker="Nova"), goal_blocked=True, answer="x")
+    assert blocked.startswith("The goal is blocked.")

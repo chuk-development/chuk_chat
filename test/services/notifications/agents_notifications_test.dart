@@ -6,7 +6,8 @@ import 'package:chuk_chat/services/notifications/agents_notifications.dart';
 import 'package:chuk_chat/services/notifications/local_notifications.dart';
 import 'package:chuk_chat/services/notifications/run_notifications.dart';
 
-import 'local_notifications_test.dart' show FakeBackend;
+import 'local_notifications_test.dart'
+    show FakeBackend, defaultAvatarPathForTest;
 
 void main() {
   late FakeBackend backend;
@@ -14,6 +15,8 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    LocalNotifications.avatarPath = (String agentId, String name) async =>
+        '/avatars/$agentId.png';
     AgentsNotifications.instance.reset();
     LocalNotifications.instance.reset();
     backend = FakeBackend();
@@ -41,6 +44,7 @@ void main() {
   });
 
   tearDown(() {
+    LocalNotifications.avatarPath = defaultAvatarPathForTest;
     RunNotifications.instance.configure();
     AgentsNotifications.instance.reset();
     LocalNotifications.instance.reset();
@@ -53,43 +57,40 @@ void main() {
   });
 
   test(
-    'attached + background: a live done toasts once, says who is done',
+    'attached + background: a live done toasts once, titled with the agent',
     () async {
       AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
       await AgentsNotifications.instance.onLiveDone('t1', runId: 'run-1');
       expect(backend.shown, hasLength(1));
-      expect(backend.shown.single['title'], 'Agent t1 is done');
+      expect(backend.shown.single['title'], 'Agent t1');
       expect(backend.shown.single['body'], 'Your answer is ready.');
       expect(backend.shown.single['tag'], 't1');
     },
   );
 
-  test(
-    'preview setting off (default): the answer stays out of the toast',
-    () async {
-      AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
-      await AgentsNotifications.instance.onLiveDone(
-        't1',
-        runId: 'run-1',
-        answer: 'Geheime Zahl: 4711',
-      );
-      expect(backend.shown.single['title'], 'Agent t1 is done');
-      expect(backend.shown.single['body'], 'Your answer is ready.');
-      expect(backend.shown.single['body'], isNot(contains('4711')));
-    },
-  );
+  test('preview setting off: the answer stays out of the toast', () async {
+    await LocalNotifications.setAnswerPreviewEnabled(false);
+    AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
+    await AgentsNotifications.instance.onLiveDone(
+      't1',
+      runId: 'run-1',
+      answer: 'Geheime Zahl: 4711',
+    );
+    expect(backend.shown.single['title'], 'Agent t1');
+    expect(backend.shown.single['body'], 'Your answer is ready.');
+    expect(backend.shown.single['body'], isNot(contains('4711')));
+  });
 
   test(
-    'preview setting on: the toast previews the answer, cleaned and short',
+    'preview setting on (default): the toast previews the answer, cleaned',
     () async {
-      await LocalNotifications.setAnswerPreviewEnabled(true);
       AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
       await AgentsNotifications.instance.onLiveDone(
         't1',
         runId: 'run-1',
         answer: '## Ergebnis\n\n**Drei** Anbieter gefunden:\n- A\n- B',
       );
-      expect(backend.shown.single['title'], 'Agent t1 is done');
+      expect(backend.shown.single['title'], 'Agent t1');
       expect(
         backend.shown.single['body'],
         'Ergebnis Drei Anbieter gefunden: A B',
@@ -97,11 +98,37 @@ void main() {
     },
   );
 
-  test('a stopped run says so', () async {
+  test('a stopped run keeps its plain sentence, no answer text', () async {
     AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
-    await AgentsNotifications.instance.onLiveDone('t1', stopped: true);
-    expect(backend.shown.single['title'], 'Agent t1 stopped');
+    await AgentsNotifications.instance.onLiveDone(
+      't1',
+      stopped: true,
+      answer: 'partial secret',
+    );
+    expect(backend.shown.single['title'], 'Agent t1');
     expect(backend.shown.single['body'], 'Open the chat to see what happened.');
+  });
+
+  test('the agent that owns the thread gives the toast its face', () async {
+    AgentsNotifications.instance.threadAgentId = (String key) => 'agent-$key';
+    AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
+    await AgentsNotifications.instance.onLiveDone('t1');
+    expect(backend.shown.single['icon'], '/avatars/agent-t1.png');
+  });
+
+  test('no agent for the thread: the app logo (no icon path)', () async {
+    AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
+    await AgentsNotifications.instance.onLiveDone('t1');
+    expect(backend.shown.single['icon'], isNull);
+  });
+
+  test('a thread is visible only in front and on screen', () {
+    AgentsNotifications.instance.threadOnScreen = (String key) => key == 't1';
+    AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.resumed;
+    expect(AgentsNotifications.instance.isThreadVisible('t1'), isTrue);
+    expect(AgentsNotifications.instance.isThreadVisible('t2'), isFalse);
+    AgentsNotifications.instance.lifecycleOverride = AppLifecycleState.paused;
+    expect(AgentsNotifications.instance.isThreadVisible('t1'), isFalse);
   });
 
   test('hidden and inactive count as background', () async {
@@ -112,20 +139,22 @@ void main() {
     expect(backend.shown.map((m) => m['tag']), <String>['t1', 't2']);
   });
 
-  test('a replayed while_away answer consumes the row and clears the toast',
-      () async {
-    await AgentsNotifications.instance.onAnswerReplayed('t3');
-    expect(consumed, <Map<String, String?>>[
-      <String, String?>{'user': 'user-1', 'session': 't3', 'run': null},
-    ]);
-    expect(backend.cancelled, <(int, String)>[
-      (LocalNotifications.idFor('t3'), 't3'),
-    ]);
+  test(
+    'a replayed while_away answer consumes the row and clears the toast',
+    () async {
+      await AgentsNotifications.instance.onAnswerReplayed('t3');
+      expect(consumed, <Map<String, String?>>[
+        <String, String?>{'user': 'user-1', 'session': 't3', 'run': null},
+      ]);
+      expect(backend.cancelled, <(int, String)>[
+        (LocalNotifications.idFor('t3'), 't3'),
+      ]);
 
-    // Idempotent per launch: a second replay does not PATCH again.
-    await AgentsNotifications.instance.onAnswerReplayed('t3');
-    expect(consumed, hasLength(1));
-  });
+      // Idempotent per launch: a second replay does not PATCH again.
+      await AgentsNotifications.instance.onAnswerReplayed('t3');
+      expect(consumed, hasLength(1));
+    },
+  );
 
   test('a second run for the same agent is consumed too; the same run only '
       'once (F7)', () async {

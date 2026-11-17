@@ -17,13 +17,15 @@ This module owns both halves of that:
   best-effort: a missing table or a stale id degrades to the generic label, and
   never to the codename.
 
-The text still carries NO answer content, which is the P7 rule that made these
-notifications generic in the first place. What changed is only that "generic"
-no longer means "meaningless".
+A completed run shows the start of its answer (docs/agents/NOTIFICATIONS.md,
+CHAT-128): :func:`answer_preview` makes it. A local toast shows it as plain
+text. A push through the cloud carries it only sealed (``notify.py``); its
+readable row keeps :data:`GENERIC_COMPLETION_BODY`.
 """
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +38,46 @@ DEFAULT_COWORKER = "Your agent"
 
 #: An automation name is user-typed; a notification line is one line.
 MAX_LABEL_LEN = 60
+
+#: The longest answer preview (docs/agents/NOTIFICATIONS.md, rule 2).
+MAX_PREVIEW_LEN = 300
+
+#: The body of a completed run when there is no answer text to show, and the
+#: readable body of every cloud row (the sealed preview carries the text).
+GENERIC_COMPLETION_BODY = "The answer is ready. Open the app to read it."
+
+_FENCE = re.compile(r"^[ \t]*(```|~~~)[^\n]*$", re.MULTILINE)
+_IMAGE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
+_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+_HEADING = re.compile(r"^[ \t]*#+[ \t]*", re.MULTILINE)
+_QUOTE = re.compile(r"^[ \t]*>+[ \t]?", re.MULTILINE)
+# ``_`` is emphasis only at a word edge: ``snake_case`` keeps its underscore.
+_UNDERSCORE = re.compile(r"(?<![A-Za-z0-9])_+|_+(?![A-Za-z0-9])")
+_SPACE = re.compile(r"\s+")
+
+
+def answer_preview(text: object, *, limit: int = MAX_PREVIEW_LEN) -> str | None:
+    """The answer as one plain line for a notification body.
+
+    Markdown is removed: code fences, ``#`` headings, ``>`` quotes, ``*``,
+    ``_`` emphasis, backticks, and link syntax (``[t](u)`` becomes ``t``).
+    Whitespace becomes single spaces. A longer text is clipped to ``limit``
+    characters and ends with ``…``. Returns None when no text is left."""
+    if not isinstance(text, str):
+        return None
+    out = _FENCE.sub(" ", text)
+    out = _IMAGE.sub(r"\1", out)
+    out = _LINK.sub(r"\1", out)
+    out = _HEADING.sub("", out)
+    out = _QUOTE.sub("", out)
+    out = out.replace("`", "").replace("*", "")
+    out = _UNDERSCORE.sub("", out)
+    out = _SPACE.sub(" ", out).strip()
+    if not out:
+        return None
+    if len(out) > limit:
+        out = out[: limit - 1].rstrip() + "…"
+    return out
 
 
 @dataclass(frozen=True)
@@ -67,17 +109,25 @@ class RunLabels:
 
 
 def completion_text(
-    labels: RunLabels, *, failed: bool = False, goal_blocked: bool = False
+    labels: RunLabels,
+    *,
+    failed: bool = False,
+    goal_blocked: bool = False,
+    answer: str | None = None,
 ) -> tuple[str, str]:
     """Title and body for a run that ended. The body says what happened; it
     never asks the user to finish something the host already finished.
     ``goal_blocked`` (docs/WIRE_CONTRACT.md, "Goal mode"): the run ended a
-    goal as blocked, so the user must act."""
+    goal as blocked, so the user must act.
+
+    A completed run shows the preview of ``answer`` (:func:`answer_preview`).
+    With no answer text, the body is :data:`GENERIC_COMPLETION_BODY`. A
+    failed or blocked run keeps its sentence."""
     if goal_blocked:
         return (f"{labels.who} needs you", "The goal is blocked. Open the app to see what it needs.")
     if failed:
         return (labels.headline, "The run did not finish. Open the app to see what happened.")
-    return (labels.headline, "The answer is ready. Open the app to read it.")
+    return (labels.headline, answer_preview(answer) or GENERIC_COMPLETION_BODY)
 
 
 #: The body of an approval push per action class (docs/WIRE_CONTRACT.md,

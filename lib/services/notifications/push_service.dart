@@ -1,9 +1,18 @@
-/// Push registration: FCM token ↔ `cowork_device_tokens`.
+/// Push registration: FCM token (or UnifiedPush endpoint) ↔
+/// `cowork_device_tokens`.
 ///
 /// The host never talks to FCM. It writes a row, the Edge Function
-/// `notify-run` reads this app's token rows and pushes a generic
-/// "answer ready" (no content) to every device of the user. This service
-/// keeps the token row true:
+/// `notify-run` reads this app's token rows and pushes to every device of
+/// the user: generic text plus the sealed answer preview
+/// (docs/agents/NOTIFICATIONS.md). The push is data-only on Android, so the
+/// app shows the toast itself ([PushPresenter]): in the background isolate
+/// ([agentsPushBackgroundHandler]) and in the foreground (`onMessage`).
+///
+/// Android without Google Play: FCM gives no token, so the service uses
+/// UnifiedPush ([UnifiedPushTransport]) when a distributor is installed.
+/// Neither: no push, and [PushService.channel] says so for the settings.
+///
+/// This service keeps the token row true:
 ///
 ///  * signed in → upsert `{user_id, device_id, token, platform}`;
 ///  * `onTokenRefresh` → upsert again;
@@ -21,6 +30,7 @@
 library;
 
 import 'dart:async';
+import 'dart:ui' show DartPluginRegistrant;
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -29,7 +39,10 @@ import 'package:supabase_flutter/supabase_flutter.dart'
     show AuthChangeEvent, AuthState;
 
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/notifications/agents_notifications.dart';
 import 'package:chuk_chat/services/notifications/notification_router.dart';
+import 'package:chuk_chat/services/notifications/push_presenter.dart';
+import 'package:chuk_chat/services/notifications/unified_push_transport.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// A push message as the service sees it: only the `data` map matters.
@@ -74,10 +87,34 @@ abstract class DeviceTokenStore {
   Future<void> delete({required String userId, required String deviceId});
 }
 
+/// Which push channel this install uses.
+enum PushChannel {
+  /// Not decided yet (start has not finished).
+  unknown,
+
+  /// Firebase Cloud Messaging.
+  fcm,
+
+  /// A UnifiedPush distributor (Android without Google Play).
+  unifiedPush,
+
+  /// No push on this platform (desktop, web): nothing to explain.
+  notSupported,
+
+  /// An Android phone with no FCM and no UnifiedPush distributor. The
+  /// settings tell the user how to get push.
+  unavailable,
+}
+
 class PushService {
   PushService._();
 
   static final PushService instance = PushService._();
+
+  /// The channel in use. The settings page reads it.
+  final ValueNotifier<PushChannel> channel = ValueNotifier<PushChannel>(
+    PushChannel.unknown,
+  );
 
   PushTransport? _transport;
   DeviceTokenStore? _store;
@@ -108,7 +145,7 @@ class PushService {
     String? platform,
   }) async {
     if (_started) return;
-    final PushTransport t = transport ?? FirebasePushTransport();
+    PushTransport t = transport ?? FirebasePushTransport();
     bool available;
     try {
       available = await t.initialize();
@@ -116,12 +153,46 @@ class PushService {
       if (kDebugMode) debugPrint('[PushService] unavailable: $error');
       available = false;
     }
-    if (!available) return;
+    // Default transports only: an Android phone without Google Play starts
+    // Firebase but never gets a token. Then UnifiedPush is the channel.
+    final bool android =
+        !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    if (transport == null && android) {
+      if (available) {
+        try {
+          _token = await t.token().timeout(const Duration(seconds: 15));
+        } catch (error) {
+          if (kDebugMode) debugPrint('[PushService] no FCM token: $error');
+          _token = null;
+        }
+        available = _token != null;
+      }
+      if (!available) {
+        final UnifiedPushTransport unified = UnifiedPushTransport();
+        try {
+          available = await unified.initialize();
+        } catch (_) {
+          available = false;
+        }
+        if (available) t = unified;
+      }
+    }
+    if (!available) {
+      channel.value = android
+          ? PushChannel.unavailable
+          : PushChannel.notSupported;
+      return;
+    }
+    channel.value = t is UnifiedPushTransport
+        ? PushChannel.unifiedPush
+        : PushChannel.fcm;
 
     _transport = t;
     _store = store ?? const SupabaseDeviceTokenStore();
     _deviceId = deviceId ?? _defaultDeviceId;
-    _platform = platform ?? _defaultPlatform();
+    _platform =
+        platform ??
+        (t is UnifiedPushTransport ? kUnifiedPushPlatform : _defaultPlatform());
     _started = true;
 
     // A tap that launched the app: route it before anything else.
@@ -262,6 +333,7 @@ class PushService {
     _userId = null;
     _token = null;
     _started = false;
+    channel.value = PushChannel.unknown;
   }
 }
 
@@ -298,6 +370,16 @@ class SupabaseDeviceTokenStore implements DeviceTokenStore {
 /// else [initialize] says no before touching Firebase.
 class FirebasePushTransport implements PushTransport {
   FirebaseMessaging? _messaging;
+  StreamSubscription<RemoteMessage>? _foregroundSub;
+
+  static void _onForegroundMessage(RemoteMessage message) {
+    unawaited(
+      PushPresenter.present(
+        message.data,
+        isVisible: AgentsNotifications.instance.isThreadVisible,
+      ),
+    );
+  }
 
   static bool get _pushPlatform =>
       !kIsWeb &&
@@ -313,6 +395,12 @@ class FirebasePushTransport implements PushTransport {
       await Firebase.initializeApp();
       FirebaseMessaging.onBackgroundMessage(agentsPushBackgroundHandler);
       _messaging = FirebaseMessaging.instance;
+      // A push while the app is in front: the system shows nothing for a
+      // data message, so the app does, unless the thread is on screen.
+      _foregroundSub ??= FirebaseMessaging.onMessage.listen(
+        _onForegroundMessage,
+        onError: (Object _) {},
+      );
       return true;
     } catch (error) {
       if (kDebugMode) debugPrint('[PushService] Firebase off: $error');
@@ -344,9 +432,21 @@ class FirebasePushTransport implements PushTransport {
 }
 
 /// Runs in a background isolate when a push arrives while the app is not
-/// in the foreground. The system already shows the notification (it is a
-/// `notification` message, not data-only), and the payload carries no
-/// content to process, so there is nothing to do here. It exists so the
-/// plugin has a registered handler and does not warn.
+/// in the foreground (docs/agents/NOTIFICATIONS.md, "Push").
+///
+/// The Android push is data-only, so nothing is on screen yet. This isolate
+/// has its own plugin registry: [PushPresenter] starts the local plugin,
+/// reads the pairing from secure storage, opens the sealed preview and shows
+/// the toast with the agent's cached face. Any failure shows the generic
+/// title and body from the data. An old-style push with a `notification`
+/// block is shown by the system already, so it is left alone.
 @pragma('vm:entry-point')
-Future<void> agentsPushBackgroundHandler(RemoteMessage message) async {}
+Future<void> agentsPushBackgroundHandler(RemoteMessage message) async {
+  if (message.notification != null) return;
+  try {
+    DartPluginRegistrant.ensureInitialized();
+  } catch (_) {
+    // Already done by the plugin's own runner.
+  }
+  await PushPresenter.present(message.data);
+}

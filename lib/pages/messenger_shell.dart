@@ -146,6 +146,7 @@ import 'package:chuk_chat/services/agents/agents_checkpoints.dart';
 import 'package:chuk_chat/services/agents/agents_derived_threads.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_mail_key_handover.dart';
+import 'package:chuk_chat/services/agents/agent_avatar_sync.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/media_index.dart';

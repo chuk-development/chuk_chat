@@ -1,32 +1,37 @@
-"""Desktop notification from the host process (docs/WIRE_CONTRACT.md).
+"""Desktop notification from the host process (docs/WIRE_CONTRACT.md,
+docs/agents/NOTIFICATIONS.md).
 
 The simplest channel when the host and the desktop app share a machine: the
 host itself shows an OS notification when a run ends with no app attached. It
-needs no cloud, no Firebase and no app process. It never carries the answer:
-the content stays in the store and reaches the app over the sealed channel.
+needs no cloud, no Firebase and no app process. The toast is local, so its
+body may show the answer preview as plain text.
 
-Linux uses ``notify-send`` (falls back to ``gdbus``), macOS ``osascript``.
-Windows is skipped. Everything is best-effort: a missing tool or a failure is
-swallowed, and a notification can never take a run down.
+Linux uses ``notify-send`` (falls back to ``gdbus``), macOS ``osascript``,
+Windows a PowerShell toast (``Windows.UI.Notifications``, no extra package).
+Everything is best-effort: a missing tool or a failure is swallowed, and a
+notification can never take a run down.
 
-The Linux toast also carries an icon path. A notification daemon draws a logo
+The icon is the agent's avatar (``<workspace>/avatars/<agent_id>.png``) when
+the caller gives one, else the app logo. A notification daemon draws a logo
 only when it is given one: the ``desktop-entry`` hint finds an icon only where
 a ``agents.desktop`` file is installed, which a host running from a checkout or
 a pip install does not have. So the app logo ships with this package
 (``data/agents.png``, the app's launcher icon) and is passed by absolute path;
 ``AGENTS_NOTIFY_ICON`` overrides it for an install that has its own themed
-icon.
+icon. macOS ``display notification`` cannot show a custom icon.
 """
 
 from __future__ import annotations
 
+import base64
 import os
 import platform
 import shutil
 import subprocess
 import threading
 from collections.abc import Callable, Sequence
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
+from xml.sax.saxutils import escape as _xml_escape
 
 from .notification_text import RunLabels
 from .notification_text import completion_text as compose_completion_text
@@ -90,14 +95,16 @@ class DesktopNotifier:
         if self._system == "Darwin":
             return True
         if self._system == "Windows":
-            return False
+            return True
         return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
 
-    def notify(self, title: str, body: str) -> bool:
-        """Show one notification. Returns True when a command was run."""
+    def notify(self, title: str, body: str, *, icon: str | None = None) -> bool:
+        """Show one notification. ``icon`` is an absolute image path (the
+        agent's avatar); without it the app logo is used. Returns True when a
+        command was run."""
         if not self.enabled:
             return False
-        argv = self._argv(title, body)
+        argv = self._argv(title, body, icon or self._icon())
         if argv is None:
             return False
         if self._background:
@@ -118,7 +125,7 @@ class DesktopNotifier:
     def _icon(self) -> str | None:
         return self._icon_override or icon_path()
 
-    def _argv(self, title: str, body: str) -> list[str] | None:
+    def _argv(self, title: str, body: str, icon: str | None) -> list[str] | None:
         if self._system == "Darwin":
             script = (
                 f'display notification "{_esc(body)}" '
@@ -126,8 +133,21 @@ class DesktopNotifier:
             )
             return ["osascript", "-e", script]
         if self._system == "Windows":
-            return None
-        icon = self._icon()
+            shell = self._which("powershell") or self._which("powershell.exe")
+            if not shell:
+                return None
+            return [
+                shell,
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-EncodedCommand",
+                encode_powershell(windows_toast_script(title, body, icon)),
+            ]
+        # The freedesktop body is markup: a raw ``&`` or ``<`` in an answer
+        # makes some daemons drop the body.
+        body = _xml_escape(body)
         if self._which("notify-send"):
             return [
                 "notify-send",
@@ -166,6 +186,68 @@ def _esc(text: str) -> str:
     return text.replace("\\", "\\\\").replace('"', '\\"')
 
 
+#: The AppUserModelID the toast is shown under. Windows shows a toast only for
+#: a registered app id; this is the id of Windows PowerShell itself, which
+#: every Windows 10/11 has.
+WINDOWS_APP_ID = r"{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe"
+
+
+def _file_uri(path: str) -> str:
+    windows = PureWindowsPath(path)
+    if windows.is_absolute():
+        return windows.as_uri()
+    return Path(path).resolve().as_uri()
+
+
+def windows_toast_xml(title: str, body: str, icon: str | None) -> str:
+    """The toast XML: title, body and the icon as ``appLogoOverride``."""
+    image = ""
+    if icon:
+        image = (
+            '<image placement="appLogoOverride" hint-crop="circle" '
+            f'src="{_xml_escape(_file_uri(icon), {chr(34): "&quot;"})}"/>'
+        )
+    return (
+        '<toast><visual><binding template="ToastGeneric">'
+        f"<text>{_xml_escape(title)}</text>"
+        f"<text>{_xml_escape(body)}</text>"
+        f"{image}"
+        "</binding></visual></toast>"
+    )
+
+
+def windows_toast_script(title: str, body: str, icon: str | None) -> str:
+    """The PowerShell script that shows one toast. Values are in single-quoted
+    PowerShell strings, so only a quote needs escaping (it is doubled)."""
+    xml = _ps_quote(windows_toast_xml(title, body, icon))
+    app_id = _ps_quote(WINDOWS_APP_ID)
+    return (
+        "[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, "
+        "ContentType = WindowsRuntime] > $null\n"
+        "[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, "
+        "ContentType = WindowsRuntime] > $null\n"
+        "$xml = New-Object Windows.Data.Xml.Dom.XmlDocument\n"
+        f"$xml.LoadXml('{xml}')\n"
+        "$toast = New-Object Windows.UI.Notifications.ToastNotification $xml\n"
+        f"[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('{app_id}').Show($toast)\n"
+    )
+
+
+#: PowerShell reads each of these as a single quote in a quoted string.
+_PS_QUOTES = ("'", "\u2018", "\u2019", "\u201a", "\u201b")
+
+
+def _ps_quote(text: str) -> str:
+    for quote in _PS_QUOTES:
+        text = text.replace(quote, quote + quote)
+    return text
+
+
+def encode_powershell(script: str) -> str:
+    """``-EncodedCommand`` wants base64 of UTF-16LE. No quoting problems."""
+    return base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+
+
 #: Where this module gets the name the reader knows. The host's own
 #: desktop-only path (an automation that finished while an app was attached)
 #: calls :func:`completion_text` with nothing but the roster's agent name, and
@@ -191,7 +273,9 @@ def current_labels() -> RunLabels:
         return RunLabels()
 
 
-def completion_text(agent_name: str, *, failed: bool = False) -> tuple[str, str]:
+def completion_text(
+    agent_name: str, *, failed: bool = False, answer: str | None = None
+) -> tuple[str, str]:
     """Title/body for a caller that has only the roster's agent name.
 
     That name (``ivory-lynx``) is generated and doubles as the workspace
@@ -200,4 +284,4 @@ def completion_text(agent_name: str, *, failed: bool = False) -> tuple[str, str]
     without one the text stays generic — honest beats a codename.
     """
     del agent_name  # accepted for the existing call sites; see above
-    return compose_completion_text(current_labels(), failed=failed)
+    return compose_completion_text(current_labels(), failed=failed, answer=answer)

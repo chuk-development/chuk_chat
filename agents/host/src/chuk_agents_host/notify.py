@@ -10,9 +10,12 @@ This module is the host's outbound side of that:
 
 Rules:
 
-- The notification carries NO answer content. Title and body are generic;
-  the answer stays in the store and reaches the app over the sealed channel.
-  The names it does carry are the ones the user knows — the agent they
+- The readable row carries NO answer content. Its title names the agent, its
+  body is generic. The answer preview (docs/agents/NOTIFICATIONS.md) goes
+  only sealed, in ``preview_sealed``: one value per stored pairing, under a
+  key from that pairing's channel key (:mod:`chuk_agents_host.push_preview`).
+  The local desktop toast shows the preview as plain text, with the agent's
+  avatar as its icon. The names are the ones the user knows — the agent they
   named, the automation they set up — never the roster's generated codename.
   :mod:`chuk_agents_host.notification_text` owns that wording and its lookup.
 - One notification per run. ``runs.notified_at`` is set first, once; a second
@@ -23,7 +26,8 @@ Rules:
 - Best-effort with an outbox. A failed delivery is kept (bounded) and retried
   when the app re-provisions (it just handed the host a fresh token).
 - Optional keyless sinks (``AGENTS_NTFY_TOPIC``, ``AGENTS_WEBHOOK_URL``) for
-  self-hosters without Firebase. Same generic text, same rules.
+  self-hosters without Firebase. They have no key, so they get the generic
+  text only.
 """
 
 from __future__ import annotations
@@ -32,7 +36,7 @@ import json
 import os
 import threading
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -50,6 +54,7 @@ from .notification_text import (
     resolve_labels,
     takeover_text,
 )
+from .push_preview import preview_plaintext, seal_for_trusts
 
 KIND_COMPLETED = "completed"
 KIND_FAILED = "failed"
@@ -87,6 +92,9 @@ class SupabaseNotifier:
         max_outbox: int = 50,
         background: bool = True,
         timeout: float = 8.0,
+        trusts_provider: Callable[[], Iterable[Any]] | None = None,
+        agent_id_for: Callable[[str], str] | None = None,
+        avatar_for: Callable[[str], str | None] | None = None,
     ) -> None:
         self._session_provider = session_provider
         self._user_id_provider = user_id_provider
@@ -100,6 +108,13 @@ class SupabaseNotifier:
         self._ntfy_topic = ntfy_topic if ntfy_topic is not None else os.environ.get("AGENTS_NTFY_TOPIC")
         self._webhook_url = webhook_url if webhook_url is not None else os.environ.get("AGENTS_WEBHOOK_URL")
         self._timeout = timeout
+        # The stored pairings (``HostTrust``): one sealed preview per record.
+        self._trusts_provider = trusts_provider or (lambda: ())
+        # The app's agent id for a thread (a run's agent id is its session
+        # key; the host's own thread maps to ``host:<device id>``).
+        self._agent_id_for = agent_id_for or (lambda key: key)
+        # The agent's avatar file, the icon of the desktop toast.
+        self._avatar_for = avatar_for or (lambda _agent_id: None)
         self._outbox: deque[Record] = deque(maxlen=max_outbox)
         self._outbox_lock = threading.Lock()
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="agents-notify") if background else None
@@ -146,17 +161,41 @@ class SupabaseNotifier:
         failed = bool(summary.get("error")) or str(summary.get("reason") or "") == "failed"
         labels = self.labels(summary)
         goal_blocked = self._goal_blocked_now(summary)
-        title, body = completion_text(labels, failed=failed, goal_blocked=goal_blocked)
+        session_key = str(summary.get("session_key") or "default")
+        title, body = completion_text(
+            labels, failed=failed, goal_blocked=goal_blocked, answer=summary.get("final_answer"),
+        )
+        # The readable row stays generic; only the seal carries the preview.
+        _, row_body = completion_text(labels, failed=failed, goal_blocked=goal_blocked)
         record = self._record(
             run_id=run_id,
             agent_id=self._agent_id(),
             agent_name=labels.coworker or "",
-            session_key=str(summary.get("session_key") or "default"),
+            session_key=session_key,
             kind=KIND_FAILED if failed else KIND_COMPLETED,
             title=title,
-            body=body,
+            body=row_body,
+            preview_body=body,
         )
         self._fire(title, body, record)
+        return True
+
+    def notify_desktop_only(self, summary: dict) -> bool:
+        """The toast alone, once per run: a fired automation that ended while
+        an app was attached (the app shows the run; the push is not needed).
+        Same text and icon as :meth:`notify_run_finished`."""
+        if self._desktop is None:
+            return False
+        run_id = str(summary.get("run_id") or "")
+        if run_id and not self._mark_notified_once(run_id):
+            self.dropped_duplicates += 1
+            return False
+        failed = bool(summary.get("error")) or str(summary.get("reason") or "") == "failed"
+        title, body = completion_text(
+            self.labels(summary), failed=failed, answer=summary.get("final_answer"),
+        )
+        session_key = str(summary.get("session_key") or "default")
+        self._show_desktop(title, body, self._icon_for(session_key))
         return True
 
     def _goal_blocked_now(self, summary: dict) -> bool:
@@ -288,10 +327,10 @@ class SupabaseNotifier:
         except Exception:  # noqa: BLE001 — no store, no dedup; still notify once here
             return True
 
-    @staticmethod
-    def _record(**fields: Any) -> Record:
-        # Only these columns. No prompt, no answer, no tool output — ever.
-        return {
+    def _record(self, *, preview_body: str | None = None, **fields: Any) -> Record:
+        # Only these columns. No prompt, no answer, no tool output in the
+        # clear — ever. The preview is in ``preview_sealed`` only.
+        record: Record = {
             "run_id": fields["run_id"],
             "agent_id": fields["agent_id"],
             "agent_name": fields["agent_name"],
@@ -300,13 +339,65 @@ class SupabaseNotifier:
             "title": fields["title"],
             "body": fields["body"],
         }
+        sealed = self._seal(
+            title=fields["title"],
+            body=preview_body if preview_body is not None else fields["body"],
+            session_key=fields["session_key"],
+            run_id=fields["run_id"],
+        )
+        if sealed:
+            record["preview_sealed"] = sealed
+        return record
+
+    def _seal(self, *, title: str, body: str, session_key: str, run_id: str) -> dict[str, str]:
+        """``{channel_id: sealed}`` for every stored pairing. Empty when there
+        is none or sealing fails: the row then has the generic text only."""
+        try:
+            trusts = [t for t in (self._trusts_provider() or ()) if t is not None]
+            if not trusts:
+                return {}
+            plaintext = preview_plaintext(
+                title=title,
+                body=body,
+                agent_id=self._safe_agent_id(session_key),
+                session_key=session_key,
+                run_id=run_id,
+            )
+            return seal_for_trusts(trusts, plaintext)
+        except Exception as exc:  # noqa: BLE001 — a seal must never lose the push
+            self._log(f"notify: preview not sealed: {type(exc).__name__}")
+            return {}
+
+    def _safe_agent_id(self, session_key: str) -> str:
+        try:
+            return str(self._agent_id_for(session_key) or session_key)
+        except Exception:  # noqa: BLE001
+            return session_key
+
+    def _icon_for(self, session_key: str) -> str | None:
+        try:
+            return self._avatar_for(self._safe_agent_id(session_key))
+        except Exception:  # noqa: BLE001 — no avatar means the app logo
+            return None
+
+    def _show_desktop(self, title: str, body: str, icon: str | None) -> None:
+        if self._desktop is None:
+            return
+        if icon:
+            self._desktop.notify(title, body, icon=icon)
+        else:
+            self._desktop.notify(title, body)
 
     def _fire(self, title: str, body: str, record: Record) -> None:
+        # The desktop toast is local: it shows ``body`` (the preview). The
+        # keyless sinks are not end-to-end: they get the row's generic text.
+        icon = self._icon_for(str(record.get("session_key") or "default"))
+        sink_title, sink_body = str(record["title"]), str(record["body"])
+
         def work() -> None:
-            if self._desktop is not None:
-                self._desktop.notify(title, body)
+            self._show_desktop(title, body, icon)
             self._deliver_cloud(record, retry_on_fail=True)
-            self._deliver_sinks(title, body)
+            self._deliver_sinks(sink_title, sink_body)
 
         self._submit(work)
 
@@ -376,6 +467,14 @@ class SupabaseNotifier:
         resp = client.post(url, headers=headers, content=json.dumps([row]))
         if resp.status_code == 401:
             raise _Unauthorized()
+        if resp.status_code == 400 and "preview_sealed" in row and "preview_sealed" in resp.text:
+            # The column is not there yet (the migration is not applied): the
+            # push still goes, with the generic text only.
+            self._log("notify: preview_sealed column missing, sent without it")
+            row = {k: v for k, v in row.items() if k != "preview_sealed"}
+            resp = client.post(url, headers=headers, content=json.dumps([row]))
+            if resp.status_code == 401:
+                raise _Unauthorized()
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, list) and data and isinstance(data[0], dict):

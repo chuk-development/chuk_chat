@@ -405,8 +405,8 @@ is used. The rows carry no answer content.
 create table if not exists public.cowork_device_tokens (
   user_id    uuid        not null references auth.users (id) on delete cascade,
   device_id  text        not null,      -- stable per app install (the Agents device id)
-  token      text        not null,      -- FCM registration token
-  platform   text        not null,      -- 'android' | 'ios' | 'linux'
+  token      text        not null,      -- FCM registration token, or the UnifiedPush endpoint URL
+  platform   text        not null,      -- 'android' | 'ios' | 'web' | 'linux' | 'macos' | 'windows' | 'unifiedpush'
   updated_at timestamptz not null default now(),
   primary key (user_id, device_id)
 );
@@ -439,7 +439,7 @@ create table if not exists public.cowork_run_notifications (
   kind         text        not null,    -- 'completed' | 'failed' | 'approval_needed'
   title        text        not null,    -- names only (agent, automation), no answer content
   body         text        not null default '',
-  preview_ciphertext text,              -- reserved (channel-key sealed preview)
+  preview_sealed jsonb,                 -- {channel_id: sealed answer preview}, see docs/agents/NOTIFICATIONS.md
   created_at   timestamptz not null default now(),
   pushed_at    timestamptz,
   consumed_at  timestamptz,
@@ -459,6 +459,13 @@ create policy agents_run_notifications_delete_own on public.cowork_run_notificat
   for delete to authenticated using (auth.uid() = user_id);
 grant select, insert, update, delete on public.cowork_run_notifications to authenticated;
 ```
+
+`preview_sealed` (migration `20261117000000_cowork_push_preview.sql`, CHAT-128)
+holds the answer preview, sealed once per stored pairing with AES-256-GCM
+under a key from that pairing's channel key. Supabase and FCM see only
+ciphertext; `title` and `body` stay generic. The same migration adds
+`consumed_at` (the first migration did not have it) and allows platform
+`unifiedpush`.
 
 ## Access pattern
 
@@ -486,7 +493,10 @@ and, when an automation fired the run, that automation — both names the user
 typed themselves, so the reader recognises them and the internal codename
 (`ivory-lynx`, also the workspace directory) never leaves the host. A leaked
 table, a leaked FCM payload or a Google-side log never contains a prompt, an
-answer or a tool result; those stay end-to-end between the host and the paired app. The FCM
+answer or a tool result in readable form; those stay end-to-end between the
+host and the paired app. The answer preview is in the row and the push only as
+`preview_sealed` ciphertext, under a key that only the host and the paired app
+hold. The FCM
 sender identity is bound to the APK, not to the user's Supabase project: a
 self-hoster either uses the shipped Firebase project (the payload has no
 content) or rebuilds the app with their own `google-services.json`.

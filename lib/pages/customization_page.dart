@@ -21,6 +21,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/pages/download_settings_page.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/notifications/local_notifications.dart';
+import 'package:chuk_chat/services/notifications/push_service.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
@@ -71,8 +72,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
   bool _hasCustomPrompt = false;
   final TextEditingController _promptController = TextEditingController();
   bool _isPromptExpanded = false;
-  // Answer text in OS notifications. Default off (privacy).
-  bool _notificationAnswerPreview = false;
+  // Answer text in OS notifications. Default on (CHAT-128).
+  bool _notificationAnswerPreview = true;
   bool _isLoadingNotificationPreview = true;
 
   /// True while a write is in flight. The switch is locked meanwhile, so two
@@ -117,7 +118,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
   }
 
   Future<void> _loadNotificationPreviewSetting() async {
-    // A failed read keeps the safe default (off) and still enables the switch.
+    // A failed read shows off (the safe side) and still enables the switch.
     bool enabled = false;
     try {
       enabled = await LocalNotifications.answerPreviewEnabled();
@@ -352,22 +353,33 @@ class _CustomizationPageState extends State<CustomizationPage> {
             ],
           ),
 
-          // Notifications: answer text in the OS toast, opt-in.
+          // Notifications: answer text in the OS toast (default on), and a
+          // line on how to get push when this phone has none.
           ExpressiveSectionHeader(l.notificationsSection),
-          ExpressiveGroup(
-            children: [
-              ExpressiveSwitchRow(
-                icon: Icons.notifications_outlined,
-                title: l.notificationAnswerPreview,
-                subtitle: l.notificationAnswerPreviewSubtitle,
-                value: _notificationAnswerPreview,
-                onChanged:
-                    _isLoadingNotificationPreview ||
-                        _isSavingNotificationPreview
-                    ? null
-                    : _setNotificationPreview,
-              ),
-            ],
+          ValueListenableBuilder<PushChannel>(
+            valueListenable: PushService.instance.channel,
+            builder: (BuildContext context, PushChannel channel, Widget? _) =>
+                ExpressiveGroup(
+                  children: [
+                    ExpressiveSwitchRow(
+                      icon: Icons.notifications_outlined,
+                      title: l.notificationAnswerPreview,
+                      subtitle: l.notificationAnswerPreviewSubtitle,
+                      value: _notificationAnswerPreview,
+                      onChanged:
+                          _isLoadingNotificationPreview ||
+                              _isSavingNotificationPreview
+                          ? null
+                          : _setNotificationPreview,
+                    ),
+                    if (channel == PushChannel.unavailable)
+                      ExpressiveRow(
+                        icon: Icons.notifications_off_outlined,
+                        title: l.notificationPushUnavailable,
+                        subtitle: l.notificationPushUnavailableSubtitle,
+                      ),
+                  ],
+                ),
           ),
 
 
