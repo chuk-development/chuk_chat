@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 
 _calls = {"n": 0}
 _initializations = {"n": 0}
@@ -48,7 +49,10 @@ def build_server(name: str = "fake") -> MCPServer:
     @server.tool(description="Always fail, with a long body.")
     def explode(size: int = 100_000) -> str:
         _calls["n"] += 1
-        raise RuntimeError("x" * max(1, int(size)))
+        # ToolError, not RuntimeError: since mcp 2.1 the server replaces the
+        # text of an unexpected exception with "Error executing tool <name>",
+        # and only an anticipated ToolError keeps its (long) body.
+        raise ToolError("x" * max(1, int(size)))
 
     # A server with a big tool surface, for the Tool Search threshold (§7.2).
     # `FAKE_MCP_EXTRA_TOOLS=60` is a realistic size: the GitHub and Slack MCP
