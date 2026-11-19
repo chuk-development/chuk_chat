@@ -299,3 +299,12 @@ own prefix byte for byte; never compact Agents threads.
 ## Impeller on Linux: no on-screen MSAA
 
 On-screen paths get jagged edges; draw offscreen. See `docs/AGENT_AVATAR.md`.
+
+## Linux: Flutter 3.50 draws shifted on NVIDIA (2026-11-19)
+
+Flutter 3.50's new OpenGL compositor (`FlCompositorOpenGL`) draws the frame
+into the lower left quarter of the window, shifted, on the NVIDIA EGL driver.
+X11 and Wayland show the same fault. Xvfb hides it (software compositor).
+Workaround: `__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json`
+(Mesa EGL), which `scripts/install_dev.sh` sets. Release builds on 3.50 have
+the fault for every NVIDIA user: fix it before the next release.

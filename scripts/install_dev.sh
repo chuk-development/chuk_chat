@@ -47,6 +47,11 @@ mkdir -p "$DEST"
 rsync -a --delete "$BUNDLE/" "$DEST/"
 
 rev="$(git rev-parse --short HEAD)"
+# Flutter 3.50's OpenGL compositor draws the frame shifted into the lower
+# left quarter on the NVIDIA EGL driver (X11 and Wayland alike). Mesa's EGL
+# draws it right, so the dev build uses Mesa until the engine is fixed.
+RUN_ENV="GDK_BACKEND=x11 __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json"
+
 dirty=""
 git diff --quiet HEAD || dirty=" + lokale Änderungen"
 mkdir -p "$(dirname "$ENTRY")"
@@ -55,7 +60,7 @@ cat > "$ENTRY" <<DESKTOP
 Type=Application
 Name=Chuk Chat (Dev)
 Comment=Build aus dem aktuellen Code ($rev$dirty)
-Exec=env GDK_BACKEND=x11 $DEST/chuk_chat
+Exec=env $RUN_ENV $DEST/chuk_chat
 Icon=chuk-chat
 Terminal=false
 Categories=Network;Chat;
@@ -66,9 +71,9 @@ echo "installed $rev$dirty to $DEST"
 if [[ $start == 1 ]]; then
   # A window that must outlive this shell: start it outside claude.slice.
   if command -v user-app >/dev/null; then
-    user-app env GDK_BACKEND=x11 "$DEST/chuk_chat"
+    user-app env $RUN_ENV "$DEST/chuk_chat"
   else
-    (GDK_BACKEND=x11 setsid "$DEST/chuk_chat" >/dev/null 2>&1 </dev/null &)
+    (env $RUN_ENV setsid "$DEST/chuk_chat" >/dev/null 2>&1 </dev/null &)
   fi
   echo "started"
 fi
