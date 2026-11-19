@@ -231,6 +231,15 @@ void main() {
       expect(sources.map((s) => s.host), ['a.example.com', 'b.example.org']);
     });
 
+    test('a notes edit shows no chips for links in the stored text', () {
+      final call = _call('notes', arguments: {'action': 'patch_memory'});
+      call.result =
+          '<diff>{"before":"see https://apps.example.com/app/1",'
+          '"after":"see https://apps.example.com/app/1 and more"}</diff>';
+
+      expect(extractSourcesFor(call), isEmpty);
+    });
+
     test('a result without links has no chips', () {
       final call = _call('some_tool', arguments: {'query': 'x'});
       call.result = 'No results.';

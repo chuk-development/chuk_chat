@@ -458,6 +458,11 @@ List<AgentActivityEntry> groupAgentActivityEntries(
 /// Most source chips shown under one step.
 const int maxSourcesPerStep = 8;
 
+/// Tools whose result echoes the user's own stored text, not pages they
+/// fetched. `notes` returns the whole Memory/User/Soul text before and after
+/// the edit, so any link the user once saved there turned into a chip.
+const Set<String> _toolsWithoutSources = <String>{'notes'};
+
 /// The pages a call pulled in.
 ///
 /// `web_search` results list numbered titles with an indented URL under
@@ -467,6 +472,9 @@ const int maxSourcesPerStep = 8;
 List<AgentActivitySource> extractSourcesFor(ToolCall call) {
   final result = call.result;
   if (result == null || result.isEmpty) return const <AgentActivitySource>[];
+  if (_toolsWithoutSources.contains(call.name)) {
+    return const <AgentActivitySource>[];
+  }
 
   final sources = <AgentActivitySource>[];
   final seen = <String>{};
