@@ -1089,9 +1089,8 @@ class _MessengerShellState extends State<MessengerShell>
       onSecrets: onSecrets,
       onRooms: _openRooms,
       onSettings: _openSettings,
-      onDocuments: onDocuments,
-      onCopyChat: onCopyChat,
-      onBrowser: onBrowser,
+      // Files, the screen and Copy full chat are rows of the pane's first
+      // page (Details), so the settings page does not list them twice.
       onDelete: onDelete,
     );
   }

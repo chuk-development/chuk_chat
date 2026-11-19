@@ -130,6 +130,8 @@ class AgentsThreadView extends StatefulWidget {
     this.onOpenAgent,
     this.profiles,
     this.menuActions = const <AgentsThreadAction>[],
+    this.onTogglePanel,
+    this.panelOpen = false,
     this.topInset = 0,
     this.phoneLayout = false,
     this.linkReport,
@@ -235,6 +237,14 @@ class AgentsThreadView extends StatefulWidget {
   /// copy full chat, profile, rename). Documents, Call and Screen are the
   /// header's own chips.
   final List<AgentsThreadAction> menuActions;
+
+  /// The desktop shell's details sidebar. When set, the header shows one
+  /// sidebar chip on the right instead of Documents, Screen and "…", and the
+  /// routines leave the top of the thread: the sidebar lists them.
+  final VoidCallback? onTogglePanel;
+
+  /// Whether that sidebar is open.
+  final bool panelOpen;
 
   /// On a phone: the height of the floating chrome over the chat. The chat
   /// reserves it inside its scroll view, so the messages pass under the chips.
@@ -2312,6 +2322,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         final bool desktop = _useDesktopChat(context);
         final bool showCards =
             showAutomations &&
+            widget.onTogglePanel == null &&
             !_automationsCollapsed &&
             (desktop || MobileChatPreferences.instance.showActivity);
         // The desktop header floats over the top of the chat on a fade from
@@ -2422,6 +2433,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       // The shell decides what the menu holds: with no agent selected it
       // is only Copy full chat, whose export still says what the link is
       // doing.
+      onTogglePanel: widget.onTogglePanel,
+      panelOpen: widget.panelOpen,
       menuActions: <AgentsThreadAction>[
         ...widget.menuActions,
         // checkpoints: the thread's pins of the agent's files.

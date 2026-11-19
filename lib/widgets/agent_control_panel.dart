@@ -16,7 +16,7 @@ library;
 // The desktop pane's first page sits next to this panel; the messenger shell
 // reaches both through this import.
 export 'package:chuk_chat/widgets/agent_details_overview.dart'
-    show AgentDetailsOverview;
+    show AgentDetailsAction, AgentDetailsOverview;
 
 import 'dart:async';
 

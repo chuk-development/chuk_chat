@@ -73,7 +73,19 @@ class AgentsThreadHeader extends StatelessWidget {
     this.connection = AgentsThreadConnection.live,
     this.onReconnect,
     this.usesUserBrowser = false, // own browser
+    this.onTogglePanel,
+    this.panelOpen = false,
   });
+
+  /// The desktop's details sidebar on the right: the counterpart of the
+  /// left menu button. When set, it is the only chip on the right: the
+  /// screen, the routines, the model, the files and the other actions all
+  /// live in that sidebar, so the header shows none of them (no automation
+  /// chip, no Documents, Screen or "…").
+  final VoidCallback? onTogglePanel;
+
+  /// Whether the sidebar is open: the chip takes the accent.
+  final bool panelOpen;
 
   // ── own browser ──
   /// The agent drives the user's own browser (`run_state.browser_target`).
@@ -159,8 +171,8 @@ class AgentsThreadHeader extends StatelessWidget {
   /// included: Documents, Screen and "…". The desktop shell keeps the switch
   /// clear of it. The voice call is not up here: it is the composer's send
   /// target while the field is empty.
-  static double trailingExtent() {
-    const int chips = 3;
+  static double trailingExtent({bool panelMode = false}) {
+    final int chips = panelMode ? 1 : 3;
     return edge - _reach + chips * chipBox;
   }
 
@@ -174,6 +186,7 @@ class AgentsThreadHeader extends StatelessWidget {
         final double maxWidth = box.maxWidth.isFinite ? box.maxWidth : 1e6;
         final AgentsAgent? who = agent;
         final bool down = connection == AgentsThreadConnection.down;
+        final VoidCallback? togglePanel = onTogglePanel;
         final bool hasDocuments = onOpenDocuments != null;
         final int fixedChips = (showScreenTarget ? 1 : 0) + 1;
         // A pane too narrow for the pill and every chip folds Documents into
@@ -211,7 +224,7 @@ class AgentsThreadHeader extends StatelessWidget {
                 onReconnect: onReconnect,
               ),
             ),
-          if (automationLabel != null) ...<Widget>[
+          if (automationLabel != null && togglePanel == null) ...<Widget>[
             const SizedBox(width: 6),
             Flexible(
               flex: 2,
@@ -228,17 +241,28 @@ class AgentsThreadHeader extends StatelessWidget {
           leading: leading.isEmpty
               ? null
               : Row(mainAxisSize: MainAxisSize.min, children: leading),
-          trailing: <Widget>[
-            if (hasDocuments && !foldDocuments)
-              ChromeChip(
-                icon: Icons.folder_open_rounded,
-                tooltip: 'Documents',
-                semanticsId: 'thread_header_documents',
-                onTap: onOpenDocuments,
-              ),
-            if (showScreenTarget) _screenChip(context),
-            if (menu.isNotEmpty) _menuChip(context, menu),
-          ],
+          trailing: togglePanel != null
+              ? <Widget>[
+                  ChromeChip(
+                    key: const ValueKey<String>('thread-header-panel'),
+                    icon: Icons.view_sidebar_outlined,
+                    accent: panelOpen,
+                    tooltip: panelOpen ? 'Hide details' : 'Show details',
+                    semanticsId: 'thread_header_panel',
+                    onTap: togglePanel,
+                  ),
+                ]
+              : <Widget>[
+                  if (hasDocuments && !foldDocuments)
+                    ChromeChip(
+                      icon: Icons.folder_open_rounded,
+                      tooltip: 'Documents',
+                      semanticsId: 'thread_header_documents',
+                      onTap: onOpenDocuments,
+                    ),
+                  if (showScreenTarget) _screenChip(context),
+                  if (menu.isNotEmpty) _menuChip(context, menu),
+                ],
         );
       },
     );

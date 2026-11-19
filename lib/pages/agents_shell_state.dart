@@ -977,6 +977,8 @@ mixin AgentsShellHost on State<MessengerShell> {
     bool phone = false,
     VoidCallback? onOpenAgent,
     List<AgentsThreadAction> menuActions = const <AgentsThreadAction>[],
+    VoidCallback? onTogglePanel,
+    bool panelOpen = false,
   }) {
     final agent = _selectedAgent;
     return AgentsThreadView(
@@ -1015,6 +1017,8 @@ mixin AgentsShellHost on State<MessengerShell> {
       onOpenAgent: onOpenAgent,
       profiles: _agentProfiles,
       menuActions: menuActions,
+      onTogglePanel: onTogglePanel,
+      panelOpen: panelOpen,
       topInset: topInset,
       phoneLayout: phone,
       linkReport: _linkReport,

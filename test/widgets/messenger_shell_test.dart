@@ -484,8 +484,8 @@ void main() {
     },
   );
 
-  testWidgets("the thread header is the phone's top bar: the agent on "
-      'the left, Documents and Screen on the right, the rest behind "…"', (
+  testWidgets('the thread header: the agent on the left, one sidebar chip on '
+      'the right; screen, files, model and the actions are in the sidebar', (
     tester,
   ) async {
     final (controller, roster) = await pumpShell(tester);
@@ -503,34 +503,25 @@ void main() {
       find.descendant(of: header, matching: find.text(name)),
       findsOneWidget,
     );
-    // The phone's chips, in its order (the call only in a build with calls),
-    // then one "…".
-    const List<String> order = <String>[
+    // One chip on the right: the sidebar, the counterpart of the menu
+    // button. No Documents, Screen or "…" up here any more.
+    expect(
+      find.descendant(of: header, matching: find.byType(ChromeChip)),
+      findsOneWidget,
+    );
+    for (final String tooltip in <String>[
       'Documents',
       'No screen open right now',
       'More actions',
-    ];
-    for (final String tooltip in order) {
-      expect(
-        find.descendant(of: header, matching: find.byTooltip(tooltip)),
-        findsOneWidget,
-        reason: tooltip,
-      );
-      expect(
-        tester.getSize(
-          find.ancestor(
-            of: find.byTooltip(tooltip),
-            matching: find.byType(ChromeChip),
-          ),
-        ),
-        const Size(48, 48),
-        reason: tooltip,
-      );
+    ]) {
+      expect(find.byTooltip(tooltip), findsNothing, reason: tooltip);
     }
-    final List<double> xs = <double>[
-      for (final String t in order) tester.getCenter(find.byTooltip(t)).dx,
-    ];
-    expect(xs, orderedEquals(List<double>.of(xs)..sort()));
+    expect(
+      tester.getSize(
+        find.descendant(of: header, matching: find.byType(ChromeChip)),
+      ),
+      const Size(48, 48),
+    );
     // Control Rooms is the roster's, not the header's.
     expect(
       find.descendant(of: header, matching: find.byTooltip('Control Rooms')),
@@ -538,12 +529,17 @@ void main() {
     );
     // The header has a band: the page colour behind the row and a fade.
     expect(tester.getSize(header).height, AgentsThreadHeader.height);
-    // The rest is in the menu.
-    await tester.tap(find.byTooltip('More actions'));
+    // The rest is in the sidebar.
+    await tester.tap(find.byTooltip('Show details'));
     await tester.pumpAndSettle();
-    expect(find.text('Details (Ctrl+.)'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('details-screen')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('details-model')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('details-files')), findsOneWidget);
     expect(find.text('Copy full chat'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.byTooltip('Settings'), findsOneWidget);
     expect(find.text('Rename'), findsOneWidget);
     expect(find.byType(AppBar), findsNothing);
     // The composer's "More models" way out is wired.
@@ -581,13 +577,24 @@ void main() {
   });
 
   testWidgets(
-    "the agent's screen unlocks in the header only once it opened one, "
+    "the agent's screen unlocks in the sidebar only once it opened one, "
     'and opens as a full-screen route',
     (tester) async {
-      final (controller, _) = await pumpShell(tester);
+      final (controller, roster) = await pumpShell(tester);
       controller.pair();
       await tester.pumpAndSettle();
-      expect(find.byTooltip("Agent's screen"), findsNothing);
+      await tester.tap(find.byTooltip('Show details'));
+      await tester.pumpAndSettle();
+      expect(roster.agents.single.name, isNotEmpty);
+      final Finder box = find.byKey(const ValueKey<String>('details-screen'));
+      // A live box says "Open screen"; a parked one is only the glyph.
+      final Finder live = find.descendant(
+        of: box,
+        matching: find.text('Open screen'),
+      );
+      final Finder parked = box;
+      expect(live, findsNothing);
+      expect(parked, findsOneWidget);
 
       // History must not expose a stale browser. Explicit VNC capability does.
       controller.emit(
@@ -598,15 +605,14 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byTooltip("Agent's screen"), findsNothing);
+      expect(live, findsNothing);
       controller.emit(
         const AgentsRelayBrowserView(status: 'opened', vncAvailable: true),
       );
       await tester.pumpAndSettle();
-      expect(find.byTooltip("Agent's screen"), findsOneWidget);
-      expect(find.text("Agent's screen"), findsNothing); // no sidebar row
+      expect(live, findsOneWidget);
 
-      await tester.tap(find.byTooltip("Agent's screen"));
+      await tester.tap(find.byKey(const ValueKey<String>('details-screen')));
       // Not pumpAndSettle: the page's spinner animates until the executor's
       // `started` event, which this test never sends.
       await tester.pump();
@@ -632,7 +638,7 @@ void main() {
       // moment the user reaches for it (bead cowork-tf1u).
       controller.emit(const AgentsRelayDone());
       await tester.pumpAndSettle();
-      expect(find.byTooltip("Agent's screen"), findsOneWidget);
+      expect(live, findsOneWidget);
 
       // The host closing the browser is what takes it away.
       controller.emit(
@@ -644,8 +650,8 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.byTooltip("Agent's screen"), findsNothing);
-      expect(find.byTooltip('No screen open right now'), findsOneWidget);
+      expect(live, findsNothing);
+      expect(parked, findsOneWidget);
     },
   );
 
@@ -1384,7 +1390,8 @@ void main() {
       controller.pair();
       await tester.pumpAndSettle();
 
-      await tapThreadAction(tester, 'Details (Ctrl+.)');
+      await tester.tap(find.byTooltip('Show details'));
+      await tester.pumpAndSettle();
 
       // A docked pane, not an overlay drawer: it pushes the thread.
       expect(find.byType(Drawer), findsNothing);

@@ -49,6 +49,9 @@ void main() {
     WidgetTester tester, {
     VoidCallback? onOpenScreen,
     VoidCallback? onScreenParked,
+    VoidCallback? onOpenModel,
+    VoidCallback? onOpenFiles,
+    List<AgentDetailsAction> actions = const <AgentDetailsAction>[],
   }) async {
     tester.view.physicalSize = const Size(360, 1400);
     tester.view.devicePixelRatio = 1;
@@ -62,6 +65,13 @@ void main() {
             sessionKey: 'amber-main',
             onOpenScreen: onOpenScreen,
             onScreenParked: onScreenParked,
+            onOpenModel: onOpenModel,
+            onOpenFiles: onOpenFiles,
+            actions: actions,
+            modelReader: (_) async => const AgentModelSummary(
+              name: 'DeepSeek V4.1 Flash',
+              provider: 'Auto',
+            ),
           ),
         ),
       ),
@@ -206,5 +216,37 @@ void main() {
         'Watch poll.py',
       );
     });
+  });
+
+  testWidgets('the model, files and actions rows open their pages', (
+    tester,
+  ) async {
+    final List<String> log = <String>[];
+    await pump(
+      tester,
+      onOpenModel: () => log.add('model'),
+      onOpenFiles: () => log.add('files'),
+      actions: <AgentDetailsAction>[
+        AgentDetailsAction(
+          icon: Icons.history,
+          label: 'Checkpoints',
+          onTap: () => log.add('checkpoints'),
+        ),
+      ],
+    );
+    await tester.pump();
+    expect(find.text('DeepSeek V4.1 Flash · Auto'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('details-model')));
+    await tester.tap(find.byKey(const ValueKey<String>('details-files')));
+    await tester.tap(find.text('Checkpoints'));
+    expect(log, <String>['model', 'files', 'checkpoints']);
+  });
+
+  testWidgets('without callbacks there are no model, files or action rows', (
+    tester,
+  ) async {
+    await pump(tester);
+    expect(find.byKey(const ValueKey<String>('details-model')), findsNothing);
+    expect(find.byKey(const ValueKey<String>('details-files')), findsNothing);
   });
 }

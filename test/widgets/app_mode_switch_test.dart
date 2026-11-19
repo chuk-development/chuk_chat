@@ -885,9 +885,9 @@ void main() {
     testWidgets('the details pane on a narrow window gives the switch a line '
         'of its own', (tester) async {
       await pumpShell(tester, size: const Size(800, 700));
-      await tester.tap(find.byTooltip('More actions'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Details (Ctrl+.)'));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('thread-header-panel')),
+      );
       await tester.pumpAndSettle();
 
       final Rect sw = strip(tester);

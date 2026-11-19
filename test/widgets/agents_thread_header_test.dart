@@ -111,9 +111,7 @@ void main() {
     );
   });
 
-  testWidgets('a tap on the agent opens what the caller wired', (
-    tester,
-  ) async {
+  testWidgets('a tap on the agent opens what the caller wired', (tester) async {
     var opened = 0;
     await tester.pumpWidget(
       _wrap(
@@ -260,10 +258,7 @@ void main() {
     expect(find.byTooltip('No screen open right now'), findsOneWidget);
     await tester.tap(find.byTooltip('No screen open right now'));
     await tester.pump();
-    expect(
-      find.text('The agent has no screen open right now'),
-      findsOneWidget,
-    );
+    expect(find.text('The agent has no screen open right now'), findsOneWidget);
 
     var opened = 0;
     await tester.pumpWidget(
@@ -313,5 +308,36 @@ void main() {
       _wrap(const AgentsThreadHeader(connection: AgentsThreadConnection.down)),
     );
     expect(find.text('Offline'), findsOneWidget);
+  });
+
+  testWidgets('with the details sidebar, one sidebar chip is the only chip '
+      'on the right and the automation chip is gone', (tester) async {
+    int toggled = 0;
+    await tester.pumpWidget(
+      _wrap(
+        AgentsThreadHeader(
+          agent: agent(id: 'a1', name: 'Alex'),
+          showScreenTarget: true,
+          onOpenDocuments: () {},
+          automationLabel: 'Wahlradar · Active',
+          menuActions: <AgentsThreadAction>[
+            _action('Copy full chat', <String>[]),
+          ],
+          onTogglePanel: () => toggled++,
+        ),
+      ),
+    );
+    expect(find.byType(ChromeChip), findsOneWidget);
+    expect(findId('thread_header_panel'), findsOneWidget);
+    expect(findId('thread_header_documents'), findsNothing);
+    expect(findId('thread_header_screen'), findsNothing);
+    expect(findId('thread_header_more'), findsNothing);
+    expect(find.text('Wahlradar · Active'), findsNothing);
+    await tester.tap(findId('thread_header_panel'));
+    expect(toggled, 1);
+    expect(
+      AgentsThreadHeader.trailingExtent(panelMode: true),
+      AgentsThreadHeader.trailingExtent() - 2 * AgentsThreadHeader.chipBox,
+    );
   });
 }

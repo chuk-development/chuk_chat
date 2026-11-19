@@ -62,6 +62,10 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
   /// closing the pane, goes back to the first page.
   String? _deskDetailsSettingsFor;
 
+  /// A sub-page of the details pane's first page: `files` or `model`, for
+  /// the agent in [_deskDetailsShownFor]. Null shows Details itself.
+  String? _deskDetailsSubpage;
+
   /// The agent the details pane showed last. A different one resets
   /// [_deskDetailsSettingsFor], so coming back to an agent opens its first
   /// page again.
@@ -151,6 +155,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     setState(() {
       _deskRightPane = _deskRightPane == pane ? null : pane;
       _deskDetailsSettingsFor = null;
+      _deskDetailsSubpage = null;
     });
     _deskScheduleSave();
   }
@@ -194,6 +199,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     setState(() {
       _deskRightPane = null;
       _deskDetailsSettingsFor = null;
+      _deskDetailsSubpage = null;
     });
     _deskScheduleSave();
   }
@@ -429,7 +435,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
           ? AgentsThreadHeader.edge
           : room != null
           ? AgentsThreadHeader.edge + 2 * AgentsThreadHeader.chipBox
-          : AgentsThreadHeader.trailingExtent();
+          : AgentsThreadHeader.trailingExtent(panelMode: agent != null);
       final double leading = home || room != null || agent == null
           ? AgentsThreadHeader.edge
           : AgentsThreadHeader.edge + AgentsThreadHeader.leadingMaxWidth;
@@ -466,6 +472,12 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
                   ? null
                   : () => _deskOpenAgentSettings(agent, toggle: true),
               menuActions: _deskMenuActions(agent),
+              // The right counterpart of the menu button: the details pane
+              // with the screen, routines, model, files and actions.
+              onTogglePanel: agent == null
+                  ? null
+                  : () => _deskToggleRightPane('details'),
+              panelOpen: _deskRightPane == 'details',
             ),
           ),
         ),
@@ -578,8 +590,36 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     if (_deskDetailsShownFor != agent.id) {
       _deskDetailsShownFor = agent.id;
       _deskDetailsSettingsFor = null;
+      _deskDetailsSubpage = null;
     }
     final bool settings = _deskDetailsSettingsFor == agent.id;
+    final String? subpage = settings ? null : _deskDetailsSubpage;
+    if (subpage == 'model') {
+      // The agent's model, inside the pane: the same page the phone opens,
+      // in its own navigator so its back chip returns to Details.
+      return SettingsSurfaceNavigator(
+        key: ValueKey<String>('desk-model-nav-${agent.id}'),
+        onClose: _deskCloseRightPane,
+        onRootBack: () => setState(() => _deskDetailsSubpage = null),
+        builder: (BuildContext context) =>
+            ModelSelectorPage(chatId: sessionKey),
+      );
+    }
+    if (subpage == 'files') {
+      // The thread's files, inside the pane: the same files page the phone
+      // opens, in its own navigator so its back chip returns to Details.
+      return SettingsSurfaceNavigator(
+        key: ValueKey<String>('desk-files-nav-${agent.id}'),
+        onClose: _deskCloseRightPane,
+        onRootBack: () => setState(() => _deskDetailsSubpage = null),
+        builder: (BuildContext context) => ChatDocumentsPanel(
+          sessionKey: sessionKey,
+          controller: _controller.value,
+          agentName: agent.name,
+          fullPage: true,
+        ),
+      );
+    }
     final Widget closeButton = FloatingHeaderButton(
       icon: Icons.close,
       tooltip: 'Close (Esc)',
@@ -611,6 +651,33 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
                 name: agent.name,
                 sessionKey: sessionKey,
                 onOpenScreen: _openAgentScreenOrNull,
+                onOpenModel: () =>
+                    setState(() => _deskDetailsSubpage = 'model'),
+                onOpenFiles: () =>
+                    setState(() => _deskDetailsSubpage = 'files'),
+                actions: <AgentDetailsAction>[
+                  AgentDetailsAction(
+                    icon: Icons.history,
+                    label:
+                        AppLocalizations.of(context)?.ckTitle ?? 'Checkpoints',
+                    onTap: () {
+                      final State? thread = _threadViewKey.currentState;
+                      if (thread is AgentsThreadViewState) {
+                        unawaited(thread.openCheckpoints());
+                      }
+                    },
+                  ),
+                  AgentDetailsAction(
+                    icon: Icons.copy_all_rounded,
+                    label: 'Copy full chat',
+                    onTap: () => unawaited(_copyFullChat()),
+                  ),
+                  AgentDetailsAction(
+                    icon: Icons.edit_outlined,
+                    label: 'Rename',
+                    onTap: () => unawaited(_openAgentRename(agent)),
+                  ),
+                ],
               ),
             ),
           ],

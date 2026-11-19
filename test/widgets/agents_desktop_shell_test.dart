@@ -169,9 +169,7 @@ void main() {
   );
 
   group('panes', () {
-    testWidgets('roster, thread and details sit side by side', (
-      tester,
-    ) async {
+    testWidgets('roster, thread and details sit side by side', (tester) async {
       await pumpDesktop(tester);
 
       final Rect roster = rosterRect(tester);
@@ -226,14 +224,16 @@ void main() {
       expect(tester.getSize(rightPane).width, kDeskDetailsMin);
     });
 
-    testWidgets('Details in the header\'s "…" menu, and a tap on the '
-        'agent, open and close the pane', (tester) async {
+    testWidgets('the sidebar chip at the right of the header, and a tap on '
+        'the agent, open and close the pane', (tester) async {
       await pumpDesktop(tester);
+      // One chip on the right: the counterpart of the menu button.
+      expect(find.byTooltip('More actions'), findsNothing);
 
       Future<void> details() async {
-        await tester.tap(find.byTooltip('More actions'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Details (Ctrl+.)'));
+        await tester.tap(
+          find.byKey(const ValueKey<String>('thread-header-panel')),
+        );
         await tester.pumpAndSettle();
       }
 
@@ -249,6 +249,16 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Routines'), findsOneWidget);
+      // Model, files and the thread's actions are in the pane too.
+      expect(
+        find.byKey(const ValueKey<String>('details-model')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('details-files')),
+        findsOneWidget,
+      );
+      expect(find.text('Copy full chat'), findsOneWidget);
       expect(find.text('MODEL'), findsNothing);
 
       await details();
@@ -313,12 +323,16 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('from Settings in the header\'s "…" menu', (tester) async {
+    testWidgets('from the gear on the Details page', (tester) async {
       await pumpDesktop(tester);
       await closePane(tester);
-      await tester.tap(find.byTooltip('More actions'));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('thread-header-panel')),
+      );
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Settings').last);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('desk-details-settings')),
+      );
       await tester.pumpAndSettle();
       expect(settingsInPane(), findsOneWidget);
       // Not a page over the window, not the centred modal.
@@ -340,10 +354,7 @@ void main() {
       await tester.tap(find.text('Profile'));
       await tester.pumpAndSettle();
       expect(settingsInPane(), findsOneWidget);
-      expect(
-        tester.widget<AgentSettingsView>(settingsInPane()).agentId,
-        id,
-      );
+      expect(tester.widget<AgentSettingsView>(settingsInPane()).agentId, id);
       // The thread follows the agent whose settings are shown.
       expect(selectedThread(tester), roster.agents[2].threads.single.key);
     });
@@ -367,7 +378,9 @@ void main() {
 
   /// The gear in the details pane's header: the Settings page.
   Future<void> openDetailsSettings(WidgetTester tester) async {
-    await tester.tap(find.byKey(const ValueKey<String>('desk-details-settings')));
+    await tester.tap(
+      find.byKey(const ValueKey<String>('desk-details-settings')),
+    );
     await tester.pumpAndSettle();
   }
 
@@ -397,7 +410,10 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey<String>('desk-details-back')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey<String>('details-screen')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('details-screen')),
+      findsOneWidget,
+    );
 
     // Settings open, then another agent: its pane starts on page one.
     await openDetailsSettings(tester);
@@ -406,7 +422,10 @@ void main() {
         .id;
     await tester.tap(find.byKey(ValueKey<String>('agent-tile-$other')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey<String>('details-screen')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('details-screen')),
+      findsOneWidget,
+    );
 
     // Back to the first agent: its Settings page is not remembered.
     final String first = roster.agents
@@ -414,13 +433,19 @@ void main() {
         .id;
     await tester.tap(find.byKey(ValueKey<String>('agent-tile-$first')));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey<String>('details-screen')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('details-screen')),
+      findsOneWidget,
+    );
 
     // Closing the pane forgets the page too.
     await openDetailsSettings(tester);
     await shortcut(tester, LogicalKeyboardKey.period);
     await shortcut(tester, LogicalKeyboardKey.period);
-    expect(find.byKey(const ValueKey<String>('details-screen')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('details-screen')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('the Settings page draws the phone rows in the phone order, '
@@ -462,8 +487,10 @@ void main() {
     }
     // No name field and no folded technical section: those were the
     // desktop-only layout the shared content replaced.
-    expect(find.byKey(const ValueKey<String>('details-name-field')),
-        findsNothing);
+    expect(
+      find.byKey(const ValueKey<String>('details-name-field')),
+      findsNothing,
+    );
     expect(find.text('Technical details'), findsNothing);
 
     final int visible = roster.visibleAgents.length;
