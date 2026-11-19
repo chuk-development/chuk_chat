@@ -220,6 +220,107 @@ crawl stops watching at 2.5 s.
 Not a fix, but tempting: a tap throttle for settings rows. It was removed again.
 The "double push" it was for did not exist.
 
+## Desktop chat: scroll up and the message rail (2026-11-19)
+
+Owner: "scrolling up is not smooth, it never was", and jumps through the
+message rail (`chat_turn_rail.dart`) "lag like hell". Measured on the real
+`ChukChatUIDesktop` with a 330-row chat (markdown, lists, tables, code, tool
+calls, a 1200x800 picture on every tenth question), 1440x900.
+
+How to run it:
+
+```bash
+# Debug, wall clock, asserts smoothness and the rail landing (fast):
+flutter test test/perf/chat_desktop_scroll_perf_test.dart
+# Profile build, engine FrameTiming, headless:
+env -u WAYLAND_DISPLAY GDK_BACKEND=x11 CHUK_MULTI_INSTANCE=1 \
+  XDG_DATA_HOME=$PWD/_scratch/perf_xdg/data \
+  XDG_CONFIG_HOME=$PWD/_scratch/perf_xdg/config \
+  XDG_CACHE_HOME=$PWD/_scratch/perf_xdg/cache dbus-run-session -- \
+  xvfb-run -a -s "-screen 0 1920x1200x24" flutter drive --profile -d linux \
+  --driver=test_driver/perf_driver.dart \
+  --target=integration_test/chat_desktop_scroll_perf_test.dart
+```
+
+Traps:
+
+- **`WAYLAND_DISPLAY` wins over Xvfb.** A shell from the owner's niri session
+  carries it, and GTK then opens the test window on his screen, not in Xvfb
+  (the log says "subsurface frame of size 2550x1034"). Unset it and set
+  `GDK_BACKEND=x11`. `CHUK_MULTI_INSTANCE=1` or the run raises the owner's
+  running app instead. The `XDG_*` dirs keep the SQLite cache and settings
+  away from his.
+- Raster under Xvfb is Mesa llvmpipe (software): 20 to 40 ms a frame, so
+  `raster_*` and `jank_total_16` mean nothing there. Compare `build_*`.
+
+Root causes, with evidence:
+
+1. **Wheel steps, no glide.** GTK reports a notch as 53 px
+   (`fl_scrolling_manager.cc`, `kScrollOffsetMultiplier`) and Flutter's
+   `pointerScroll` jumps the whole notch in one frame. A turning wheel moved
+   53 px, stood still for two frames, moved again: 62 % of the frames inside
+   a wheel scroll did not move. Fix: `SmoothWheelScrollPosition`
+   (`chat_scroll_mixin.dart`, the chat's own controller): a notch moves a
+   target and every frame closes `1 - e^(-dt/45 ms)` of the gap; a notch
+   mid-glide only moves the target, so the speed stays steady. Touchpads
+   (pan/zoom events) and small deltas pass through unchanged.
+2. **A far rail jump laid out every row in between.** `SliverList` places
+   row k only after laying out every row between it and the rows it has;
+   the rail jumped to an estimated offset and the list built, parsed and
+   measured the whole chat in one frame (319 ms build in profile, 1.4 to
+   1.8 s in debug). Fix: `ChatScrollMixin.scrollToRow` splits the anchored
+   transcript at the target row (it becomes the first row below the center
+   line), lands 0.4 screens before it and glides there. Only the rows on
+   screen are built. A built row less than two screens away is animated to.
+3. **The plain desktop chat opened by walking to the bottom.** Only the
+   Agents thread used the anchored transcript on desktop; the plain chat used
+   a `ListView` and `settleScrollToBottom` walked all 330 rows: 709 ms build
+   in profile. Desktop now always uses the anchored transcript, like mobile.
+4. **Every rebuild of the screen rebuilt every visible bubble and
+   recomputed the rail.** Desktop had no `TranscriptRowMemo` (mobile had),
+   and `chatTurnRailTicks` collapsed the whitespace of every answer of the
+   chat on each rebuild (about 10 ms for 139 000 characters). A plain screen
+   rebuild: 30 to 60 ms debug before, about 10 ms after. Ticks now read
+   their texts only when the hover card asks.
+5. **Pictures changed height after they loaded.** A thumbnail drew at its
+   placeholder height, decoded the whole picture to learn its ratio and
+   then animated to the real size, in a row that could be under the reader.
+   The ratio is now read from the header (`ImageDescriptor`) and kept per
+   source, so a tile built again has its real size in its first frame.
+
+Rail placement: the strips stand on the axis of the left icon column (31 px,
+`kSbNavIconCentre`; they stood at 12..20 px) and grow both ways from it.
+With the sidebar folded, the root passes the column's icons and gear
+(`railColumnTop`, `railColumnBottom`) and the rail is centred between them:
+at 1440x1035 the gap above and below is 174 px each (before: 82 and 178).
+Test: `test/widgets/chat_turn_rail_root_test.dart`.
+
+Numbers. Profile build, Linux, Xvfb, same host and scenario, before (HEAD
+`9e778c4df`) and after. Build = UI thread per frame, in ms
+(`_scratch/perf/desktop_before2.json`, `desktop_after3.json`).
+
+| Path | before b p99 | before b max | after b p99 | after b max | build frames > 16.7 ms |
+|---|---:|---:|---:|---:|---|
+| open the 330-row chat | 159.2 | 497.3 | 2.5 | 3.3 | 4 -> 0 |
+| wheel up, 120 notches | 4.8 | 6.4 | 4.9 | 6.7 | 0 -> 0 |
+| fling up x5 | 4.7 | 8.3 | 5.1 | 9.0 | 0 -> 0 |
+| rail jumps x8, far rows | 180.8 | 268.2 | 10.5 | 20.6 | 6 -> 1 |
+
+Rail jumps, worst build frame of each: before 196, (miss), 6, 254, 268, 215,
+215, 181; after 10, 11, 13, 11, 15, 8, 21, 14. The "(miss)" is a click on
+the last strip that hit nothing: the strip sat on the edge of the hit box.
+The box now reaches one strip gap past the end strips.
+
+Wheel motion (same run): before, steps of 53 px with 66 % of the frames
+standing still; after, the list moves on every frame (1 % still, the last
+frame of a glide). Debug wall clock (`chat_desktop_scroll_perf_test.dart`):
+rail jump worst frame 1359 to 1821 ms before, 56 to 108 ms after; a plain
+screen rebuild 30 to 60 ms before, 10 to 25 ms after; wheel steps 24 px max.
+
+Scrolling itself (wheel, fling) was not slow on the UI thread on this host:
+build p99 about 5 ms before and after. What the owner saw on scroll was the
+stepping of the wheel, and on jumps the walk.
+
 ## Open
 
 See the beads filed with `chuk_chat-l4t6`.

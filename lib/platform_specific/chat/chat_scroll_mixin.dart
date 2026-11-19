@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/rendering.dart' show ScrollCacheExtent, ScrollDirection;
+import 'package:flutter/rendering.dart'
+    show RenderAbstractViewport, ScrollCacheExtent, ScrollDirection;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
@@ -166,6 +167,106 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
     });
   }
 
+  /// Height of row `i` as the list last reported it (`extentOf` of
+  /// [buildAnchoredTranscript]); a rough default before the first build.
+  double Function(int index) _rowExtent = (int _) => 120;
+
+  /// Rough height of the rows below the center line.
+  double _rowsBelowLineExtent() {
+    final int count = transcriptRows.length;
+    double sum = 0;
+    for (int i = _transcriptSplit; i < count; i++) {
+      sum += _rowExtent(i);
+    }
+    return sum;
+  }
+
+  /// Gap between the list's top padding and a row brought there by
+  /// [scrollToRow] (24 px from the top of a list without a header).
+  static const double rowJumpGap = 14;
+
+  /// How far before its target a long jump lands, as a share of the
+  /// viewport, to glide the last stretch in the direction of travel.
+  static const double rowJumpLeadIn = 0.4;
+
+  /// Bring row [index] to the top of the list.
+  ///
+  /// A row that is built and at most two screens away is animated to. A
+  /// far row is not scrolled to at all: a sliver list cannot place row 40
+  /// without laying out every row between it and the rows it has, so the
+  /// old jump laid out (built, parsed, measured) the whole chat in one frame
+  /// (300 ms in a profile build, over a second in debug, for 330 rows).
+  /// Instead the transcript is split again AT the row: the row becomes the
+  /// first one below the center line, the rows before it grow upwards from
+  /// there, and the list lands a little before the row and glides the last
+  /// [rowJumpLeadIn] of a screen to it. Only the rows on screen are built.
+  ///
+  /// [rowKey] is the key the row carries when built (the turn rail's); it
+  /// tells a near row from a far one.
+  Future<void> scrollToRow(int index, {GlobalKey? rowKey}) async {
+    if (!mounted || !scrollController.hasClients) return;
+    final ScrollPosition position = scrollController.position;
+    final double viewport = position.viewportDimension;
+    final double wantedTop = transcriptTopInset + rowJumpGap;
+
+    final RenderObject? row = rowKey?.currentContext?.findRenderObject();
+    if (row is RenderBox && row.attached && row.hasSize) {
+      final RenderAbstractViewport rowViewport = RenderAbstractViewport.of(row);
+      final double exact =
+          rowViewport.getOffsetToReveal(row, 0).offset - wantedTop;
+      if ((exact - position.pixels).abs() <= viewport * 2 ||
+          !anchoredTranscript) {
+        await position.animateTo(
+          exact.clamp(position.minScrollExtent, position.maxScrollExtent),
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOutCubic,
+        );
+        return;
+      }
+    }
+    final List<Map<String, String>> rows = transcriptRows;
+    if (!anchoredTranscript || index < 0 || index >= rows.length) return;
+
+    // Up or down? Where the row's top lies relative to the center line,
+    // by the row heights, against the top of the view.
+    double rowTop = 0;
+    if (index < _transcriptSplit) {
+      for (int i = index; i < _transcriptSplit; i++) {
+        rowTop -= _rowExtent(i);
+      }
+    } else {
+      for (int i = _transcriptSplit; i < index; i++) {
+        rowTop += _rowExtent(i);
+      }
+    }
+    final double viewTop =
+        position.pixels - (_transcriptSplit > 0 ? viewport : 0);
+    final bool up = rowTop < viewTop;
+
+    // Split at the row. Its top is the center line, which an anchor of 1
+    // puts at the bottom edge of the view at offset 0; the first row of a
+    // chat starts the plain top-aligned list instead.
+    setState(() {
+      _transcriptSplit = index;
+      _transcriptSnapshot = List<Map<String, String>>.of(rows.take(index));
+      transcriptEpoch++;
+    });
+    final double target = index > 0 ? viewport - wantedTop : 0;
+    final double lead = viewport * rowJumpLeadIn;
+    if (position is ScrollPositionWithSingleContext) position.goIdle();
+    // Quietly, like a thread switch: the offset belongs to the slivers of
+    // the next layout, not to the ones on screen now.
+    position.correctPixels(up ? target + lead : math.max(0, target - lead));
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || !scrollController.hasClients) return;
+    final ScrollPosition after = scrollController.position;
+    await after.animateTo(
+      target.clamp(after.minScrollExtent, after.maxScrollExtent),
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   /// The anchored transcript: history above the center line, new rows below.
   ///
   /// [itemCount] may exceed the rows (a trailing typing row); indices at and
@@ -184,6 +285,7 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
     required bool addAutomaticKeepAlives,
     double Function(int index)? extentOf,
   }) {
+    if (extentOf != null) _rowExtent = extentOf;
     SliverChildBuilderDelegate delegate(
       NullableIndexedWidgetBuilder builder,
       int count,
@@ -546,11 +648,18 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
     // The jump button from far up an anchored history: jump, and restart the
     // history sliver at its newest row. Animating (or jumping with the old
     // children kept) would build every row between here and there.
-    if (force && anchoredTranscript && _transcriptSplit > 0) {
-      if (scrollController.hasClients) {
-        final ScrollPosition position = scrollController.position;
-        final double distance = position.maxScrollExtent - position.pixels;
-        if (distance > position.viewportDimension * 3) {
+    // After a jump to a row ([scrollToRow]) the newest rows sit below the
+    // center line, where reaching the end would walk them all: anchor the
+    // thread at its bottom again instead.
+    if (force && anchoredTranscript && scrollController.hasClients) {
+      final ScrollPosition position = scrollController.position;
+      final double distance = position.maxScrollExtent - position.pixels;
+      if (distance > position.viewportDimension * 3) {
+        if (_rowsBelowLineExtent() > position.viewportDimension * 2) {
+          _anchorTranscriptAtBottom();
+          return;
+        }
+        if (_transcriptSplit > 0) {
           setState(() => transcriptEpoch++);
           scrollController.jumpTo(position.maxScrollExtent);
           settleScrollToBottom();
@@ -623,7 +732,8 @@ const ValueKey<String> _kTranscriptCenterKey = ValueKey<String>(
 );
 
 /// A [ScrollController] whose initial offset is read when a position is
-/// created, not fixed at construction.
+/// created, not fixed at construction, and whose positions glide on a mouse
+/// wheel ([SmoothWheelScrollPosition]).
 class _TranscriptScrollController extends ScrollController {
   _TranscriptScrollController(this._initialOffset);
 
@@ -631,4 +741,125 @@ class _TranscriptScrollController extends ScrollController {
 
   @override
   double get initialScrollOffset => _initialOffset();
+
+  @override
+  ScrollPosition createScrollPosition(
+    ScrollPhysics physics,
+    ScrollContext context,
+    ScrollPosition? oldPosition,
+  ) => SmoothWheelScrollPosition(
+    physics: physics,
+    context: context,
+    initialPixels: initialScrollOffset,
+    keepScrollOffset: keepScrollOffset,
+    oldPosition: oldPosition,
+    debugLabel: debugLabel,
+  );
+}
+
+/// Wheel notches shorter than this are passed straight through: they come
+/// from a high-resolution wheel or a touchpad that already sends a smooth
+/// stream of small steps.
+const double kSmoothWheelMinDelta = 12;
+
+/// Time constant of a wheel glide: each frame covers the share
+/// `1 - e^(-dt / tau)` of the way left, so a notch is 95 % done after three
+/// of these (about 135 ms), close to Chromium's smooth scroll.
+const Duration kSmoothWheelTau = Duration(milliseconds: 45);
+
+/// A scroll position that glides a mouse-wheel notch instead of jumping.
+///
+/// Flutter moves the list by the whole notch in one frame: on Linux GTK
+/// reports a notch as 53 px, so a turning wheel moved the chat 53 px, stood
+/// still for two or three frames, and moved 53 px again (measured: 62 % of
+/// the frames inside a wheel scroll did not move at all). Browsers and
+/// native apps glide each notch over a few frames. Here a notch moves the
+/// glide's target, and every frame closes a fixed share of the gap. A notch
+/// that arrives mid-glide only moves the target further, so a turning wheel
+/// gives one steady motion: no restart, no standing frame.
+class SmoothWheelScrollPosition extends ScrollPositionWithSingleContext {
+  SmoothWheelScrollPosition({
+    required super.physics,
+    required super.context,
+    super.initialPixels,
+    super.keepScrollOffset,
+    super.oldPosition,
+    super.debugLabel,
+  });
+
+  @override
+  void pointerScroll(double delta) {
+    if (delta.abs() < kSmoothWheelMinDelta) {
+      super.pointerScroll(delta);
+      return;
+    }
+    final ScrollActivity? current = activity;
+    final double from = current is _WheelGlideActivity
+        ? current.target
+        : pixels;
+    final double target = (from + delta).clamp(
+      minScrollExtent,
+      maxScrollExtent,
+    );
+    if ((target - pixels).abs() < 0.5) return;
+    // Same direction bookkeeping as the plain wheel: the chat reads it to
+    // tell a reader who scrolls up from a list that only grows.
+    updateUserScrollDirection(
+      delta > 0 ? ScrollDirection.reverse : ScrollDirection.forward,
+    );
+    if (current is _WheelGlideActivity) {
+      current.target = target;
+    } else {
+      beginActivity(_WheelGlideActivity(this, target, context.vsync));
+    }
+  }
+}
+
+/// The glide of [SmoothWheelScrollPosition]: eases [pixels] towards a
+/// target that the next notch may move.
+class _WheelGlideActivity extends ScrollActivity {
+  _WheelGlideActivity(this._position, this.target, TickerProvider vsync)
+    : super(_position) {
+    _ticker = vsync.createTicker(_tick)..start();
+  }
+
+  final SmoothWheelScrollPosition _position;
+
+  /// Where the glide ends.
+  double target;
+
+  late final Ticker _ticker;
+  Duration _last = Duration.zero;
+  double _velocity = 0;
+
+  void _tick(Duration elapsed) {
+    // The first tick of a ticker reports zero time; count it as one frame,
+    // or the first frame of every glide would stand still.
+    double dt = (elapsed - _last).inMicroseconds / 1e6;
+    _last = elapsed;
+    if (dt <= 0) dt = 1 / 60;
+    final double from = _position.pixels;
+    final double tau = kSmoothWheelTau.inMicroseconds / 1e6;
+    double next = from + (target - from) * (1 - math.exp(-dt / tau));
+    final bool done = (target - next).abs() < 0.5;
+    if (done) next = target;
+    _velocity = (next - from) / dt;
+    final double overscroll = delegate.setPixels(next);
+    if (done || overscroll.abs() > 0) delegate.goBallistic(0);
+  }
+
+  @override
+  bool get isScrolling => true;
+
+  @override
+  bool get shouldIgnorePointer => true;
+
+  @override
+  double get velocity => _velocity;
+
+  @override
+  void dispose() {
+    _ticker.dispose();
+    super.dispose();
+  }
 }

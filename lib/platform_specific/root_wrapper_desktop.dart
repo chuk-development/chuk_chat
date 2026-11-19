@@ -1,8 +1,10 @@
 // lib/platform_specific/root_wrapper_desktop.dart
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/app_notification.dart';
+
 import 'dart:math' as math;
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -83,6 +85,16 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
   static const double _kHeaderCenterBottom =
       kTopInitialSpacing + (kButtonVisualHeight + kMinInteractiveDimension) / 2;
 
+  /// Bottom of the last icon of the folded rail with [count] icons.
+  static double _miniRailBottom(int count) => count == 0
+      ? kTopInitialSpacing + kMenuButtonHeight
+      : sbNavRowTop(count - 1) + kSbNavIconTop + kSbNavIconTile;
+
+  /// Top of the folded rail's settings gear tile, from the bottom edge
+  /// (it is placed by its centre, see [_sidebarSettingsGear]).
+  static const double _kRailGearTopFromBottom =
+      kSbFooterSettingsCentreFromBottom + kSbNavIconTile / 2;
+
   bool _isSidebarExpanded = false;
   bool _hasOpenedSidebar = false;
 
@@ -105,6 +117,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
   }
 
   String? _activeProjectId;
+
   /// 'workspaces' for the full-page workspace list, or null.
   String? _activePanel;
   ArtifactDocument? _activeArtifact;
@@ -405,14 +418,19 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
     final state = _chatUIKey.currentState;
     final messages = state?.debugMessages;
     if (messages == null || messages.isEmpty) {
-        AppNotifications.show(context, 'No messages to copy');
+      AppNotifications.show(context, 'No messages to copy');
       return;
     }
     final text = DebugChatFormatter.format(
       messages,
       context: chatDebugContext(state, platform: 'desktop'),
     );
-    Clipboard.setData(ClipboardData(text: text));AppNotifications.show(context, 'Copied ${messages.length} messages (debug, images redacted)', duration: Duration(seconds: 2));
+    Clipboard.setData(ClipboardData(text: text));
+    AppNotifications.show(
+      context,
+      'Copied ${messages.length} messages (debug, images redacted)',
+      duration: Duration(seconds: 2),
+    );
   }
 
   // Mini-rail icons. Visible only when the sidebar is folded.
@@ -619,6 +637,42 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
     final bool isWorkspacesFullPage = _activePanel == 'workspaces';
     final bool showContent =
         (!isCompactMode || !_isSidebarExpanded) && !isWorkspacesFullPage;
+    // Right panel width for Projects/Media/Artifacts.
+    // Minimum chat width of 300px required to show panel
+    const double minChatWidth = 300.0;
+    const double minPanelWidth = 320.0;
+    final double sidebarWidth = _isSidebarExpanded ? effectiveSidebarWidth : 0;
+    final double availableForPanel = screenWidth - sidebarWidth - minChatWidth;
+    final bool hasArtifact =
+        kFeatureArtifacts && _activeArtifact != null && _panelOpen;
+    // Artifacts use user-dragged width (default 50%); other panels cap at 400px.
+    final double contentWidth = screenWidth - sidebarWidth;
+    final double defaultArtifactWidth = (contentWidth * 0.5).clamp(
+      minPanelWidth,
+      math.max(minPanelWidth, contentWidth - minChatWidth),
+    );
+    final double maxPanelWidth = hasArtifact
+        ? (_userArtifactPanelWidth ?? defaultArtifactWidth).clamp(
+            minPanelWidth,
+            math.max(minPanelWidth, contentWidth - minChatWidth),
+          )
+        : 400.0;
+    final double panelWidth = availableForPanel >= minPanelWidth
+        ? math.min(maxPanelWidth, availableForPanel)
+        : 0;
+    // The workspace list is full-page and the media library is a modal, so
+    // the side slot only ever carries an artifact.
+    final String? effectivePanel = hasArtifact ? 'artifact' : null;
+    final bool showPanel =
+        effectivePanel != null && !isCompactMode && panelWidth > 0;
+
+    // The folded rail's icons sit over the chat's left edge unless an
+    // artifact panel pushed the chat 48 px right of them.
+    final List<Widget> miniRail = _isSidebarExpanded
+        ? const <Widget>[]
+        : _buildMiniRail(l);
+    final bool railOverChat =
+        !_isSidebarExpanded && !(showPanel && effectivePanel == 'artifact');
     final Widget chatArea = ChukChatUIDesktop(
       key: _chatUIKey,
       onToggleSidebar: _toggleSidebar,
@@ -668,36 +722,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
       // switch, as the Agents half's thread starts below its header row.
       // Without one, chuk_chat's layout is unchanged.
       topInset: headerCenter == null ? 0 : _kHeaderCenterBottom,
+      // The folded sidebar's icons and gear stand over the chat's left edge,
+      // in the column of the message rail.
+      railColumnTop: railOverChat ? _miniRailBottom(miniRail.length) : 0,
+      railColumnBottom: railOverChat ? _kRailGearTopFromBottom : 0,
     );
-
-    // Right panel width for Projects/Media/Artifacts.
-    // Minimum chat width of 300px required to show panel
-    const double minChatWidth = 300.0;
-    const double minPanelWidth = 320.0;
-    final double sidebarWidth = _isSidebarExpanded ? effectiveSidebarWidth : 0;
-    final double availableForPanel = screenWidth - sidebarWidth - minChatWidth;
-    final bool hasArtifact =
-        kFeatureArtifacts && _activeArtifact != null && _panelOpen;
-    // Artifacts use user-dragged width (default 50%); other panels cap at 400px.
-    final double contentWidth = screenWidth - sidebarWidth;
-    final double defaultArtifactWidth = (contentWidth * 0.5).clamp(
-      minPanelWidth,
-      math.max(minPanelWidth, contentWidth - minChatWidth),
-    );
-    final double maxPanelWidth = hasArtifact
-        ? (_userArtifactPanelWidth ?? defaultArtifactWidth).clamp(
-            minPanelWidth,
-            math.max(minPanelWidth, contentWidth - minChatWidth),
-          )
-        : 400.0;
-    final double panelWidth = availableForPanel >= minPanelWidth
-        ? math.min(maxPanelWidth, availableForPanel)
-        : 0;
-    // The workspace list is full-page and the media library is a modal, so
-    // the side slot only ever carries an artifact.
-    final String? effectivePanel = hasArtifact ? 'artifact' : null;
-    final bool showPanel =
-        effectivePanel != null && !isCompactMode && panelWidth > 0;
 
     // Debug: Log panel state when active
     if (effectivePanel != null) {
@@ -730,7 +759,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
                   ? collapsedLeft
                   : effectiveSidebarWidth;
               return Positioned.fill(
-                left: collapsedLeft +
+                left:
+                    collapsedLeft +
                     (expandedLeft - collapsedLeft) * _sidebarProgress.value,
                 right: showPanel ? panelWidth : 0,
                 child: offstageChat ?? const SizedBox.shrink(),
@@ -879,7 +909,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
           // the expanded sidebar: brand row is kMenuButtonHeight (48) tall,
           // then nav rows are kButtonVisualHeight (40) tall. Search is NOT
           // in the mini-rail — only New chat, Workspaces, Media.
-          if (!_isSidebarExpanded) ..._buildMiniRail(l),
+          ...miniRail,
           _sidebarSettingsGear(l, effectiveSidebarWidth),
 
           // Copy full chat button (top-right of chat area)
@@ -903,8 +933,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
           // the chrome buttons, across the whole window. Its free part starts
           // right of the menu button (or of the open sidebar) and ends left
           // of the copy button, the workspace panel and the side panel.
-          if (headerCenter != null &&
-              (!isCompactMode || !_isSidebarExpanded))
+          if (headerCenter != null && (!isCompactMode || !_isSidebarExpanded))
             Positioned(
               key: const ValueKey<String>('root-desktop-header-center'),
               top:

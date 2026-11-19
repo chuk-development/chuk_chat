@@ -57,6 +57,19 @@ void main() {
       expect(chatTurnRailBand(paneHeight: 900, top: 76, bottom: 0), 824);
       // A composer taller than half the area leaves no room.
       expect(chatTurnRailBand(paneHeight: 400, top: 0, bottom: 300), 0);
+      // Icons over the top of the column (to 159) and a gear at its foot
+      // (45 px): centred between them at 574.5, and clear of the composer
+      // (from 795): twice 220.5.
+      expect(
+        chatTurnRailBand(
+          paneHeight: 1035,
+          top: 0,
+          bottom: 240,
+          columnTop: 159,
+          columnBottom: 45,
+        ),
+        441,
+      );
     });
 
     test('jump estimate: a row share by measured heights', () {
@@ -94,8 +107,12 @@ void main() {
 
     test('gutter and hit strip never reach into the text column', () {
       expect(chatTurnRailGutter(1200, 760), 220);
+      // The hit strip is centred on the icon column's axis (31 px): 11..51.
+      expect(chatTurnRailHitLeft(kChatTurnRailColumnCentre), 11);
       expect(chatTurnRailHitStripWidth(220), 40);
-      expect(chatTurnRailHitStripWidth(30), 18);
+      // Room for the widest (24 px) strip around the axis, no more.
+      expect(chatTurnRailHitStripWidth(43), 32);
+      expect(chatTurnRailHitStripWidth(42), 0);
       expect(chatTurnRailHitStripWidth(10), 0);
     });
 
@@ -142,7 +159,12 @@ void main() {
     await pumpRail(tester, messages: _chat(4));
     expect(_strip(0), findsOneWidget);
     expect(_strip(9), findsOneWidget);
-    expect(tester.getTopLeft(_strip(0)).dx, 12);
+    // Every strip is centred on the left icon column's axis, at every width.
+    final Finder bar = find.descendant(
+      of: _strip(0),
+      matching: find.byType(AnimatedContainer),
+    );
+    expect(tester.getCenter(bar).dx, kChatTurnRailColumnCentre);
 
     await pumpRail(tester, messages: _chat(1));
     expect(_strip(0), findsNothing);
@@ -167,6 +189,18 @@ void main() {
     expect(_stripWidth(tester, 9), 16);
     expect(_stripWidth(tester, 0), 10);
     expect(_stripWidth(tester, 15), 8);
+    // A grown strip grows both ways: it stays on the column's axis.
+    expect(
+      tester
+          .getCenter(
+            find.descendant(
+              of: _strip(6),
+              matching: find.byType(AnimatedContainer),
+            ),
+          )
+          .dx,
+      kChatTurnRailColumnCentre,
+    );
     expect(
       find.byKey(const ValueKey<String>('turn-rail-preview')),
       findsOneWidget,

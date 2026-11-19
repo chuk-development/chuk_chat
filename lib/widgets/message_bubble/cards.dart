@@ -33,6 +33,49 @@ Size singleImageBox({
   return Size(width, height);
 }
 
+/// Width / height of every image a thumbnail has measured, by source.
+///
+/// A tile that is built again (a row scrolled back into view, a chat opened
+/// again) knows its real size in its first frame. Without it the tile drew
+/// at its placeholder height, measured the picture a few frames later and
+/// changed height: the row under the reader's eyes jumped while scrolling,
+/// and the list's length changed under the scrollbar. Only numbers are kept,
+/// no image content.
+final Map<String, double> _thumbnailAspects = <String, double>{};
+
+/// Most ratios kept; the oldest go first.
+const int _kThumbnailAspectsMax = 512;
+
+void _rememberThumbnailAspect(String source, double ratio) {
+  _thumbnailAspects.remove(source);
+  if (_thumbnailAspects.length >= _kThumbnailAspectsMax) {
+    _thumbnailAspects.remove(_thumbnailAspects.keys.first);
+  }
+  _thumbnailAspects[source] = ratio;
+}
+
+/// The intrinsic width / height of encoded image [bytes], read from the
+/// header: no full decode of the picture.
+Future<double?> _encodedAspect(Uint8List bytes) async {
+  final ui.ImmutableBuffer buffer = await ui.ImmutableBuffer.fromUint8List(
+    bytes,
+  );
+  try {
+    final ui.ImageDescriptor descriptor = await ui.ImageDescriptor.encoded(
+      buffer,
+    );
+    try {
+      return descriptor.height > 0
+          ? descriptor.width / descriptor.height
+          : null;
+    } finally {
+      descriptor.dispose();
+    }
+  } finally {
+    buffer.dispose();
+  }
+}
+
 /// Cached image thumbnail that decodes once and caches the bytes
 class _CachedImageThumbnail extends StatefulWidget {
   const _CachedImageThumbnail({
@@ -96,6 +139,9 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
   @override
   void initState() {
     super.initState();
+    if (widget.naturalAspect) {
+      _aspectRatio = _thumbnailAspects[widget.imageDataUrl];
+    }
     _loadImage();
     // Live-swap to the "Image deleted" state the moment this exact storage
     // object is removed anywhere (chat right-click, Media Manager) — no reload
@@ -160,16 +206,14 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
 
     // In natural-aspect mode, decode the intrinsic dimensions so the tile can
     // size itself to the real ratio instead of a placeholder square.
-    if (widget.naturalAspect && _cachedBytes != null) {
+    final Uint8List? loaded = _cachedBytes;
+    if (widget.naturalAspect && loaded != null && _aspectRatio == null) {
       try {
-        final codec = await ui.instantiateImageCodec(_cachedBytes!);
-        final frame = await codec.getNextFrame();
-        final img = frame.image;
-        if (img.height > 0) {
-          _aspectRatio = img.width / img.height;
+        final double? ratio = await _encodedAspect(loaded);
+        if (ratio != null) {
+          _aspectRatio = ratio;
+          _rememberThumbnailAspect(widget.imageDataUrl, ratio);
         }
-        img.dispose();
-        codec.dispose();
       } catch (e) {
         if (kDebugMode) {
           debugPrint('Failed to decode image dimensions: $e');
@@ -241,7 +285,9 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
     if (_isLoading) {
       return wrap(
         Container(
-          width: widget.width,
+          // The real size when the ratio is already known: the picture then
+          // takes the placeholder's place without a resize.
+          width: renderWidth,
           height: renderHeight,
           decoration: BoxDecoration(
             color: Colors.grey.withValues(alpha: 0.3),
@@ -496,9 +542,9 @@ class _ArtifactInlineCardState extends State<_ArtifactInlineCard> {
       );
       final chatId = ArtifactStorageService.activeChatId;
       if (match == null && chatId != null && chatId.isNotEmpty) {
-        match = (await ArtifactStorageService.loadArtifactsForChat(
-          chatId,
-        )).where((a) => a.id == widget.artifactId).firstOrNull;
+        match = (await ArtifactStorageService.loadArtifactsForChat(chatId))
+            .where((a) => a.id == widget.artifactId)
+            .firstOrNull;
       }
 
       if (match != null) {

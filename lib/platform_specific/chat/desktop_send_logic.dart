@@ -3219,6 +3219,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         ..clear()
         ..addAll(chat.messages.map(_messageToRawMap));
       _messageRenderCache.clear();
+      _rowMemo.clear();
     });
   }
 }

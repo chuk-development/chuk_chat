@@ -114,6 +114,7 @@ import 'package:chuk_chat/utils/desktop_drop_stub.dart'
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/platform_specific/chat/regen_variant_seed.dart';
 import 'package:chuk_chat/platform_specific/chat/row_extent_cache.dart';
+import 'package:chuk_chat/platform_specific/chat/transcript_row_memo.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_clipboard_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_file_handler.dart';
@@ -182,6 +183,14 @@ class ChukChatUIDesktop extends StatefulWidget {
   /// its first row starts below it. Zero for chuk_chat's own screen.
   final double topInset;
 
+  /// What stands in the message rail's column besides the rail, from the
+  /// top and the bottom of this screen: the folded sidebar's icons and its
+  /// settings gear, which the root draws over this screen's left edge. The
+  /// rail is centred in the part of the column they leave free. Zero when
+  /// nothing stands there (the sidebar is open, or another pane).
+  final double railColumnTop;
+  final double railColumnBottom;
+
   /// A row drawn after the last message, inside the transcript's scroll (the
   /// Agents browser takeover card). It scrolls with the messages and never
   /// covers one. The list scrolls to it when it appears. Only the Agents
@@ -234,6 +243,8 @@ class ChukChatUIDesktop extends StatefulWidget {
     this.agentsThread = false,
     this.agentsTitle,
     this.topInset = 0,
+    this.railColumnTop = 0,
+    this.railColumnBottom = 0,
     this.transcriptFooter,
     this.composerAbove,
     this.composerSeat,
@@ -555,9 +566,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool get _isStreaming =>
       _activeChatId != null && _streamingManager.isStreaming(_activeChatId!);
 
-  // Agents: the thread opens at its bottom (see ChatScrollMixin).
+  // Every chat opens at its bottom without laying out the rows above, and a
+  // rail jump splits the list at its row (see ChatScrollMixin). The plain
+  // ListView walked the whole chat on open (700 ms build in a profile build
+  // for 330 rows) and on every far jump.
   @override
-  bool get anchoredTranscript => widget.agentsThread;
+  bool get anchoredTranscript => true;
 
   // Agents: the thread saves its model only when it changed (see
   // ChatModelSelectionMixin).
@@ -1107,6 +1121,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     _messageRenderCache.clear();
     _rowExtents.clear();
+    _rowMemo.clear();
 
     // Synchronous fast path: if the requested chat is already fully cached,
     // populate inline without entering async / showing the spinner. This
@@ -1228,6 +1243,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _stopAudioRecordingForNavigation();
 
     setState(() {
+      _rowMemo.clear();
       _messages
         ..clear()
         ..addAll(mappedMessages);
@@ -1279,6 +1295,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         );
       }
       _messages.clear();
+      _rowMemo.clear();
       _animCtrl.reset();
       _fileHandler.attachedFiles.clear();
       messageActionsHandler.cancelEdit();
@@ -1350,6 +1367,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             debugPrint('│ ⚠️ [LOAD-CHAT-DESKTOP] Chat $chatId load failed!');
           }
           _messages.clear();
+          _rowMemo.clear();
           _animCtrl.reset();
           _fileHandler.attachedFiles.clear();
           messageActionsHandler.cancelEdit();
@@ -1371,6 +1389,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           );
         }
         _messages.clear();
+        _rowMemo.clear();
         _animCtrl.reset();
         _fileHandler.attachedFiles.clear();
         messageActionsHandler.cancelEdit();
@@ -1394,6 +1413,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         _activeChatId!,
       );
       if (bgMessages != null && bgMessages.isNotEmpty) {
+        _rowMemo.clear();
         _messages
           ..clear()
           ..addAll(
@@ -1479,6 +1499,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (!mounted || _activeChatId != chatId) {
       return false;
     }
+    _rowMemo.clear();
     _messages
       ..clear()
       ..addAll(mappedMessages);
@@ -1561,6 +1582,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // Clear UI immediately for instant response
     setState(() {
       _messages.clear();
+      _rowMemo.clear();
       _animCtrl.reset();
       _activeChatId = null;
       _isSending = false; // Reset for new chat
@@ -2333,6 +2355,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// Measured row heights of the open chat, by row key.
   final RowExtentCache _rowExtents = RowExtentCache();
 
+  /// The built rows of the open chat, reused while nothing they show
+  /// changed (see [TranscriptRowMemo]).
+  final TranscriptRowMemo _rowMemo = TranscriptRowMemo();
+
   /// Height of row [i]: measured, else estimated. Rows past the messages
   /// (the transcript footer) count as one short row.
   double _rowExtentOf(int i) {
@@ -2364,9 +2390,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   }
   // ── end unread pill ──
 
-  /// The message list. Upstream: the plain [ListView]. Agents: the
-  /// bottom-anchored transcript ([ChatScrollMixin.buildAnchoredTranscript]),
-  /// which opens a thread at its bottom without laying out the rows above.
+  /// The message list: the bottom-anchored transcript
+  /// ([ChatScrollMixin.buildAnchoredTranscript]), which opens a chat at its
+  /// bottom without laying out the rows above.
   Widget _buildMessageList({
     required double expandedInputWidth,
     required double horizontalPadding,
@@ -2385,6 +2411,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final Widget? footer = widget.transcriptFooter;
     final int itemCount = _messages.length + (footer != null ? 1 : 0);
     final int firstUnreadIndex = _firstUnreadIndex;
+    _rowMemo.trimTo(_messages.length);
     Widget rowBuilder(BuildContext _, int i) {
       if (footer != null && i == _messages.length) {
         return Padding(
@@ -2393,6 +2420,35 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           child: footer,
         );
       }
+      // Everything the row reads besides its own message map. Equal inputs
+      // and an equal map hand back the row built last time, so a rebuild of
+      // this screen (a stream tick, the composer, a rail jump) does not
+      // rebuild every bubble on it ([TranscriptRowMemo]). A plain rebuild
+      // of the screen with a long chat open cost 30 to 60 ms in debug.
+      final Map<String, String> raw = _messages[i];
+      final List<Object?> rowInputs = <Object?>[
+        _activeChatId,
+        _messages.length,
+        i == 0 ? null : _messages[i - 1]['sender'],
+        i + 1 < _messages.length ? _messages[i + 1]['sender'] : null,
+        _isStreaming,
+        _isSending,
+        expandedInputWidth,
+        _flyInKey,
+        widget.showToolCalls,
+        widget.showReasoningTokens,
+        widget.showModelInfo,
+        widget.showTps,
+        messageActionsHandler.editingMessageIndex == i,
+        TtsAudioService.activeText.value,
+        TtsAudioService.phase.value,
+        i == firstUnreadIndex,
+        // The ask_user chips of the last answer hide while a question holds
+        // the composer's seat.
+        i == _messages.length - 1 ? _openChatQuestion() != null : null,
+      ];
+      final Widget? kept = _rowMemo.lookup(i, raw, rowInputs);
+      if (kept != null) return kept;
       final data = _messageRenderCache.build(
         messages: _messages,
         index: i,
@@ -2437,39 +2493,25 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           ? KeyedSubtree(key: _turnRail.keyFor(i), child: measured)
           : measured;
       // The first row the reader has not seen carries the unread pill's key.
-      return i == firstUnreadIndex
+      final Widget row = i == firstUnreadIndex
           ? KeyedSubtree(key: _firstUnreadKey, child: railed)
           : railed;
+      _rowMemo.store(i, raw, rowInputs, row);
+      return row;
     }
 
     Widget itemBuilder(BuildContext context, int i) => rowBuilder(context, i);
 
-    if (widget.agentsThread) {
-      transcriptBottomInset = bottomPadding;
-      return buildAnchoredTranscript(
-        split: resolveTranscriptSplit(),
-        itemCount: itemCount,
-        padding: padding,
-        itemBuilder: itemBuilder,
-        scrollCacheExtent: cacheExtent,
-        addAutomaticKeepAlives: true,
-        extentOf: _rowExtentOf,
-      );
-    }
-    return ListView.custom(
-      controller: scrollController,
+    transcriptBottomInset = bottomPadding;
+    transcriptTopInset = padding.top;
+    return buildAnchoredTranscript(
+      split: resolveTranscriptSplit(),
+      itemCount: itemCount,
       padding: padding,
+      itemBuilder: itemBuilder,
       scrollCacheExtent: cacheExtent,
-      childrenDelegate: CachedExtentChildDelegate(
-        itemBuilder,
-        childCount: itemCount,
-        extentOf: _rowExtentOf,
-        addAutomaticKeepAlives: true, // Keep message widgets alive
-        // Each item already wraps its own RepaintBoundary below, so the
-        // builder's automatic one would just be a redundant layer on every
-        // row.
-        addRepaintBoundaries: false,
-      ),
+      addAutomaticKeepAlives: true,
+      extentOf: _rowExtentOf,
     );
   }
 
@@ -2747,12 +2789,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             contentMaxWidth: _kMaxChatContentWidth,
                             topPadding: widget.topInset,
                             bottomPadding: inputAreaTotalHeight,
-                            onTickTap: (int index) => scrollToTurn(
-                              _turnRail,
-                              index: index,
-                              itemCount: _messages.length,
-                              controller: scrollController,
-                              extentOf: _rowExtentOf,
+                            columnTop: widget.railColumnTop,
+                            columnBottom: widget.railColumnBottom,
+                            onTickTap: (int index) => unawaited(
+                              scrollToRow(
+                                index,
+                                rowKey: _turnRail.keyFor(index),
+                              ),
                             ),
                           ),
                         ),
