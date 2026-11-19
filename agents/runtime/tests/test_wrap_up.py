@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from chuk_agents_runtime.loop import (
     LAST_STEP_NOTE,
+    WRAP_UP_AUTOMATION_NOTE,
     WRAP_UP_NOTE,
     AgentLoop,
     StopReason,
@@ -109,3 +110,92 @@ def test_a_limit_stopped_run_is_recorded_as_incomplete(tmp_path):
     # A client that was away still gets the stopped run's end.
     reasons = [e["reason"] for e in store.run_terminals("k")]
     assert "max_iterations" in reasons
+
+
+def _automation_registry(made: list[dict]) -> ToolRegistry:
+    reg = _registry()
+    reg.register(
+        "skill",
+        {"type": "object", "properties": {"name": {"type": "string"}}},
+        lambda name="": {"ok": True, "skill": name},
+    )
+
+    def schedule_task(spec="", prompt="", name=""):
+        made.append({"spec": spec, "prompt": prompt})
+        return {"ok": True, "id": "abc12345", "spec": spec}
+
+    reg.register(
+        "schedule_task",
+        {
+            "type": "object",
+            "properties": {
+                "spec": {"type": "string"},
+                "prompt": {"type": "string"},
+                "name": {"type": "string"},
+            },
+        },
+        schedule_task,
+    )
+    return reg
+
+
+class ScriptBuilder:
+    """CHAT-147: loads the automations skill, then keeps polishing its script.
+    It creates the schedule only when the runtime says so."""
+
+    def __init__(self, schedule_early: bool = False) -> None:
+        self.calls: list[list[dict]] = []
+        self.schedule_early = schedule_early
+        self.scheduled = False
+
+    def complete(self, messages):
+        self.calls.append(list(messages))
+        texts = _texts(messages)
+        if any(t.startswith("[runtime] This is the last step") for t in texts):
+            return ModelResponse(text="Tagesjob läuft täglich um 08:00.")
+        if len(self.calls) == 1:
+            return tool_call_response(("skill", {"name": "automations"}))
+        wants = self.schedule_early and len(self.calls) == 2
+        wants = wants or any("Your next call must create it" in t for t in texts)
+        if wants and not self.scheduled:
+            self.scheduled = True
+            return tool_call_response(
+                ("schedule_task", {"spec": "0 8 * * *", "prompt": "Wahlen prüfen", "name": "Wahlradar täglich"})
+            )
+        return tool_call_response(("echo", {"v": f"polish {len(self.calls)}"}))
+
+
+def _runtime_rows(store: StateStore) -> list[str]:
+    rows = [m.content.get("content") for m in store.get_conversation(store.route("k"))]
+    return [r for r in rows if isinstance(r, str) and r.startswith("[runtime] Only")]
+
+
+def test_a_requested_automation_is_created_before_the_run_ends(tmp_path):
+    """CHAT-147: the run asked for a daily job ran out of steps before its
+    ``schedule_task`` call. The wrap-up note now says to create it first."""
+    store = StateStore(str(tmp_path / "s.db"))
+    made: list[dict] = []
+    model = ScriptBuilder()
+    loop = AgentLoop(model, _automation_registry(made), store, max_iterations=10)
+    result = loop.run("k", "such täglich nach Wahlen in Deutschland")
+
+    assert result.reason is StopReason.FINISHED
+    assert _runtime_rows(store) == [WRAP_UP_AUTOMATION_NOTE.format(left=2)]
+    assert made == [{"spec": "0 8 * * *", "prompt": "Wahlen prüfen"}]
+
+
+def test_an_automation_already_created_gets_the_plain_note(tmp_path):
+    store = StateStore(str(tmp_path / "s.db"))
+    made: list[dict] = []
+    loop = AgentLoop(ScriptBuilder(schedule_early=True), _automation_registry(made), store, max_iterations=10)
+    loop.run("k", "such täglich nach Wahlen in Deutschland")
+
+    assert len(made) == 1
+    assert _runtime_rows(store) == [WRAP_UP_NOTE.format(left=2)]
+
+
+def test_a_run_without_the_skill_gets_the_plain_note(tmp_path):
+    store = StateStore(str(tmp_path / "s.db"))
+    loop = AgentLoop(Collector(), _automation_registry([]), store, max_iterations=10)
+    loop.run("k", "find six mugs")
+    assert _runtime_rows(store) == [WRAP_UP_NOTE.format(left=2)]

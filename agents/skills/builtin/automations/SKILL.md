@@ -20,6 +20,11 @@ NOT such a request. Do the check now, one time, and give the result. At the
 end you may offer the routine in one sentence ("Soll ich das jeden Morgen um
 9 machen?"). When you are not sure, do not create it.
 
+When the user does ask for one, create it early: as soon as you know what
+the run must check, call `schedule_task` (or `start_watcher`). A run has a
+step limit; scripts, tests and documents come after the job exists, and a
+later run can improve them. A job that was only planned never runs.
+
 For a time in the answer, take today from the `[clock]` note and read the
 weekday from `next_fire_local` in the tool result. Do not calculate it.
 

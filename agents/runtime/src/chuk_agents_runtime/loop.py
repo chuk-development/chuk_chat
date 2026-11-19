@@ -459,6 +459,21 @@ WRAP_UP_NOTE = (
     "Finish with what you have: pack and send any files you collected, then "
     "write the final answer. Say clearly what you found and what is missing."
 )
+#: The wrap-up note when the user asked for an automation in this run (the
+#: run loaded the ``automations`` skill) and none was created yet (CHAT-147:
+#: the "Wahlradar" agent built and tested its daily script, got "stop now",
+#: and ended without the ``schedule_task`` call, so the daily job never ran).
+#: Creating it is one call; the answer comes after it.
+WRAP_UP_AUTOMATION_NOTE = (
+    "[runtime] Only {left} steps are left for this task. The user asked for "
+    "a recurring job and it does not exist yet. Your next call must create it "
+    "(schedule_task, or start_watcher for a watcher script). Do not polish "
+    "scripts or documents first. Then write the final answer: say what runs "
+    "when, what you found and what is missing."
+)
+#: Tools that create an automation. A successful call of one of them
+#: settles the request (``_ActiveRun.automation_made``).
+AUTOMATION_CREATE_TOOLS = frozenset({"schedule_task", "start_watcher", "watch_url", "watch_mail"})
 #: The last step has no tools: the model must write the answer.
 LAST_STEP_NOTE = (
     "[runtime] This is the last step of this task. You cannot call tools any "
@@ -604,6 +619,11 @@ class _ActiveRun:
     #: Set once the run told the user what it is doing (the model's own
     #: ``send_message``, its text before the tools, or the written fallback).
     interim_sent: bool = False
+    #: The run loaded the ``automations`` skill (the user asked for a
+    #: schedule or a watcher) / an automation was created in this run. Asked
+    #: and not made = the wrap-up note says to create it first (CHAT-147).
+    automation_asked: bool = False
+    automation_made: bool = False
 
 
 class _PendingRecall:
@@ -1480,10 +1500,15 @@ class AgentLoop:
         steps_near = limit >= 5 and state.iterations >= int(WRAP_UP_SHARE * limit)
         if not state.wrap_noted and (steps_near or token_near) and left > 1:
             state.wrap_noted = True
+            note = (
+                WRAP_UP_AUTOMATION_NOTE
+                if active.automation_asked and not active.automation_made
+                else WRAP_UP_NOTE
+            )
             self._append(
                 active.session_id,
                 "context",
-                {"role": "user", "content": WRAP_UP_NOTE.format(left=left)},
+                {"role": "user", "content": note.format(left=left)},
             )
         if state.final_step and not state.last_step:
             # A provider asked for the closing message now (a goal marked
@@ -1936,6 +1961,15 @@ class AgentLoop:
                         tool=call.tool_name, count=count, arguments=preview
                     )
                 active.pending_notes.append(f"[runtime] {text}")
+            if call.tool_name == "skill" and str(args.get("name") or "").strip() == "automations":
+                active.automation_asked = True
+            elif (
+                call.tool_name in AUTOMATION_CREATE_TOOLS
+                and not raised
+                and isinstance(result, dict)
+                and result.get("ok") is True
+            ):
+                active.automation_made = True
             if self._is_mutating(call.tool_name):
                 target = _call_target(args)
                 pair = (call.tool_name, target)
