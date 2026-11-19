@@ -91,7 +91,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
   /// this one value, so every frame shows them at the same point.
   late final AnimationController _sidebarAnim = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 220),
+    duration: const Duration(milliseconds: 300),
   )..addStatusListener(_onSidebarAnimStatus);
   late final Animation<double> _sidebarProgress = CurvedAnimation(
     parent: _sidebarAnim,
@@ -715,14 +715,27 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
           // removal/insertion conflicts.  Hide via Offstage when the
           // sidebar covers the full screen in compact mode or assistants
           // is showing full-page.
-          Positioned.fill(
-            // Reserve 48px for collapsed sidebar icons when artifact panel
-            // is open, so chat content doesn't slide under the hamburger.
-            left: (!isCompactMode && _isSidebarExpanded)
-                ? effectiveSidebarWidth
-                : (showPanel && effectivePanel == 'artifact' ? 48 : 0),
-            right: showPanel ? panelWidth : 0,
+          // The chat moves with the sidebar: its left edge follows the
+          // same animation as the panel, so opening or closing the sidebar
+          // glides the chat over instead of jumping it in the first frame.
+          AnimatedBuilder(
+            animation: _sidebarProgress,
             child: Offstage(offstage: !showContent, child: chatArea),
+            builder: (BuildContext context, Widget? offstageChat) {
+              // Reserve 48px for collapsed sidebar icons when artifact panel
+              // is open, so chat content doesn't slide under the hamburger.
+              final double collapsedLeft =
+                  showPanel && effectivePanel == 'artifact' ? 48 : 0;
+              final double expandedLeft = isCompactMode
+                  ? collapsedLeft
+                  : effectiveSidebarWidth;
+              return Positioned.fill(
+                left: collapsedLeft +
+                    (expandedLeft - collapsedLeft) * _sidebarProgress.value,
+                right: showPanel ? panelWidth : 0,
+                child: offstageChat ?? const SizedBox.shrink(),
+              );
+            },
           ),
 
           // Full-page workspaces view (replaces chat area)
