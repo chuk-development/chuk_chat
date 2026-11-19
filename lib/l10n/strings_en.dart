@@ -1652,6 +1652,12 @@ const Map<String, String> stringsEn = {
   // ── Chat UI: stats row and turn rail ──
   'chatStatsTokPerSec': '{n} tok/s',
   'chatStatsCacheHit': 'Cache hit {pct}',
+  'chatStatsCacheLeft': 'Cache {time} left',
+  'chatStatsCacheLeftApprox': 'Cache ~{time} left',
+  'chatStatsCacheExpired': 'Cache expired',
+  'chatStatsCacheLikelyExpired': 'Cache likely expired',
+  'chatStatsCacheTip': '{provider} keeps the prompt cached for {ttl} after the last reply. A message after that pays for the full prompt again.',
+  'chatStatsCacheTipApprox': '{provider} usually keeps the prompt cached for about {ttl} after the last reply, with no guarantee. A message after that may pay for the full prompt again.',
   'chatStatsContext': 'Context {used} of {limit}',
   'chatStatsPrompt': 'Prompt: {n}',
   'chatStatsCached': 'Cached: {n}',

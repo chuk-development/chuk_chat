@@ -1620,6 +1620,19 @@ class AppLocalizations {
       _get('chatStatsTokPerSec').replaceAll('{n}', n);
   String chatStatsCacheHit(String pct) =>
       _get('chatStatsCacheHit').replaceAll('{pct}', pct);
+  String chatStatsCacheLeft(String time) =>
+      _get('chatStatsCacheLeft').replaceAll('{time}', time);
+  String chatStatsCacheLeftApprox(String time) =>
+      _get('chatStatsCacheLeftApprox').replaceAll('{time}', time);
+  String get chatStatsCacheExpired => _get('chatStatsCacheExpired');
+  String get chatStatsCacheLikelyExpired =>
+      _get('chatStatsCacheLikelyExpired');
+  String chatStatsCacheTip(String provider, String ttl) => _get(
+    'chatStatsCacheTip',
+  ).replaceAll('{provider}', provider).replaceAll('{ttl}', ttl);
+  String chatStatsCacheTipApprox(String provider, String ttl) => _get(
+    'chatStatsCacheTipApprox',
+  ).replaceAll('{provider}', provider).replaceAll('{ttl}', ttl);
   String chatStatsContext(String used, String limit) => _get(
     'chatStatsContext',
   ).replaceAll('{used}', used).replaceAll('{limit}', limit);

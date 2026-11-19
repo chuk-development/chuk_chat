@@ -101,6 +101,11 @@ class ProviderCacheAffinity extends ChangeNotifier {
     return cacheTtlByFamily[family] ?? defaultCacheTtl;
   }
 
+  /// The last served request of [chatId], warm or not. Null when this app
+  /// session has not seen one.
+  ProviderAffinity? lastServedFor(String? chatId) =>
+      chatId == null || chatId.isEmpty ? null : _byChat[chatId];
+
   /// The record for [chatId] when it is about [modelId] and its provider's
   /// cache is still warm, else null.
   ProviderAffinity? warmFor(String? chatId, String modelId) {
