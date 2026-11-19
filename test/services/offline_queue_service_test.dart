@@ -3,6 +3,8 @@
 // Unit tests for OfflineQueueService — verifies enqueue/list/remove and the
 // watch() stream over an in-memory SQLite database.
 
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -134,6 +136,48 @@ void main() {
       expect(emitted, isNotEmpty);
       // After all operations we should have ended at length=1.
       expect(emitted.last, 1);
+    });
+  });
+  group('OfflineQueueService migration', () {
+    test('opens a v2 file that an older build set back to version 1',
+        () async {
+      final dir = await Directory.systemTemp.createTemp('offline_queue_');
+      final path = '${dir.path}/offline_queue.db';
+      // What an older build leaves: v2 columns, user_version 1.
+      final raw = await databaseFactoryFfi.openDatabase(path);
+      await raw.execute('''
+        CREATE TABLE pending_messages (
+          id TEXT PRIMARY KEY, chat_id TEXT NOT NULL,
+          message_json TEXT NOT NULL,
+          attempt_count INTEGER NOT NULL DEFAULT 0, last_error TEXT,
+          created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+          user_id TEXT, kind TEXT NOT NULL DEFAULT 'text',
+          state TEXT NOT NULL DEFAULT 'queued',
+          next_attempt_at INTEGER NOT NULL DEFAULT 0,
+          seq INTEGER NOT NULL DEFAULT 0,
+          encrypted INTEGER NOT NULL DEFAULT 0)
+      ''');
+      await raw.execute(
+        'CREATE INDEX idx_pending_user ON pending_messages (user_id)',
+      );
+      await raw.setVersion(1);
+      await raw.close();
+
+      await OfflineQueueService.instance.debugReset();
+      OfflineQueueService.debugDatabasePath = path;
+      addTearDown(() async {
+        await OfflineQueueService.instance.debugReset();
+        OfflineQueueService.debugDatabasePath = inMemoryDatabasePath;
+        await dir.delete(recursive: true);
+      });
+
+      await OfflineQueueService.instance.init();
+      final id = await OfflineQueueService.instance.enqueue(
+        chatId: 'chat-1',
+        sendPayload: {'messageText': 'hello'},
+      );
+      final pending = await OfflineQueueService.instance.listForChat('chat-1');
+      expect(pending.single.id, id);
     });
   });
 }

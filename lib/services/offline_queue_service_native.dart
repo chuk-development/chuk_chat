@@ -119,31 +119,38 @@ class OfflineQueueService {
   /// Version 2: owner, kind, state, backoff time, order and the sealed flag.
   /// Existing rows keep their payload (plaintext, `encrypted = 0`) and get
   /// a seq in their old created_at order.
+  ///
+  /// Idempotent: an older build that opens the file sets user_version back
+  /// to 1 while the v2 columns stay, so the next newer build runs this again.
+  /// Columns that already exist are skipped instead of failing the open.
   static Future<void> _upgradeToV2(Database db) async {
-    await db.execute('ALTER TABLE $_table ADD COLUMN user_id TEXT');
+    final existing = {
+      for (final row in await db.rawQuery('PRAGMA table_info($_table)'))
+        row['name'] as String,
+    };
+    Future<void> addColumn(String name, String definition) async {
+      if (existing.contains(name)) return;
+      await db.execute('ALTER TABLE $_table ADD COLUMN $name $definition');
+    }
+
+    await addColumn('user_id', 'TEXT');
+    await addColumn('kind', "TEXT NOT NULL DEFAULT 'text'");
+    await addColumn('state', "TEXT NOT NULL DEFAULT 'queued'");
+    await addColumn('next_attempt_at', 'INTEGER NOT NULL DEFAULT 0');
+    await addColumn('seq', 'INTEGER NOT NULL DEFAULT 0');
+    await addColumn('encrypted', 'INTEGER NOT NULL DEFAULT 0');
+    // Old rows: order by creation time. rowid breaks ties. Only when seq is
+    // new, so a second run keeps the order v2 rows already have.
+    if (!existing.contains('seq')) {
+      await db.execute(
+        'UPDATE $_table SET seq = (SELECT COUNT(*) FROM $_table AS o '
+        'WHERE o.created_at < $_table.created_at OR '
+        '(o.created_at = $_table.created_at AND o.rowid <= $_table.rowid))',
+      );
+    }
     await db.execute(
-      "ALTER TABLE $_table ADD COLUMN kind TEXT NOT NULL DEFAULT 'text'",
+      'CREATE INDEX IF NOT EXISTS idx_pending_user ON $_table (user_id)',
     );
-    await db.execute(
-      "ALTER TABLE $_table ADD COLUMN state TEXT NOT NULL DEFAULT 'queued'",
-    );
-    await db.execute(
-      'ALTER TABLE $_table ADD COLUMN next_attempt_at INTEGER NOT NULL '
-      'DEFAULT 0',
-    );
-    await db.execute(
-      'ALTER TABLE $_table ADD COLUMN seq INTEGER NOT NULL DEFAULT 0',
-    );
-    await db.execute(
-      'ALTER TABLE $_table ADD COLUMN encrypted INTEGER NOT NULL DEFAULT 0',
-    );
-    // Old rows: order by creation time. rowid breaks ties.
-    await db.execute(
-      'UPDATE $_table SET seq = (SELECT COUNT(*) FROM $_table AS o '
-      'WHERE o.created_at < $_table.created_at OR '
-      '(o.created_at = $_table.created_at AND o.rowid <= $_table.rowid))',
-    );
-    await db.execute('CREATE INDEX idx_pending_user ON $_table (user_id)');
   }
 
   /// Open/migrate the underlying DB. Safe to call multiple times.
