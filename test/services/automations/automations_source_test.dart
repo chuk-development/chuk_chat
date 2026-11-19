@@ -30,16 +30,20 @@ class FakeAutomationController extends FakeRelayController
   }
 }
 
-AgentsAutomation automation(String id, {String session = 'thread-1', String state = 'active', double created = 1.0}) =>
-    AgentsAutomation.fromPayload(<String, dynamic>{
-      'id': id,
-      'session_key': session,
-      'kind': 'schedule',
-      'name': id,
-      'state': state,
-      'spec': {'every': 300},
-      'created_at': created,
-    })!;
+AgentsAutomation automation(
+  String id, {
+  String session = 'thread-1',
+  String state = 'active',
+  double created = 1.0,
+}) => AgentsAutomation.fromPayload(<String, dynamic>{
+  'id': id,
+  'session_key': session,
+  'kind': 'schedule',
+  'name': id,
+  'state': state,
+  'spec': {'every': 300},
+  'created_at': created,
+})!;
 
 void main() {
   final source = AutomationsSource.instance;
@@ -61,7 +65,9 @@ void main() {
   test('an automation event lands in the map and notifies', () {
     var notified = 0;
     source.addListener(() => notified++);
-    controller.emit(AgentsRelayAutomation(event: 'created', automation: automation('a1')));
+    controller.emit(
+      AgentsRelayAutomation(event: 'created', automation: automation('a1')),
+    );
     expect(notified, 1);
     expect(source.byId('a1')?.state, 'active');
     expect(source.forSession('thread-1').map((a) => a.id), ['a1']);
@@ -69,22 +75,60 @@ void main() {
   });
 
   test('the last event wins per id; done ones leave the live list', () {
-    controller.emit(AgentsRelayAutomation(event: 'created', automation: automation('a1')));
-    controller.emit(AgentsRelayAutomation(event: 'paused', automation: automation('a1', state: 'paused')));
+    controller.emit(
+      AgentsRelayAutomation(event: 'created', automation: automation('a1')),
+    );
+    controller.emit(
+      AgentsRelayAutomation(
+        event: 'paused',
+        automation: automation('a1', state: 'paused'),
+      ),
+    );
     expect(source.liveForSession('thread-1').single.isPaused, isTrue);
-    controller.emit(AgentsRelayAutomation(event: 'cancelled', automation: automation('a1', state: 'done')));
+    controller.emit(
+      AgentsRelayAutomation(
+        event: 'cancelled',
+        automation: automation('a1', state: 'done'),
+      ),
+    );
+    expect(source.liveForSession('thread-1'), isEmpty);
+    expect(source.forSession('thread-1').single.isOver, isTrue);
+  });
+
+  test('a replayed older event never brings a finished row back', () {
+    controller.emit(
+      AgentsRelayAutomation(
+        event: 'fired',
+        automation: automation('w1', state: 'done'),
+      ),
+    );
+    controller.emit(
+      AgentsRelayAutomation(event: 'fired', automation: automation('w1')),
+    );
     expect(source.liveForSession('thread-1'), isEmpty);
     expect(source.forSession('thread-1').single.isOver, isTrue);
   });
 
   test('a list reply replaces its scope and marks it listed', () {
-    controller.emit(AgentsRelayAutomation(event: 'created', automation: automation('gone')));
-    controller.emit(AgentsRelayAutomation(event: 'created', automation: automation('keep', session: 'other')));
+    controller.emit(
+      AgentsRelayAutomation(event: 'created', automation: automation('gone')),
+    );
+    controller.emit(
+      AgentsRelayAutomation(
+        event: 'created',
+        automation: automation('keep', session: 'other'),
+      ),
+    );
     expect(source.listed('thread-1'), isFalse);
-    controller.emit(AgentsRelayAutomationList(
-      sessionKey: 'thread-1',
-      automations: [automation('a2', created: 5), automation('a3', created: 9)],
-    ));
+    controller.emit(
+      AgentsRelayAutomationList(
+        sessionKey: 'thread-1',
+        automations: [
+          automation('a2', created: 5),
+          automation('a3', created: 9),
+        ],
+      ),
+    );
     expect(source.listed('thread-1'), isTrue);
     expect(source.listed('other'), isFalse);
     // Newest first; the other session's row survives a scoped reply.
@@ -114,25 +158,32 @@ void main() {
     expect(await source.refresh(), isFalse);
   });
 
-  test('one row per automation: a restarted watcher folds into its live row', () {
-    AgentsAutomation watcher(String id, String state, double created) =>
-        AgentsAutomation.fromPayload(<String, dynamic>{
-          'id': id,
-          'session_key': 'thread-1',
-          'kind': 'watcher',
-          'name': 'Wahlradar',
-          'state': state,
-          'spec': {'script_path': 'monitor.py', 'restart': true},
-          'created_at': created,
-        })!;
-    controller.emit(AgentsRelayAutomationList(automations: [
-      watcher('old', 'done', 10),
-      watcher('live', 'active', 20),
-      automation('s1', created: 30),
-    ]));
-    expect(source.all.length, 3);
-    expect(source.distinct.map((a) => a.id), ['s1', 'live']);
-  });
+  test(
+    'one row per automation: a restarted watcher folds into its live row',
+    () {
+      AgentsAutomation watcher(String id, String state, double created) =>
+          AgentsAutomation.fromPayload(<String, dynamic>{
+            'id': id,
+            'session_key': 'thread-1',
+            'kind': 'watcher',
+            'name': 'Wahlradar',
+            'state': state,
+            'spec': {'script_path': 'monitor.py', 'restart': true},
+            'created_at': created,
+          })!;
+      controller.emit(
+        AgentsRelayAutomationList(
+          automations: [
+            watcher('old', 'done', 10),
+            watcher('live', 'active', 20),
+            automation('s1', created: 30),
+          ],
+        ),
+      );
+      expect(source.all.length, 3);
+      expect(source.distinct.map((a) => a.id), ['s1', 'live']);
+    },
+  );
 
   test('two rows of one state keep the newest', () {
     AgentsAutomation twin(String id, double created) =>
@@ -145,10 +196,11 @@ void main() {
           'spec': {'every': 300},
           'created_at': created,
         })!;
-    controller.emit(AgentsRelayAutomationList(automations: [
-      twin('older', 10),
-      twin('newer', 20),
-    ]));
+    controller.emit(
+      AgentsRelayAutomationList(
+        automations: [twin('older', 10), twin('newer', 20)],
+      ),
+    );
     expect(source.distinct.map((a) => a.id), ['newer']);
   });
 
@@ -157,10 +209,17 @@ void main() {
     expect(source.agentName('host:cowork-host'), 'cowork-host');
     expect(source.agentName('default'), 'Default agent');
     expect(source.agentName('thread-1'), 'thread-1');
-    controller.emit(const AgentsRelayAgentList(agents: [
-      AgentsHostAgentName(agentId: 'host:cowork-host', name: 'Ivory Lynx', host: true),
-    ]));
+    controller.emit(
+      const AgentsRelayAgentList(
+        agents: [
+          AgentsHostAgentName(
+            agentId: 'host:cowork-host',
+            name: 'Ivory Lynx',
+            host: true,
+          ),
+        ],
+      ),
+    );
     expect(source.agentName('host:cowork-host'), 'Ivory Lynx');
   });
 }
-

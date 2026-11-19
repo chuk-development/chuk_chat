@@ -23,6 +23,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
@@ -149,7 +150,13 @@ class AgentModelState {
     required this.own,
     required this.defaultMode,
     required this.defaultConfig,
+    this.defaultEffort,
   });
+
+  /// The reasoning level the agent runs the default model at, when it was
+  /// changed from the default's own level. The default has no provider
+  /// (Auto), so it has no [own] record to carry it.
+  final String? defaultEffort;
 
   /// The agent's own model, or null when it follows the app default.
   final ChatModelSelection? own;
@@ -167,7 +174,7 @@ class AgentModelState {
 
   /// The level the next run asks for, clamped to what the model allows.
   String get reasoningEffort => ChatModeService.sanitizeReasoningForModel(
-    own?.reasoningEffort ?? defaultConfig.reasoningEffort,
+    own?.reasoningEffort ?? defaultEffort ?? defaultConfig.reasoningEffort,
     modelId: modelId,
     providerSlug: providerSlug,
   );
@@ -192,7 +199,28 @@ class AgentModel {
       own: own,
       defaultMode: defaultMode,
       defaultConfig: defaultConfig,
+      defaultEffort: own == null ? await _loadDefaultEffort(chatId) : null,
     );
+  }
+
+  static String _defaultEffortKey(String chatId) =>
+      'agent_default_effort_$chatId';
+
+  static Future<String?> _loadDefaultEffort(String chatId) async {
+    if (chatId.isEmpty) return null;
+    final prefs = await SharedPreferences.getInstance();
+    final String? effort = prefs.getString(_defaultEffortKey(chatId));
+    return effort == null || effort.isEmpty ? null : effort;
+  }
+
+  static Future<void> _saveDefaultEffort(String chatId, String? effort) async {
+    if (chatId.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (effort == null || effort.isEmpty) {
+      await prefs.remove(_defaultEffortKey(chatId));
+    } else {
+      await prefs.setString(_defaultEffortKey(chatId), effort);
+    }
   }
 
   /// What an agent with no model of its own runs on: DeepSeek V4.1 Flash
@@ -203,9 +231,10 @@ class AgentModel {
   static const String defaultModelId = 'deepseek/deepseek-v4.1-flash-1017';
 
   /// The default's provider, reasoning level and the mode it is labelled as.
+  /// No provider: the API picks one per run (Auto, owner 2026-11-19).
   static const ModeConfig defaultConfig = ModeConfig(
     modelId: defaultModelId,
-    providerSlug: ChatModeService.defaultProviderSlug,
+    providerSlug: '',
     reasoningEffort: 'low',
   );
   static const ChatMode defaultMode = ChatMode.standard;
@@ -249,6 +278,9 @@ class AgentModel {
       own: own,
       defaultMode: defaultMode,
       defaultConfig: defaultConfig,
+      defaultEffort: own == null
+          ? await safely<String?>(() => _loadDefaultEffort(chatId), null)
+          : null,
     );
   }
 
@@ -333,6 +365,35 @@ class AgentModel {
     required String providerSlug,
     required String reasoningEffort,
   }) async {
+    if (providerSlug.isEmpty && modelId != defaultModelId) {
+      // Auto is only the default model's: another model gets its cheapest
+      // provider, as a model picked on the page does.
+      providerSlug = await providerFor(modelId) ?? '';
+      if (providerSlug.isEmpty) {
+        throw ArgumentError('No provider is known for $modelId');
+      }
+    }
+    if (providerSlug.isEmpty) {
+      // Auto has no local record (a record needs a provider). The default
+      // model on Auto is the agent default; its level is kept apart.
+      final String effort = ChatModeService.sanitizeReasoningForModel(
+        reasoningEffort,
+        modelId: modelId,
+        providerSlug: providerSlug,
+      );
+      final auto = ChatModelSelection(
+        modelId: modelId,
+        providerSlug: '',
+        reasoningEffort: effort,
+      );
+      await ChatModelSelectionService.instance.clear(chatId);
+      await _saveDefaultEffort(
+        chatId,
+        effort == defaultConfig.reasoningEffort ? null : effort,
+      );
+      unawaited(_pushToHost(chatId, auto));
+      return auto;
+    }
     final selection = ChatModelSelection(
       modelId: modelId,
       providerSlug: providerSlug,
@@ -350,12 +411,15 @@ class AgentModel {
   /// Drops the agent's own model: it follows the app default again.
   static Future<void> useDefault(String chatId) async {
     await ChatModelSelectionService.instance.clear(chatId);
+    await _saveDefaultEffort(chatId, null);
     unawaited(_pushToHost(chatId, null));
   }
 
   /// The host's stored model for [chatId] (`source: agent` in its status
-  /// frame). Taken into the local record only when this install has none:
-  /// that is the reinstall, and the host has the user's last choice.
+  /// frame). The host row is what runs, so the local record follows it:
+  /// after a reinstall, and when the row was changed elsewhere (another
+  /// device, the host itself). Otherwise the settings showed one model while
+  /// another one ran (CHAT-146).
   static Future<void> adoptFromHost(
     String chatId, {
     required String modelId,
@@ -364,12 +428,33 @@ class AgentModel {
   }) async {
     if (chatId.isEmpty || modelId.isEmpty) return;
     final own = await ChatModelSelectionService.instance.load(chatId);
-    if (own != null) return;
+    if (providerSlug == null || providerSlug.isEmpty) {
+      // A host row with no provider is Auto. The local record cannot hold
+      // that; the agent default can (DeepSeek V4.1 Flash on Auto). So the
+      // default model on Auto is "no own record here". Another model on
+      // Auto has no local form and keeps the record as it is.
+      if (modelId == defaultModelId) {
+        if (own != null) await ChatModelSelectionService.instance.clear(chatId);
+        await _saveDefaultEffort(
+          chatId,
+          reasoningEffort == defaultConfig.reasoningEffort
+              ? null
+              : reasoningEffort,
+        );
+      }
+      return;
+    }
+    if (own != null &&
+        own.modelId == modelId &&
+        own.providerSlug == providerSlug &&
+        (reasoningEffort == null || own.reasoningEffort == reasoningEffort)) {
+      return;
+    }
     await ChatModelSelectionService.instance.save(
       chatId,
       ChatModelSelection(
         modelId: modelId,
-        providerSlug: providerSlug ?? '',
+        providerSlug: providerSlug,
         reasoningEffort: reasoningEffort,
       ),
     );

@@ -142,6 +142,14 @@ class AutomationsSource extends ChangeNotifier {
   void _onInbound(AgentsRelayInbound event) {
     switch (event) {
       case AgentsRelayAutomation():
+        // A finished row (done / failed) never comes back to life: a replayed
+        // older event of the same automation must not overwrite it, or the
+        // app shows a watcher as "active" that ended months ago (CHAT-147).
+        final AgentsAutomation? known = _byId[event.automation.id];
+        if (known != null && known.isOver && !event.automation.isOver) {
+          _noteResult(event);
+          return;
+        }
         _byId[event.automation.id] = event.automation;
         _noteResult(event);
         notifyListeners();

@@ -412,7 +412,7 @@ void main() {
         find.descendant(
           of: row,
           matching: find.text(
-            'App default (Standard) · Fireworks · Reasoning low',
+            'App default (Standard) · Automatic · Reasoning low',
           ),
         ),
         findsOneWidget,

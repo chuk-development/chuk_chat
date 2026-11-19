@@ -162,9 +162,7 @@ void main() {
 
   testWidgets('the reasoning level is the agent s own', (tester) async {
     await _pump(tester);
-    final Finder group = find.byKey(
-      const ValueKey<String>('agent_reasoning'),
-    );
+    final Finder group = find.byKey(const ValueKey<String>('agent_reasoning'));
     await tester.scrollUntilVisible(
       group,
       200,
@@ -179,10 +177,13 @@ void main() {
     await tester.tap(find.descendant(of: group, matching: find.text('High')));
     await tester.pumpAndSettle();
 
-    final own = await ChatModelSelectionService.instance.load(_chat);
-    expect(own!.reasoningEffort, 'high');
-    expect(own.modelId, 'deepseek/deepseek-v4.1-flash-1017');
-    expect(own.providerSlug, 'fireworks/serverless');
+    // The default model stays on Auto (no provider, no own record); the
+    // level is the agent's own.
+    expect(await ChatModelSelectionService.instance.load(_chat), isNull);
+    final state = await AgentModel.resolve(_chat);
+    expect(state.reasoningEffort, 'high');
+    expect(state.modelId, 'deepseek/deepseek-v4.1-flash-1017');
+    expect(state.providerSlug, isEmpty);
   });
 
   testWidgets('a model picked on the page starts on its cheapest provider', (
@@ -315,8 +316,7 @@ void main() {
     });
 
     testWidgets('Retry loads the list once it is there', (tester) async {
-      AgentModel.debugCatalogue = () async =>
-          throw StateError('offline');
+      AgentModel.debugCatalogue = () async => throw StateError('offline');
       await pumpBare(
         tester,
         const AgentModelPage(chatId: _chat, agentName: 'Alex'),

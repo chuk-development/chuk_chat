@@ -35,16 +35,34 @@ void main() {
     expect(sent.last['model'], isNull);
   });
 
-  test('adoptFromHost fills an empty record only', () async {
-    await AgentModel.adoptFromHost(chat, modelId: flash, providerSlug: 'x');
-    final adopted = await ChatModelSelectionService.instance.load(chat);
-    expect(adopted?.modelId, flash);
+  test(
+    'adoptFromHost mirrors the host row, also over a stale record',
+    () async {
+      await AgentModel.adoptFromHost(chat, modelId: flash, providerSlug: 'x');
+      final adopted = await ChatModelSelectionService.instance.load(chat);
+      expect(adopted?.modelId, flash);
+      expect(adopted?.providerSlug, 'x');
 
-    await AgentModel.adoptFromHost(chat, modelId: 'other/model');
-    final kept = await ChatModelSelectionService.instance.load(chat);
-    expect(kept?.modelId, flash);
-    expect(sent, isEmpty, reason: 'adopting must not echo back to the host');
-  });
+      // Changed on the host (another device): the local record follows.
+      await AgentModel.adoptFromHost(
+        chat,
+        modelId: 'other/model',
+        providerSlug: 'deepinfra',
+      );
+      final followed = await ChatModelSelectionService.instance.load(chat);
+      expect(followed?.modelId, 'other/model');
+      expect(followed?.providerSlug, 'deepinfra');
+
+      // The default model on Auto (no provider) is the agent default: the
+      // local record goes, and the settings show the default on Auto.
+      await AgentModel.adoptFromHost(chat, modelId: AgentModel.defaultModelId);
+      expect(await ChatModelSelectionService.instance.load(chat), isNull);
+      final state = await AgentModel.resolveOrFallback(chat);
+      expect(state.modelId, AgentModel.defaultModelId);
+      expect(state.providerSlug, isEmpty);
+      expect(sent, isEmpty, reason: 'adopting must not echo back to the host');
+    },
+  );
 
   test('status payload carries the stored source', () {
     final choice = AgentModelChoice.fromPayload(<String, dynamic>{
