@@ -221,8 +221,8 @@ void main() {
       expect(sources.single.host, 'example.com');
     });
 
-    test('any other tool falls back to the URLs in its result', () {
-      final call = _call('some_tool', arguments: {'query': 'x'});
+    test('another web tool falls back to the URLs in its result', () {
+      final call = _call('browser_navigate', arguments: {'query': 'x'});
       call.result =
           'Found https://a.example.com/x and https://a.example.com/x '
           'again, plus https://b.example.org/y.';
@@ -231,17 +231,19 @@ void main() {
       expect(sources.map((s) => s.host), ['a.example.com', 'b.example.org']);
     });
 
-    test('a notes edit shows no chips for links in the stored text', () {
-      final call = _call('notes', arguments: {'action': 'patch_memory'});
-      call.result =
-          '<diff>{"before":"see https://apps.example.com/app/1",'
-          '"after":"see https://apps.example.com/app/1 and more"}</diff>';
+    test('a tool that fetches no pages has no chips', () {
+      for (final name in <String>['notes', 'some_tool', 'calculate']) {
+        final call = _call(name, arguments: {'action': 'patch_memory'});
+        call.result =
+            '<diff>{"before":"see https://apps.example.com/app/1",'
+            '"after":"see https://apps.example.com/app/1 and more"}</diff>';
 
-      expect(extractSourcesFor(call), isEmpty);
+        expect(extractSourcesFor(call), isEmpty, reason: name);
+      }
     });
 
     test('a result without links has no chips', () {
-      final call = _call('some_tool', arguments: {'query': 'x'});
+      final call = _call('web_search', arguments: {'query': 'x'});
       call.result = 'No results.';
 
       expect(extractSourcesFor(call), isEmpty);

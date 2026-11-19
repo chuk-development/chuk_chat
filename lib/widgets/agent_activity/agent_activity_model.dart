@@ -9,6 +9,7 @@
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/agents/agents_tool_row_info.dart';
+import 'package:chuk_chat/widgets/agent_activity/tool_activity_category.dart';
 
 /// What a timeline line represents. Drives the icon and the wording.
 enum AgentActivityKind {
@@ -458,23 +459,31 @@ List<AgentActivityEntry> groupAgentActivityEntries(
 /// Most source chips shown under one step.
 const int maxSourcesPerStep = 8;
 
-/// Tools whose result echoes the user's own stored text, not pages they
-/// fetched. `notes` returns the whole Memory/User/Soul text before and after
-/// the edit, so any link the user once saved there turned into a chip.
-const Set<String> _toolsWithoutSources = <String>{'notes'};
+/// Whether a call of the tool [name] pulls pages from the web, so the links
+/// in its result are sources the model looked up.
+///
+/// Every other tool gets no chips. Their results can hold links the model
+/// never looked at: `notes` echoes the whole Memory text, so a link the user
+/// once saved there showed up as a "source" on every memory edit.
+bool toolFetchesWebPages(String name) {
+  final ToolActivityCategory category = toolActivityCategoryOf(name);
+  if (category == ToolActivityCategory.webSearch ||
+      category == ToolActivityCategory.webFetch) {
+    return true;
+  }
+  return name == 'search_places' || name == 'search_restaurants';
+}
 
 /// The pages a call pulled in.
 ///
 /// `web_search` results list numbered titles with an indented URL under
-/// each; `web_crawl` fetches the one URL it was given. Anything else falls
-/// back to the URLs in the result text, which is how a new tool still gets
-/// chips without this having to know about it.
+/// each; `web_crawl` fetches the one URL it was given. The other web tools
+/// ([toolFetchesWebPages]) give the URLs in their result text. Tools that do
+/// not fetch pages give none.
 List<AgentActivitySource> extractSourcesFor(ToolCall call) {
   final result = call.result;
   if (result == null || result.isEmpty) return const <AgentActivitySource>[];
-  if (_toolsWithoutSources.contains(call.name)) {
-    return const <AgentActivitySource>[];
-  }
+  if (!toolFetchesWebPages(call.name)) return const <AgentActivitySource>[];
 
   final sources = <AgentActivitySource>[];
   final seen = <String>{};
