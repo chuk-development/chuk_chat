@@ -24,6 +24,20 @@ from chuk_agents_manager.room_driver import (
     RoomDriver,
 )
 from chuk_agents_manager.room_binding import RoomBinding
+from chuk_agents_manager.room_lead import (
+    LEAD_MAX_ROUNDS,
+    LEAD_MAX_TASKS,
+    Handoff,
+    HandoffCollector,
+    run_lead_exchange,
+)
+from chuk_agents_manager.room_routing import (
+    AUTO_PICK_MIN_CONFIDENCE,
+    AUTO_PICK_TIMEOUT_SECONDS,
+    RouteDecision,
+    auto_pick,
+    route_first_round,
+)
 from chuk_agents_manager.room_transcript import RoomTranscriptStore
 from chuk_agents_manager.group_room import (
     DEFAULT_MAX_MEMBERS,
@@ -36,6 +50,12 @@ from chuk_agents_manager.group_room import (
     RoomMember,
     RoomSession,
     RoomTurn,
+    RESPONDER_MODES,
+    MAX_BULLETIN_CHARS,
+    TURN_AGENT,
+    TURN_HANDOFF,
+    TURN_USER,
+    clean_responder,
     parse_mentions,
     has_broadcast_mention,
     BROADCAST_HANDLES,
@@ -118,6 +138,22 @@ __all__ = [
     "RoomMember",
     "RoomSession",
     "RoomTurn",
+    "RESPONDER_MODES",
+    "MAX_BULLETIN_CHARS",
+    "TURN_AGENT",
+    "TURN_HANDOFF",
+    "TURN_USER",
+    "clean_responder",
+    "LEAD_MAX_ROUNDS",
+    "LEAD_MAX_TASKS",
+    "Handoff",
+    "HandoffCollector",
+    "run_lead_exchange",
+    "AUTO_PICK_MIN_CONFIDENCE",
+    "AUTO_PICK_TIMEOUT_SECONDS",
+    "RouteDecision",
+    "auto_pick",
+    "route_first_round",
     "parse_mentions",
     "has_broadcast_mention",
     "BROADCAST_HANDLES",

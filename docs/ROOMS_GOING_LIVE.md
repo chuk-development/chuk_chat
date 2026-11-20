@@ -1,5 +1,10 @@
 # Rooms: going live (the one gated step)
 
+> **Groups (2026-11-20).** In the app a room is now called a **group**
+> ("Gruppe"). The section "Groups" at the end of this file tells why groups
+> did not work for the owner, what changed, and the wire frames. Read it
+> first.
+
 Group rooms (§16.1) are built and tested on every layer that does not need live
 multi-agent transport. This is the runbook for the last step — making a room
 drive **real** members — which is gated because it spends credits and touches the
@@ -105,3 +110,105 @@ production path with no credits and no relay. Run it with
       (`host/tests/test_room_live.py`, five cases, no relay and no credits.)
 - [ ] Point at the prod relay (with a human; it can take chat down).
 - [ ] One small real-credit room run to confirm end to end.
+
+## Groups (2026-11-20)
+
+### Why groups did not work for the owner
+
+The owner said: "We still have no real groups." We examined the live host
+and the code. These were the causes:
+
+1. **The app forgot every group.** `LocalRoomSource` kept the groups in
+   memory only. The host did not send a list. After each app start the list
+   was empty.
+2. **No group ever ran on the live host.** `~/.local/share/chuk-agents/rooms.db`
+   had zero rows. The directory `room-agents/` did not exist. The pool starts
+   it for the first member.
+3. **A running group blocked the session.** The executor called
+   `on_room_frame` on its reader thread. `RoomService.handle_room_task` ran
+   the full exchange there. During a group run (several agent runs) the
+   one-to-one chat, Stop and approvals did not move.
+4. **The thread showed only the last exchange.** The host cleared the
+   transcript on each message. The user's own messages were not kept.
+5. **Each message woke every member.** There was no way to say who answers.
+6. **Members did not know the group.** The prompt had no group name, no
+   member names, no shared instructions and no earlier conversation.
+7. **The words were wrong.** The UI said "room" and "Control Rooms", in
+   English only.
+
+The engine itself worked. A probe with two real agents on DeepSeek V4.1
+Flash answered in 8 s (`scripts/agents_room_probe.py`).
+
+### What a group has now
+
+- **Settings on the host** (`rooms` table, new columns): `responder`,
+  `lead_agent_id`, `fallback_agent_id`, `bulletin` (max 12 000 characters),
+  `workdir`. Old files get the columns on open.
+- **Who answers** (`manager/room_routing.py`, `route_first_round`), in this
+  order:
+  1. `@all`, `@everyone` or `@room`: every member.
+  2. `@handle`: the named members.
+  3. Nobody named: the `responder` mode.
+     - `everyone`: every member (the old behaviour, the default).
+     - `mentions`: nobody. The exchange ends with `no_addressee`.
+     - `auto`: the cheap model (`ROOM_AUTO_MODEL_ID`, DeepSeek V4.1 Flash,
+       reasoning off) picks one member, or more. A pick under 0.6, a bad
+       answer, an error or a slow answer gives the fallback member. The host
+       waits 2.5 s (`ROOM_AUTO_TIMEOUT_SECONDS`). We measured 1.1 to 1.9 s
+       per pick, so 1.5 s fell back about half the time. The reply carries
+       `routed_by` and the app shows "Picked by auto · 94%".
+     - `lead`: the lead member answers. It can give tasks to members with
+       the tool `hand_off_tasks` (`runtime/room_handoff.py`). The members
+       run at the same time. The lead is woken once with their results.
+       Limits per user message: 3 lead turns and 8 tasks
+       (`manager/room_lead.py`). The tool refuses a task over a limit and
+       tells the model why. If the model writes `@member` and does not use
+       the tool, the first lead turn still gives that member a task.
+- **Agent to agent**: an `@mention` in a reply pulls a member in, within the
+  old `RoomCaps` (3 rounds). Lead mode uses its own limits.
+- **The prompt** (`RoomContext.as_prompt`): group name, the other members
+  with names, the shared instructions, the shared folder, up to 24 earlier
+  entries (6 000 characters), the current exchange, a role note.
+- **The transcript** keeps the whole conversation: user messages
+  (`kind: user`), replies (`agent`) and tasks (`handoff`). It keeps the last
+  200 entries per group.
+- **The run is in the background.** `RoomService(background=True)` runs each
+  exchange on its own thread. Two messages to one group run in order. The
+  stores are safe across threads (one lock each).
+- **A member runs on its own model** (`session_features.agent_model` of the
+  agent, see `docs/agents/AGENT_MODEL.md`), else the host default.
+- **Shared folder**: stored and named in the prompt. It is not mounted into
+  the docker sandboxes yet (open point).
+
+### Wire frames (all new keys are optional)
+
+App to host:
+
+- `room_create` + `responder`, `lead_agent_id`, `fallback_agent_id`,
+  `bulletin`, `workdir`. A missing key keeps the stored value.
+- `room_settings` `{room_id, <any setting key>}`: only the given keys change.
+- `room_list_request` `{}`: the host answers `room_list`.
+- `room_stop` `{room_id}`: stops the run after the current turn.
+
+Host to app:
+
+- `room_list` `{rooms: [{room_id, name, members, agent_to_agent, responder,
+  lead_agent_id, fallback_agent_id, bulletin, workdir}]}`.
+- `room_working` `{room_id, agent_id, handle}`: a member started its turn.
+- `room_turn` + `kind` (`handoff` only; `agent` is left out),
+  `routed_by` (`{"mode": "auto", "confidence": 0.94, "fallback": false}` or
+  `{"mode": "lead"}`), `to_agent_id`, `to_handle`.
+- `room_history` turns + `kind` (`agent`, `user`, `handoff`) and the same
+  optional keys.
+- `room_done` reasons + `no_addressee`, `lead_done`.
+
+### Prove it
+
+- Tests: `manager/tests/test_room_groups.py`, `host/tests/test_room_groups.py`
+  (lead mode through real executors and the real tool, mock models),
+  `runtime/tests/test_room_handoff.py`.
+- Live probe (real model, spends a few cents):
+  `agents/host/.venv/bin/python scripts/agents_room_probe.py "<message>"
+  [--responder auto|lead|mentions|everyone] [--lead ID] AGENT_ID AGENT_ID`.
+  With `--live` it writes into the host's `rooms.db` and
+  `room-transcript.db`. Back them up into `_scratch/` first.

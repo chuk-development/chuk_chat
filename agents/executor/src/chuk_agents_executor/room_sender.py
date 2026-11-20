@@ -29,6 +29,7 @@ def make_room_task_sender(
     *,
     session_key: str,
     timeout: float = 120.0,
+    model_for: "Callable[[], dict | None] | None" = None,
 ) -> TaskSender:
     """Wrap ``controller`` into a :data:`TaskSender` for one room member.
 
@@ -37,10 +38,27 @@ def make_room_task_sender(
     the run produced no answer (an ``error`` terminal, a timeout with no ``done``,
     or a ``done`` that carried no text). One member, one controller, one sender:
     a room binds several of these, one per reachable member.
+
+    ``model_for`` names the member's own model (``{"id", "provider"?,
+    "reasoning_effort"?}``) at send time, so a member answers in a group on
+    the model it answers on alone; ``None`` leaves the executor's default.
     """
 
     def send(prompt: str) -> str | None:
-        request_id = controller.send_task(prompt, session_key=session_key)
+        model = None
+        if model_for is not None:
+            try:
+                model = model_for()
+            except Exception:  # noqa: BLE001 — the default model, not no turn
+                model = None
+        model = model if isinstance(model, dict) else {}
+        request_id = controller.send_task(
+            prompt,
+            session_key=session_key,
+            model=model.get("id"),
+            provider=model.get("provider"),
+            reasoning_effort=model.get("reasoning_effort"),
+        )
         events = controller.collect(request_id, timeout=timeout)
         for event in events:
             if event.get("type") == "done":

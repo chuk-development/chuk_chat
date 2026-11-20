@@ -175,8 +175,14 @@ class RoomAgentPool:
         logger: Callable[[str], None] | None = None,
         dashboard=None,
         agent_name_for: Callable[[str], str] | None = None,
+        model_for: Callable[[str], "dict | None"] | None = None,
     ) -> None:
         self._binding = binding
+        # The member's own model (docs/agents/AGENT_MODEL.md), read per turn.
+        self._model_for = model_for
+        # The lead's hand-off backend while it leads a running exchange
+        # (§16.1 lead mode); read by its executor when a run starts.
+        self._handoffs: dict[str, object] = {}
         self._model_wiring = model_wiring
         self._environment_factory = environment_factory
         self._db_dir = Path(db_dir)
@@ -203,6 +209,19 @@ class RoomAgentPool:
     def running_ids(self) -> frozenset[str]:
         with self._lock:
             return frozenset(self._agents)
+
+    def arm_handoff(self, agent_id: str, backend: object | None) -> None:
+        """Give ``agent_id``'s next runs the ``hand_off_tasks`` tool bound to
+        ``backend``, or (``None``) take it away again."""
+        with self._lock:
+            if backend is None:
+                self._handoffs.pop(agent_id, None)
+            else:
+                self._handoffs[agent_id] = backend
+
+    def _handoff_for(self, agent_id: str) -> object | None:
+        with self._lock:
+            return self._handoffs.get(agent_id)
 
     # -- lifecycle -------------------------------------------------------
 
@@ -243,6 +262,11 @@ class RoomAgentPool:
                     existing.controller,
                     session_key=f"room:{room_id}",
                     timeout=self._turn_timeout,
+                    model_for=(
+                        (lambda _id=agent_id: self._model_for(_id))
+                        if self._model_for is not None
+                        else None
+                    ),
                 ),
             )
             return True
@@ -322,6 +346,7 @@ class RoomAgentPool:
                 if self._agent_name_for is not None
                 else None
             ),
+            room_handoff_for=lambda _key, _id=agent_id: self._handoff_for(_id),
         )
         try:
             executor.start()

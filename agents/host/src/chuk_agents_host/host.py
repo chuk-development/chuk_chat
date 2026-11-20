@@ -163,6 +163,13 @@ TRANSPORT_LOCAL = "local"
 TRANSPORT_CLOUD = "cloud"
 DEFAULT_SYSTEM_PROMPT = "You are an Agents agent running on the user's own machine."
 
+#: The cheap model that picks who answers in a group in ``auto`` mode.
+ROOM_AUTO_MODEL_ID = "deepseek/deepseek-v4.1-flash-1017"
+#: How long the group picker may take before the fallback member answers.
+#: Measured 2026-11-20 through api.chuk.chat with reasoning off: 1.1 to 1.9 s
+#: per pick, so the 1.5 s of the design would fall back about half the time.
+ROOM_AUTO_TIMEOUT_SECONDS = 2.5
+
 #: While parked on the heal channel, how often the host tries its dead refresh
 #: token once more. A refusal can be a misread network fault; this makes sure a
 #: host never stays parked when its credential would in fact work again.
@@ -448,6 +455,8 @@ class LocalHost:
             logger=self._log,
             dashboard=self._dashboard,
             agent_name_for=self._browser_coworker_name,
+            # A member answers in a group on its own model, as it does alone.
+            model_for=self._stored_agent_model,
         )
 
         # Persistent trust: after the first §15 pairing this file holds the stable
@@ -1253,6 +1262,44 @@ class LocalHost:
             for key in keys
         }
 
+    def _stored_agent_model(self, agent_id: str) -> dict | None:
+        """The agent's own model (docs/agents/AGENT_MODEL.md), or ``None``."""
+        try:
+            store = StateStore(self._db_path)
+            try:
+                data = store.load_feature(agent_id, "agent_model")
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — the default model, not no turn
+            return None
+        if not isinstance(data, dict) or not isinstance(data.get("id"), str):
+            return None
+        return {k: v for k, v in data.items() if isinstance(v, str) and v.strip()}
+
+    def _room_auto_ask(self):
+        """The picker of a group in ``auto`` mode: one short call to the cheap
+        model (:data:`ROOM_AUTO_MODEL_ID`). ``None`` before an account is
+        provisioned; the group then answers with its fallback member."""
+        select, factory = self._model_select, self._model_factory
+        if select is None and factory is None:
+            return None
+
+        def ask(system: str, user: str) -> str:
+            client = (
+                select(ROOM_AUTO_MODEL_ID, None, "none")
+                if select is not None
+                else factory()
+            )
+            response = client.complete(
+                [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ]
+            )
+            return response.text or ""
+
+        return ask
+
     def _workspace_for_agent(self, agent_id: str) -> str:
         """The host directory an agent works in — one per agent, never shared.
 
@@ -1418,6 +1465,15 @@ class LocalHost:
             # member, started on demand and registered in the binding, so a
             # member answers instead of reporting offline.
             members_ready=self._room_agents.ensure_room,
+            # Groups (docs/ROOMS_GOING_LIVE.md, "Groups"): the cheap model of
+            # ``auto`` mode, the lead's hand-off tool, the members' names, and
+            # an exchange on its own thread so this session's frame loop stays
+            # free while members work.
+            ask_model=self._room_auto_ask,
+            arm_handoff=self._room_agents.arm_handoff,
+            name_for=self._browser_coworker_name,
+            background=True,
+            auto_timeout=ROOM_AUTO_TIMEOUT_SECONDS,
         )
 
         task_server = TaskServer(

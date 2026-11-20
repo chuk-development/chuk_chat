@@ -17,9 +17,15 @@ is what makes the routing and the offline handling testable on their own.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 
 from chuk_agents_manager.group_room import GroupRoom, RoomCaps, RoomMember, RoomTurn
+from chuk_agents_manager.room_lead import OFFLINE_REPLY, ArmHandoff, run_lead_exchange
+from chuk_agents_manager.room_routing import (
+    AUTO_PICK_TIMEOUT_SECONDS,
+    AskModel,
+    route_first_round,
+)
 from chuk_agents_manager.room_runner import RoomContext, RoomOutcome, RoomRunner
 
 #: Runs one member's turn: (member, prompt) -> reply, or ``None`` when the member
@@ -27,10 +33,6 @@ from chuk_agents_manager.room_runner import RoomContext, RoomOutcome, RoomRunner
 #: (:meth:`RoomContext.as_prompt`).
 MemberRunner = Callable[[RoomMember, str], "str | None"]
 
-#: Shown in the transcript in place of an offline member's reply. It is a real
-#: turn — the exchange advances past it — but it says plainly that nobody
-#: answered, rather than inventing words for an agent that was not there.
-OFFLINE_REPLY = "(offline — no reply)"
 
 
 class RoomDriver:
@@ -58,7 +60,33 @@ class RoomDriver:
         *,
         on_turn: Callable[[RoomTurn], None] | None = None,
         stop: Callable[[], bool] | None = None,
+        on_start: Callable[[RoomMember], None] | None = None,
+        history: tuple[RoomTurn, ...] = (),
+        names: Mapping[str, str] | None = None,
+        ask: AskModel | None = None,
+        arm: ArmHandoff | None = None,
+        auto_timeout: float = AUTO_PICK_TIMEOUT_SECONDS,
     ) -> RoomOutcome:
+        """Run one user message: decide the first speakers with the room's
+        responder mode (:func:`route_first_round`), then either the lead
+        exchange (``lead`` mode, nobody named) or the ordinary turn order."""
+        decision = route_first_round(
+            room, user_message, ask=ask, names=names, timeout=auto_timeout
+        )
+        if decision.via == "lead":
+            return run_lead_exchange(
+                room,
+                user_message,
+                run_member=self._member_runner,
+                arm=arm,
+                on_turn=on_turn,
+                on_start=on_start,
+                stop=stop,
+                history=history,
+                names=names,
+                routed_by=decision.routed_by(),
+            )
+
         def turn_fn(ctx: RoomContext) -> str:
             reply = self._member_runner(ctx.speaker, ctx.as_prompt())
             # An offline member is not a crash: the room keeps going, its line
@@ -73,5 +101,10 @@ class RoomDriver:
             caps=self._caps,
             stop=stop,
             on_turn=on_turn,
+            on_start=on_start,
+            first_round=decision.members,
+            routed_by=decision.routed_by(),
+            history=history,
+            names=names,
         )
         return runner.run(user_message)

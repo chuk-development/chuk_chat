@@ -92,6 +92,13 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
     {"type": "room_rename", "room_id": "...", "name": "..."}  # app -> host: rename
     {"type": "room_delete", "room_id": "..."}             # app -> host: forget a room
     {"type": "room_history_request", "room_id": "..."}    # app -> host: replay it
+    {"type": "room_settings", "room_id": "...",           # app -> host: who answers,
+     "responder": "auto", "bulletin": "..."}              #   instructions, folder
+    {"type": "room_list_request"}                         # app -> host: list groups
+    {"type": "room_list", "rooms": [{...}]}               # host -> app: every group
+    {"type": "room_stop", "room_id": "..."}               # app -> host: stop a run
+    {"type": "room_working", "room_id": "...",            # host -> app: a member
+     "agent_id": "...", "handle": "amber"}                #   started its turn
     {"type": "room_history",                              # host -> app: stored turns
      "room_id": "...", "turns": [{"round": 1, ...}]}
     {"type": "room_turn",                                 # one member's turn (§16.1)
@@ -773,14 +780,27 @@ def room_task_payload(*, room_id: str, message: str) -> dict[str, Any]:
 
 
 def room_turn_payload(
-    *, room_id: str, round: int, agent_id: str, handle: str, text: str
+    *,
+    room_id: str,
+    round: int,
+    agent_id: str,
+    handle: str,
+    text: str,
+    kind: str = "agent",
+    routed_by: dict | None = None,
+    to_agent_id: str | None = None,
+    to_handle: str | None = None,
 ) -> dict[str, Any]:
     """One member's turn in a group room (§16.1). Streamed as it happens, so the
     app renders the back-and-forth live rather than after the whole exchange.
 
     ``room_id`` names which room the turn belongs to, so the app routes it to the
-    right open room — several rooms can run at once."""
-    return {
+    right open room — several rooms can run at once. ``kind`` is ``agent`` (a
+    reply) or ``handoff`` (a task the lead gave ``to_agent_id``/``to_handle``);
+    ``routed_by`` says why a router chose this speaker (``{"mode": "auto",
+    "confidence": 0.94, "fallback": false}`` or ``{"mode": "lead"}``). The
+    optional keys are left out when unset, so an old app sees the old frame."""
+    payload: dict[str, Any] = {
         "type": "room_turn",
         "room_id": room_id,
         "round": round,
@@ -788,6 +808,32 @@ def room_turn_payload(
         "handle": handle,
         "text": text,
     }
+    if kind != "agent":
+        payload["kind"] = kind
+    if routed_by:
+        payload["routed_by"] = routed_by
+    if to_agent_id is not None:
+        payload["to_agent_id"] = to_agent_id
+    if to_handle is not None:
+        payload["to_handle"] = to_handle
+    return payload
+
+
+def room_working_payload(*, room_id: str, agent_id: str, handle: str) -> dict[str, Any]:
+    """Host -> app: a member of the group just started its turn (§16.1), so the
+    app can show who is working before the reply arrives."""
+    return {
+        "type": "room_working",
+        "room_id": room_id,
+        "agent_id": agent_id,
+        "handle": handle,
+    }
+
+
+def room_list_payload(*, rooms: list[dict]) -> dict[str, Any]:
+    """Host -> app: every group the host keeps, with members and settings, in
+    answer to ``room_list_request``. The app restores its group list from it."""
+    return {"type": "room_list", "rooms": rooms}
 
 
 def room_done_payload(

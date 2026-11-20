@@ -67,6 +67,22 @@ _MENTION = re.compile(r"@([A-Za-z0-9][A-Za-z0-9-]*)")
 #: real member handles, so they are recognised separately from `parse_mentions`.
 BROADCAST_HANDLES = frozenset({"all", "everyone", "room"})
 
+#: Who answers a message that names nobody (the group's default responder):
+#: ``everyone`` (every member, the old behaviour), ``mentions`` (nobody unless
+#: @named), ``auto`` (a cheap model picks the best member, see
+#: :mod:`chuk_agents_manager.room_routing`) or ``lead`` (one lead member answers
+#: and may hand tasks to the others, see :mod:`chuk_agents_manager.room_lead`).
+RESPONDER_MODES = ("everyone", "mentions", "auto", "lead")
+DEFAULT_RESPONDER = "everyone"
+
+#: The longest shared group instructions ("bulletin") a room keeps.
+MAX_BULLETIN_CHARS = 12_000
+
+
+def clean_responder(value: object) -> str | None:
+    """The responder mode ``value`` names, or ``None`` when it names none."""
+    return value if isinstance(value, str) and value in RESPONDER_MODES else None
+
 
 def has_broadcast_mention(text: str) -> bool:
     """True when ``text`` contains a broadcast mention (`@all`/`@everyone`/`@room`)."""
@@ -130,8 +146,22 @@ class GroupRoom:
     #: round. ``False`` makes a room strictly user-driven: the user still
     #: addresses whom they like, agents only answer, never summon.
     agent_to_agent: bool = True
+    #: Who answers a message that names nobody (:data:`RESPONDER_MODES`).
+    responder: str = DEFAULT_RESPONDER
+    #: The lead member in ``lead`` mode. ``None`` (or a member that left) means
+    #: the first member leads.
+    lead_agent_id: str | None = None
+    #: Who answers in ``auto`` mode when the picker is unsure, slow or fails.
+    #: ``None`` (or a member that left) means the first member.
+    fallback_agent_id: str | None = None
+    #: Shared group instructions every member reads with each turn.
+    bulletin: str = ""
+    #: An optional shared working folder, named to every member.
+    workdir: str = ""
 
     def __post_init__(self) -> None:
+        if self.responder not in RESPONDER_MODES:
+            raise RoomError(f"unknown responder mode: {self.responder!r}")
         if (
             self.caps.max_members is not None
             and len(self.members) > self.caps.max_members
@@ -160,6 +190,28 @@ class GroupRoom:
             if m.handle == handle:
                 return m
         return None
+
+    def member_by_id(self, agent_id: str | None) -> RoomMember | None:
+        for m in self.members:
+            if m.agent_id == agent_id:
+                return m
+        return None
+
+    @property
+    def lead(self) -> RoomMember | None:
+        """The member that leads in ``lead`` mode: the chosen one while it is
+        still a member, else the first member."""
+        return self.member_by_id(self.lead_agent_id) or (
+            self.members[0] if self.members else None
+        )
+
+    @property
+    def fallback(self) -> RoomMember | None:
+        """The member ``auto`` mode falls back to: the chosen one while it is
+        still a member, else the first member."""
+        return self.member_by_id(self.fallback_agent_id) or (
+            self.members[0] if self.members else None
+        )
 
     def with_member(self, member: RoomMember) -> "GroupRoom":
         if (
@@ -258,14 +310,33 @@ def assign_room_handles(agents) -> list["RoomMember"]:
     return members
 
 
+#: Kinds of transcript entries: an agent's reply, the user's message, and a
+#: task a lead handed to a member.
+TURN_AGENT = "agent"
+TURN_USER = "user"
+TURN_HANDOFF = "handoff"
+
+
 @dataclass(frozen=True, slots=True)
 class RoomTurn:
-    """One agent turn in a room exchange: which round, which member spoke."""
+    """One entry in a room exchange: which round, which member spoke.
+
+    ``kind`` is :data:`TURN_AGENT` for a member's reply (the default),
+    :data:`TURN_USER` for the user's own message (``agent_id`` and ``handle``
+    empty) and :data:`TURN_HANDOFF` for a task the lead gave a member
+    (``to_agent_id``/``to_handle`` name that member). ``routed_by`` says why a
+    member spoke when a router chose it, e.g. ``{"mode": "auto",
+    "confidence": 0.94, "fallback": False}``.
+    """
 
     round: int
     agent_id: str
     handle: str
     text: str
+    kind: str = TURN_AGENT
+    routed_by: dict | None = None
+    to_agent_id: str | None = None
+    to_handle: str | None = None
 
 
 class RoomSession:
@@ -287,6 +358,7 @@ class RoomSession:
         *,
         caps: RoomCaps | None = None,
         agent_to_agent: bool | None = None,
+        first_round: "tuple[RoomMember, ...] | None" = None,
     ) -> None:
         self._room = room
         self._caps = caps or room.caps
@@ -313,16 +385,25 @@ class RoomSession:
         # 'no_more_mentions'.
         self._suppressed_mentions = False
 
-        # Round 1: the user's mentions, or everyone in room order.
+        # Round 1: what the router decided (``first_round``), else the user's
+        # mentions, or everyone in room order.
         mentioned = parse_mentions(user_message, self._handles)
-        if mentioned and not has_broadcast_mention(user_message):
+        if first_round is not None:
+            self._queue = deque(first_round)
+        elif mentioned and not has_broadcast_mention(user_message):
             order = [room.member_by_handle(h) for h in mentioned]
             self._queue: deque[RoomMember] = deque(m for m in order if m)
         else:
             # No mention, or an explicit @all/@everyone/@room: everyone speaks.
             self._queue = deque(room.members)
         if not self._queue:
-            self._stop_reason = "no_members"
+            # A router that chose nobody (``mentions`` mode, nobody named) is
+            # not an empty room: say which it is.
+            self._stop_reason = (
+                "no_addressee"
+                if first_round is not None and room.members
+                else "no_members"
+            )
 
     # -- read-only state -------------------------------------------------
 

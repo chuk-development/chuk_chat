@@ -61,6 +61,7 @@ from .agent_mail import MailBinding, register_agent_mail_tools
 from .agent_message import PROMPT_SECTION as PROGRESS_PROMPT_SECTION
 from .agent_message import AgentMessageBackend, make_interim_writer, register_message_tools
 from .agent_naming import AgentNamingBackend, naming_prompt_section, register_naming_tools
+from .room_handoff import HandoffBackend, register_handoff_tools
 from .automations import AutomationBackend, register_automation_tools
 from .calls import CallBackend, register_call_tools
 from .takeover import TakeoverBackend, register_takeover_tool
@@ -433,6 +434,7 @@ def build_runtime(
     automations: AutomationBackend | None = None,
     agent_naming: AgentNamingBackend | None = None,
     agent_message: AgentMessageBackend | None = None,
+    room_handoff: HandoffBackend | None = None,
     calls: CallBackend | None = None,
     takeover: TakeoverBackend | None = None,
     phase_observer: Callable[[str, str | None], None] | None = None,
@@ -677,6 +679,11 @@ def build_runtime(
     # docs/WIRE_CONTRACT.md, "send_message"). ``None`` (no thread to send
     # to: a room, a child run, a mail run) registers nothing.
     register_message_tools(registry, agent_message)
+
+    # A group lead's hand-off (§16.1, lead mode): ``hand_off_tasks``, bound by
+    # the executor to the running group exchange. ``None`` (every other run)
+    # registers nothing.
+    register_handoff_tools(registry, room_handoff)
 
     # The agent calls the user (docs/WIRE_CONTRACT.md, "The agent calls the
     # user"): ``call_user`` rings the app and returns at once, ``call_status``

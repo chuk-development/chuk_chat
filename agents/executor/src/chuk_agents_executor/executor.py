@@ -1554,8 +1554,13 @@ class Executor:
         budget=None,
         dashboard=None,
         agent_name_for: Callable[[str], str] | None = None,
+        room_handoff_for: Callable[[str], Any] | None = None,
     ) -> None:
         self._name = name
+        # A group lead's ``hand_off_tasks`` (§16.1, lead mode): the host's
+        # room pool answers, per session key, the running exchange's backend
+        # while this agent leads one, else ``None``.
+        self._room_handoff_for = room_handoff_for
         self._endpoint = endpoint
         self._opener = opener
         self._sealer = sealer
@@ -2987,6 +2992,17 @@ class Executor:
             self._terminal(request_id, error_payload(f"agent frame failed: {type(exc).__name__}"))
             return
         self._terminal(request_id, _as_agent_list(rows))
+
+    def _room_handoff_backend(self, session_key: str):
+        """``hand_off_tasks`` for this run: only while the host says this
+        agent leads a running group exchange on ``session_key``."""
+        hook = self._room_handoff_for
+        if hook is None:
+            return None
+        try:
+            return hook(session_key)
+        except Exception:  # noqa: BLE001 — no tool, never a dead run
+            return None
 
     def _agent_naming_backend(self, session_key: str):
         """``rename_self`` for the agent of ``session_key`` (the app's agent
@@ -6151,6 +6167,7 @@ class Executor:
             # ``rename_self`` (docs/WIRE_CONTRACT.md, "Agent names"): bound to
             # this agent's id, so a model can only ever rename itself.
             agent_naming=self._agent_naming_backend(session_key),
+            room_handoff=self._room_handoff_backend(session_key),
             # ``send_message`` (CHAT-79): a chat message while the work goes
             # on. Only an agent's own thread with a reader; never a restricted
             # mail run.

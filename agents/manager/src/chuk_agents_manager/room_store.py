@@ -18,11 +18,49 @@ order the user built the room in is the order it plays back.
 
 from __future__ import annotations
 
+import functools
 import sqlite3
+import threading
 import uuid
 from datetime import datetime, timezone
 
-from chuk_agents_manager.group_room import GroupRoom, RoomCaps, RoomError, RoomMember
+from chuk_agents_manager.group_room import (
+    DEFAULT_RESPONDER,
+    MAX_BULLETIN_CHARS,
+    GroupRoom,
+    RoomCaps,
+    RoomError,
+    RoomMember,
+    clean_responder,
+)
+
+#: The group settings columns added after the first schema, with their DDL.
+_SETTINGS_COLUMNS = {
+    "responder": f"TEXT NOT NULL DEFAULT '{DEFAULT_RESPONDER}'",
+    "lead_agent_id": "TEXT",
+    "fallback_agent_id": "TEXT",
+    "bulletin": "TEXT NOT NULL DEFAULT ''",
+    "workdir": "TEXT NOT NULL DEFAULT ''",
+}
+
+#: The longest shared folder path a group keeps.
+MAX_WORKDIR_CHARS = 1_000
+
+#: Marks "leave this setting as it is" in :meth:`RoomStore.set_settings`.
+UNCHANGED = object()
+
+
+def _locked(method):
+    """Run a store method under the store's lock: a group runs on its own
+    thread while the frame thread edits rooms, and one SQLite connection must
+    not be used by two threads at once."""
+
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+
+    return wrapper
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS rooms (
@@ -34,7 +72,12 @@ CREATE TABLE IF NOT EXISTS rooms (
     max_rounds    INTEGER NOT NULL,
     max_messages  INTEGER,
     created_at    TEXT NOT NULL,
-    agent_to_agent INTEGER NOT NULL DEFAULT 1
+    agent_to_agent INTEGER NOT NULL DEFAULT 1,
+    responder     TEXT NOT NULL DEFAULT 'everyone',
+    lead_agent_id TEXT,
+    fallback_agent_id TEXT,
+    bulletin      TEXT NOT NULL DEFAULT '',
+    workdir       TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS room_members (
     room_id   TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
@@ -60,7 +103,8 @@ class RoomStore:
     """
 
     def __init__(self, path: str = ":memory:") -> None:
-        self._conn = sqlite3.connect(path)
+        self._lock = threading.RLock()
+        self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(_SCHEMA)
@@ -92,6 +136,14 @@ class RoomStore:
             if name in columns
         ):
             self._relax_cap_columns()
+        # Group settings (who answers, the lead, instructions, the folder).
+        present = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(rooms)").fetchall()
+        }
+        for name, ddl in _SETTINGS_COLUMNS.items():
+            if name not in present:
+                self._conn.execute(f"ALTER TABLE rooms ADD COLUMN {name} {ddl}")
 
     def _relax_cap_columns(self) -> None:
         self._conn.commit()  # a PRAGMA cannot change inside a transaction
@@ -132,6 +184,7 @@ class RoomStore:
 
     # -- CRUD ------------------------------------------------------------
 
+    @_locked
     def create_room(
         self,
         *,
@@ -174,6 +227,7 @@ class RoomStore:
             agent_to_agent=agent_to_agent,
         )
 
+    @_locked
     def add_member(self, room_id: str, agent_id: str, handle: str) -> GroupRoom:
         """Add one agent to the room, or raise :class:`RoomError`.
 
@@ -200,6 +254,7 @@ class RoomStore:
         self._conn.commit()
         return self.get(room_id)  # type: ignore[return-value]
 
+    @_locked
     def remove_member(self, room_id: str, agent_id: str) -> GroupRoom:
         cur = self._conn.execute(
             "DELETE FROM room_members WHERE room_id = ? AND agent_id = ?",
@@ -210,6 +265,7 @@ class RoomStore:
             raise RoomError(f"not a member of {room_id}: {agent_id}")
         return self.get(room_id)  # type: ignore[return-value]
 
+    @_locked
     def get(self, room_id: str) -> GroupRoom | None:
         row = self._conn.execute(
             "SELECT * FROM rooms WHERE id = ?", (room_id,)
@@ -228,14 +284,69 @@ class RoomStore:
             members=members,
             caps=self._caps_from_row(row),
             agent_to_agent=bool(row["agent_to_agent"]),
+            responder=clean_responder(row["responder"]) or DEFAULT_RESPONDER,
+            lead_agent_id=row["lead_agent_id"],
+            fallback_agent_id=row["fallback_agent_id"],
+            bulletin=row["bulletin"] or "",
+            workdir=row["workdir"] or "",
         )
 
+    @_locked
+    def set_settings(
+        self,
+        room_id: str,
+        *,
+        responder=UNCHANGED,
+        lead_agent_id=UNCHANGED,
+        fallback_agent_id=UNCHANGED,
+        bulletin=UNCHANGED,
+        workdir=UNCHANGED,
+    ) -> GroupRoom:
+        """Change the group settings that are given; the others stay. A bad
+        value is a :class:`RoomError` and changes nothing: an unknown responder
+        mode, or instructions over :data:`MAX_BULLETIN_CHARS`. An empty lead or
+        fallback id means "the first member"."""
+        updates: dict[str, object] = {}
+        if responder is not UNCHANGED:
+            mode = clean_responder(responder)
+            if mode is None:
+                raise RoomError(f"unknown responder mode: {responder!r}")
+            updates["responder"] = mode
+        for key, value in (("lead_agent_id", lead_agent_id), ("fallback_agent_id", fallback_agent_id)):
+            if value is UNCHANGED:
+                continue
+            if value is not None and not isinstance(value, str):
+                raise RoomError(f"{key} must be text")
+            updates[key] = value or None
+        if bulletin is not UNCHANGED:
+            if not isinstance(bulletin, str):
+                raise RoomError("bulletin must be text")
+            if len(bulletin) > MAX_BULLETIN_CHARS:
+                raise RoomError(f"bulletin is over {MAX_BULLETIN_CHARS} characters")
+            updates["bulletin"] = bulletin
+        if workdir is not UNCHANGED:
+            if not isinstance(workdir, str) or len(workdir) > MAX_WORKDIR_CHARS:
+                raise RoomError("workdir must be a short path")
+            updates["workdir"] = workdir.strip()
+        if self.get(room_id) is None:
+            raise RoomError(f"no such room: {room_id}")
+        if updates:
+            assignments = ", ".join(f"{key} = ?" for key in updates)
+            self._conn.execute(
+                f"UPDATE rooms SET {assignments} WHERE id = ?",
+                (*updates.values(), room_id),
+            )
+            self._conn.commit()
+        return self.get(room_id)  # type: ignore[return-value]
+
+    @_locked
     def list(self) -> list[GroupRoom]:
         rows = self._conn.execute(
             "SELECT id FROM rooms ORDER BY created_at, id"
         ).fetchall()
         return [self.get(row["id"]) for row in rows]  # type: ignore[misc]
 
+    @_locked
     def rename_room(self, room_id: str, name: str) -> GroupRoom:
         """Rename a room, returning it. A no-such-room is a :class:`RoomError`."""
         cur = self._conn.execute(
@@ -246,6 +357,7 @@ class RoomStore:
             raise RoomError(f"no such room: {room_id}")
         return self.get(room_id)  # type: ignore[return-value]
 
+    @_locked
     def set_agent_to_agent(self, room_id: str, enabled: bool) -> GroupRoom:
         """Switch the room's agent-to-agent policy, returning the room.
 
@@ -261,6 +373,7 @@ class RoomStore:
             raise RoomError(f"no such room: {room_id}")
         return self.get(room_id)  # type: ignore[return-value]
 
+    @_locked
     def delete(self, room_id: str) -> bool:
         cur = self._conn.execute("DELETE FROM rooms WHERE id = ?", (room_id,))
         self._conn.commit()
