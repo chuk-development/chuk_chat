@@ -21,7 +21,10 @@
     "docs/HANDOFF.md": "session handoff; names files of that session",
     "docs/PYDANTIC_AI_LOOP.md": "names files of the pydantic-ai repository",
     "docs/AGENT_MAIL.md": "names files of the api_server repository",
-    "docs/VOICE_STACK_DECISION.md": "decision record; names a planned directory"
+    "docs/VOICE_STACK_DECISION.md": "decision record; names a planned directory",
+    "docs/notes/proposed/duskbot/architecture.md": "competitor analysis; names files of the duskbot repository",
+    "docs/notes/proposed/duskbot/design.md": "competitor analysis; names files of the duskbot repository",
+    "docs/notes/proposed/duskbot/product.md": "competitor analysis; names files of the duskbot repository"
   },
   "targets": {
     "docs/agents/DESIGN.md": "CLAUDE.md says 'if present'",
