@@ -169,11 +169,8 @@ String queuedMessagesForComposer(String pending, List<String> followUps) =>
 const double _kComposerSendWidth = 44;
 const double _kComposerSendHeight = 36;
 
-/// The padding inside the composer box, around its one row.
-const double _kComposerBoxPadding = 3;
-
-/// The tallest the composer box grows with text before the field scrolls.
-const double _kComposerMaxHeight = 144;
+/// The gap between the pinned target and the text beside it (desktop: 8).
+const double _kComposerSendGap = 8;
 
 class ChukChatUIMobile extends StatefulWidget {
   final VoidCallback onToggleSidebar;
@@ -439,15 +436,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   final Uuid _uuid = const Uuid();
   bool _lastTextWasEmpty = true;
   bool _showFullscreenButton = false;
-
-  /// Whether the composer showed the two-row layout at the last change.
-  bool _lastDraftWrapped = false;
-
-  /// Keeps the composer's text field (and its focus, caret and IME link)
-  /// when it moves between the one-row and the two-row composer.
-  final GlobalKey _composerFieldKey = GlobalKey(
-    debugLabel: 'mobile-composer-field',
-  );
 
   // Services and handlers
   late ChatApiService _chatApiService;
@@ -1245,17 +1233,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final int newlineCount = '\n'.allMatches(text).length;
     final bool shouldShowFullscreen = text.length > 66 || newlineCount >= 2;
 
-    // The composer goes to two rows when the draft wraps.
-    final bool wraps =
-        mounted && _composerDraftWraps(context, _fileHandler.hasAttachments);
-
     if (currentTextIsEmpty != _lastTextWasEmpty ||
-        shouldShowFullscreen != _showFullscreenButton ||
-        wraps != _lastDraftWrapped) {
+        shouldShowFullscreen != _showFullscreenButton) {
       setState(() {
         _lastTextWasEmpty = currentTextIsEmpty;
         _showFullscreenButton = shouldShowFullscreen;
-        _lastDraftWrapped = wraps;
       });
     }
   }
@@ -5038,17 +5020,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         ? Colors.red.withValues(alpha: 0.4)
         : iconFg.withValues(alpha: 0.25);
 
-    // One row, as in the modern chat apps: plus, the mode control, the
-    // field, the microphone, send. The box is 48 px high while the field
-    // holds one line and grows with the text up to 144 px. Send is the only
-    // filled target; stop takes its place while a reply streams. The buttons stay at the bottom of the row while the field grows.
-    // The rows that come and go (attachments, edit or reply notice, the `/`
-    // menu, the queue) sit above the row, across the full width.
     return Container(
-      key: const ValueKey<String>('mobile-composer-box'),
       decoration: BoxDecoration(
         color: bg.withValues(alpha: 0.98),
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(26),
         border: Border.all(color: borderColor, width: 2),
         boxShadow: [
           BoxShadow(
@@ -5058,196 +5033,84 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           ),
         ],
       ),
-      padding: const EdgeInsets.all(_kComposerBoxPadding),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+      // Send / stop / voice is pinned to the top right of the box, over the
+      // text, at the desktop composer's size: the two composers draw the
+      // same target in the same place (chat_ui_desktop.dart _buildSearchBar).
+      child: Stack(
         children: [
-          if (hasAttachments)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
-              child: AttachmentPreviewBar(
-                files: _fileHandler.attachedFiles,
-                onRemove: removeComposerAttachment,
-              ),
-            ),
-          if (messageActionsHandler.isEditing)
-            _buildComposerNotice(
-              theme: theme,
-              icon: Icons.edit,
-              label: 'Editing message',
-              actionLabel: 'Cancel',
-              onAction: cancelEditMessage,
-            ),
-          // Messenger mode: the message the next send quotes, on the same
-          // one-line notice as an edit or a queued message.
-          if (widget.messengerMode)
-            if (_replyDrafts[_messengerChatKey] case final reply?)
-              _buildComposerNotice(
-                theme: theme,
-                icon: Icons.reply_rounded,
-                label:
-                    'Reply to ${reply.author}: '
-                    '"${reply.text.replaceAll(RegExp(r'\s+'), ' ').trim()}"',
-                actionLabel: AppLocalizations.of(context)!.cancel,
-                onAction: () =>
-                    setState(() => _replyDrafts.remove(_messengerChatKey)),
-              ),
-          // The `/` and `@` menu, while a trigger is open.
-          ComposerTriggerMenu(controller: _trigger),
-          // The queue dock: messages sent while the reply runs.
-          QueueDock(
-            queue: _followUps.queue,
-            onEdit: (String id, String text) =>
-                setState(() => _followUps.edit(id, text)),
-            onRemove: (String id) => setState(() => _followUps.remove(id)),
-            onSteerNow: _followUps.steerAvailable
-                ? (String id) => setState(() => _followUps.steerNow(id))
-                : null,
-          ),
-          Builder(
-            builder: (BuildContext context) {
-              final List<Widget> leading = <Widget>[
-                // Rebuilds when model capabilities load, so the attach menu
-                // reflects image support live on cold start without a second
-                // tap.
-                ValueListenableBuilder<int>(
-                  valueListenable: ModelCapabilitiesService.revision,
-                  builder: (context, _, _) => Builder(
-                    builder: (anchorContext) => buildTinyIconButton(
-                      icon: Icons.add_rounded,
-                      iconSize: 22,
-                      buttonSize: ComposerMetrics.targetSize,
-                      // Round, so the tap ink is a circle and not a square
-                      // patch behind a round icon.
-                      cornerRadius: ComposerMetrics.targetSize / 2,
-                      onTap: () => _handleAddAttachmentTap(anchorContext),
-                      isActive: hasAttachments,
-                      color: iconFg,
-                    ),
-                  ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Everything above the action row keeps clear of the pinned
+              // target, as on the desktop.
+              Padding(
+                padding: const EdgeInsets.only(
+                  right: _kComposerSendWidth + _kComposerSendGap,
                 ),
-                if (!widget.messengerMode) ...[
-                  const SizedBox(width: ComposerMetrics.targetGap),
-                  _buildModelControl(
-                    isCompactMode: isCompactMode,
-                    iconFg: iconFg,
-                  ),
-                ],
-                if (_workspacesEnabled && _selectedWorkspaceId != null) ...[
-                  const SizedBox(width: ComposerMetrics.targetGap),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 96),
-                    child: _buildWorkspaceChip(iconFg),
-                  ),
-                ],
-              ];
-              final List<Widget> trailing = <Widget>[
-                if (isRecording) ...[
-                  buildTinyIconButton(
-                    icon: Icons.stop_rounded,
-                    iconSize: 20,
-                    buttonSize: ComposerMetrics.targetSize,
-                    cornerRadius: ComposerMetrics.targetSize / 2,
-                    onTap: _handleMicTap,
-                    isActive: true,
-                    color: Colors.red,
-                    semanticsId: 'mic_button',
-                  ),
-                ] else if (!hasTypedText && !showStopAction) ...[
-                  buildTinyIconButton(
-                    icon: Icons.mic,
-                    iconSize: 20,
-                    buttonSize: ComposerMetrics.targetSize,
-                    cornerRadius: ComposerMetrics.targetSize / 2,
-                    onTap: _handleMicTap,
-                    isActive: false,
-                    color: iconFg,
-                    semanticsId: 'mic_button',
-                  ),
-                ] else if (_showFullscreenButton && !showStopAction) ...[
-                  // Takes the microphone's slot: the microphone only shows
-                  // with an empty field and this only with a long one, so the
-                  // two never want the place at the same time.
-                  buildTinyIconButton(
-                    icon: Icons.open_in_full_rounded,
-                    iconSize: 18,
-                    buttonSize: ComposerMetrics.targetSize,
-                    cornerRadius: ComposerMetrics.targetSize / 2,
-                    onTap: _openFullscreenEditor,
-                    isActive: false,
-                    color: iconFg,
-                    semanticsId: 'fullscreen_composer_button',
-                  ),
-                ],
-                const SizedBox(width: ComposerMetrics.targetGap),
-                // Send / stop / voice: the desktop composer's widget and
-                // numbers. It sits on the bottom line of the row, centred on
-                // the 38 px targets beside it.
-                SizedBox(
-                  height: ComposerMetrics.targetSize,
-                  child: Center(
-                    child: ComposerSendButton(
-                      controller: composerController,
-                      hasOtherContent: hasAttachments || isRecording,
-                      loading: _audioHandler.isTranscribingAudio,
-                      stopping: ComposerSendButton.stopsWhile(
-                        busy: showStopAction,
-                        micActive: isRecording,
-                      ),
-                      onStop: _cancelCurrentOperation,
-                      onSend: isRecording ? _handleAudioSend : sendOrSubmitEdit,
-                      // No call while a message is edited: the field is the
-                      // edit.
-                      onVoice: messageActionsHandler.isEditing
-                          ? null
-                          : composerVoiceAction(
-                              context,
-                              _voice,
-                              agentName: widget.messengerMode
-                                  ? widget.agentsTitle
-                                  : null,
-                            ),
-                      width: _kComposerSendWidth,
-                      height: _kComposerSendHeight,
-                      radius: 20,
-                      sendIcon: Icons.arrow_upward_rounded,
-                      iconSize: 26,
-                      stopIconSize: 22,
-                      sendIconScaleY: 0.95,
-                      spinnerSize: 20,
-                      spinnerStroke: 2.5,
-                      semanticsId: 'send_button',
-                    ),
-                  ),
-                ),
-              ];
-              // ── What you are saying ──
-              //
-              // The waveform is drawn over the text field, not in place of
-              // it: the field keeps its slot in the layout, so the composer
-              // is exactly as tall while recording as it is at rest and the
-              // thread does not jump the moment the microphone opens.
-              final Widget field = KeyedSubtree(
-                key: _composerFieldKey,
                 child: ConstrainedBox(
-                  // At least as tall as the buttons, so one line of text
-                  // sits on their centre line.
                   constraints: const BoxConstraints(
-                    minHeight: ComposerMetrics.targetSize,
+                    minHeight: _kComposerSendHeight,
                   ),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    // As tall as the field, not as tall as the space.
-                    heightFactor: 1,
-                    child: ConstrainedBox(
-                      // The box stops at [_kComposerMaxHeight]; then the
-                      // field scrolls.
-                      constraints: const BoxConstraints(
-                        maxHeight:
-                            _kComposerMaxHeight - 2 * _kComposerBoxPadding - 4,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (hasAttachments)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6, right: 6),
+                          child: AttachmentPreviewBar(
+                            files: _fileHandler.attachedFiles,
+                            onRemove: removeComposerAttachment,
+                          ),
+                        ),
+                      if (messageActionsHandler.isEditing)
+                        _buildComposerNotice(
+                          theme: theme,
+                          icon: Icons.edit,
+                          label: 'Editing message',
+                          actionLabel: 'Cancel',
+                          onAction: cancelEditMessage,
+                        ),
+                      // Messenger mode: the message the next send quotes, on the same
+                      // one-line notice as an edit or a queued message.
+                      if (widget.messengerMode)
+                        if (_replyDrafts[_messengerChatKey] case final reply?)
+                          _buildComposerNotice(
+                            theme: theme,
+                            icon: Icons.reply_rounded,
+                            label:
+                                'Reply to ${reply.author}: '
+                                '"${reply.text.replaceAll(RegExp(r'\s+'), ' ').trim()}"',
+                            actionLabel: AppLocalizations.of(context)!.cancel,
+                            onAction: () => setState(
+                              () => _replyDrafts.remove(_messengerChatKey),
+                            ),
+                          ),
+                      // The `/` and `@` menu, while a trigger is open.
+                      ComposerTriggerMenu(controller: _trigger),
+                      // The queue dock: messages sent while the reply runs.
+                      QueueDock(
+                        queue: _followUps.queue,
+                        onEdit: (String id, String text) =>
+                            setState(() => _followUps.edit(id, text)),
+                        onRemove: (String id) =>
+                            setState(() => _followUps.remove(id)),
+                        onSteerNow: _followUps.steerAvailable
+                            ? (String id) =>
+                                  setState(() => _followUps.steerNow(id))
+                            : null,
                       ),
-                      child: ComposerInputRow(
+
+                      // ── Row one: what you are saying ──
+                      //
+                      // The waveform is drawn over the text field, not in place of it:
+                      // the field keeps its slot in the layout, so the composer is
+                      // exactly as tall while recording as it is at rest and the thread
+                      // does not jump the moment the microphone opens.
+                      ComposerInputRow(
                         isRecording: isRecording,
                         audioLevels: _audioHandler.audioLevels,
                         accentColor: Colors.red,
@@ -5280,8 +5143,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                             key: TourKeyRegistry.instance.anchorFor(
                               TourSlots.chatInput,
                             ),
-                            // Hidden composer scrollbar (reads as clutter); the
-                            // field grows to the box cap before it scrolls.
+                            // Hidden composer scrollbar (reads as clutter); the field grows
+                            // to ~8 lines before it scrolls.
                             child: ScrollConfiguration(
                               behavior: ScrollConfiguration.of(context)
                                   .copyWith(scrollbars: false),
@@ -5290,10 +5153,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 child: TextField(
                                   controller: composerController,
                                   focusNode: composerFocusNode,
-                                  // No focus while the sidebar covers the chat.
-                                  // Set here, not on the node: TextField writes
-                                  // this value back to its node on every
-                                  // rebuild.
+                                  // No focus while the sidebar covers the chat. Set here,
+                                  // not on the node: TextField writes this value back to
+                                  // its node on every rebuild.
                                   canRequestFocus: !widget.isSidebarExpanded,
                                   selectionControls:
                                       ComposerSelectionControls.instance,
@@ -5307,30 +5169,27 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                     height: 1.35,
                                   ),
                                   minLines: 1,
-                                  // The box caps the height, then it scrolls.
-                                  maxLines: null,
+                                  maxLines: 8,
                                   decoration: InputDecoration(
                                     hintText: messageActionsHandler.isEditing
                                         ? AppLocalizations.of(context)!
                                               .editYourMessage
                                         : AppLocalizations.of(context)!
                                               .askMeAnything,
-                                    hintMaxLines: 1,
                                     hintStyle: TextStyle(
                                       color: theme.colorScheme.onSurface
                                           .withValues(alpha: 0.5),
                                       fontSize: composerFontSize(),
-                                      overflow: TextOverflow.ellipsis,
                                     ),
                                     filled: false,
                                     border: InputBorder.none,
                                     enabledBorder: InputBorder.none,
                                     focusedBorder: InputBorder.none,
-                                    contentPadding: const EdgeInsets.fromLTRB(
-                                      8,
-                                      6,
-                                      6,
-                                      6,
+                                    contentPadding: const EdgeInsets.only(
+                                      left: 8,
+                                      top: 6,
+                                      bottom: 6,
+                                      right: 6,
                                     ),
                                     isDense: true,
                                   ),
@@ -5342,80 +5201,126 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
-              );
-              // One row while the draft fits on one line. When it wraps, the
-              // field takes the full width and the buttons go to a row under
-              // it, so a long draft is not read in a narrow column.
-              if (!_composerDraftWraps(context, hasAttachments)) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    ...leading,
-                    Expanded(child: field),
-                    ...trailing,
-                  ],
-                );
-              }
-              return Column(
-                key: const ValueKey<String>('mobile-composer-two-rows'),
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  field,
-                  const SizedBox(height: 2),
-                  Row(
-                    children: <Widget>[...leading, const Spacer(), ...trailing],
+              ),
+
+              const SizedBox(height: 4),
+
+              // ── Row two: what you can do about it ──
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  // Rebuilds when model capabilities load, so the attach menu
+                  // reflects image support live on cold start without a second tap.
+                  ValueListenableBuilder<int>(
+                    valueListenable: ModelCapabilitiesService.revision,
+                    builder: (context, _, _) => Builder(
+                      builder: (anchorContext) => buildTinyIconButton(
+                        icon: Icons.add_rounded,
+                        iconSize: 22,
+                        buttonSize: ComposerMetrics.targetSize,
+                        // Round, so the tap ink is a circle and not a square
+                        // patch behind a round icon.
+                        cornerRadius: ComposerMetrics.targetSize / 2,
+                        onTap: () => _handleAddAttachmentTap(anchorContext),
+                        isActive: hasAttachments,
+                        color: iconFg,
+                      ),
+                    ),
                   ),
+                  const SizedBox(width: ComposerMetrics.targetGap),
+                  _buildModelControl(
+                    isCompactMode: isCompactMode,
+                    iconFg: iconFg,
+                  ),
+                  if (_workspacesEnabled && _selectedWorkspaceId != null) ...[
+                    const SizedBox(width: ComposerMetrics.targetGap),
+                    Flexible(child: _buildWorkspaceChip(iconFg)),
+                  ],
+                  const Spacer(),
+                  if (isRecording) ...[
+                    buildTinyIconButton(
+                      icon: Icons.stop_rounded,
+                      iconSize: 20,
+                      buttonSize: ComposerMetrics.targetSize,
+                      cornerRadius: ComposerMetrics.targetSize / 2,
+                      onTap: _handleMicTap,
+                      isActive: true,
+                      color: Colors.red,
+                      semanticsId: 'mic_button',
+                    ),
+                  ] else if (!hasTypedText && !showStopAction) ...[
+                    buildTinyIconButton(
+                      icon: Icons.mic,
+                      iconSize: 20,
+                      buttonSize: ComposerMetrics.targetSize,
+                      cornerRadius: ComposerMetrics.targetSize / 2,
+                      onTap: _handleMicTap,
+                      isActive: false,
+                      color: iconFg,
+                      semanticsId: 'mic_button',
+                    ),
+                  ] else if (_showFullscreenButton && !showStopAction) ...[
+                    // Takes the microphone's slot: the microphone only shows with
+                    // an empty field and this only with a long one, so the two
+                    // never want the place at the same time. Out here instead of
+                    // inside the field, the typed text keeps the full width.
+                    buildTinyIconButton(
+                      icon: Icons.open_in_full_rounded,
+                      iconSize: 18,
+                      buttonSize: ComposerMetrics.targetSize,
+                      cornerRadius: ComposerMetrics.targetSize / 2,
+                      onTap: _openFullscreenEditor,
+                      isActive: false,
+                      color: iconFg,
+                      semanticsId: 'fullscreen_composer_button',
+                    ),
+                  ],
                 ],
-              );
-            },
+              ),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: ComposerSendButton(
+              controller: composerController,
+              hasOtherContent: hasAttachments || isRecording,
+              loading: _audioHandler.isTranscribingAudio,
+              stopping: ComposerSendButton.stopsWhile(
+                busy: showStopAction,
+                micActive: isRecording,
+              ),
+              onStop: _cancelCurrentOperation,
+              onSend: isRecording ? _handleAudioSend : sendOrSubmitEdit,
+              // No call while a message is edited: the field is the edit.
+              onVoice: messageActionsHandler.isEditing
+                  ? null
+                  : composerVoiceAction(
+                      context,
+                      _voice,
+                      agentName: widget.messengerMode
+                          ? widget.agentsTitle
+                          : null,
+                    ),
+              // The desktop composer's numbers, one for one.
+              width: _kComposerSendWidth,
+              height: _kComposerSendHeight,
+              radius: 20,
+              sendIcon: Icons.arrow_upward_rounded,
+              iconSize: 26,
+              stopIconSize: 22,
+              sendIconScaleY: 0.95,
+              spinnerSize: 20,
+              spinnerStroke: 2.5,
+              semanticsId: 'send_button',
+            ),
           ),
         ],
       ),
     );
-  }
-
-  /// Whether the draft no longer fits on the one line the field has in the
-  /// single-row composer: it holds a line break, or it is wider than that
-  /// line. The width is the composer's inner width less the targets around
-  /// the field. It is a small over-estimate of them, so the composer goes to
-  /// two rows a little before the text would wrap, never after.
-  bool _composerDraftWraps(BuildContext context, bool hasAttachments) {
-    final String text = composerController.text;
-    if (text.isEmpty) return false;
-    if (text.contains('\n')) return true;
-    final double screen = MediaQuery.sizeOf(context).width;
-    final double inner =
-        math.min(_kMaxChatContentWidth, screen - 2 * _kHorizontalPaddingSmall) -
-        2 * _kComposerBoxPadding -
-        4;
-    double around =
-        ComposerMetrics.targetSize + // plus
-        ComposerMetrics.targetSize + // microphone or expand
-        ComposerMetrics.targetGap +
-        _kComposerSendWidth +
-        14; // the field's own side padding
-    if (!widget.messengerMode) around += ComposerMetrics.targetGap + 64;
-    if (_workspacesEnabled && _selectedWorkspaceId != null) {
-      around += ComposerMetrics.targetGap + 96;
-    }
-    final double room = inner - around;
-    if (room <= 0) return true;
-    final TextPainter painter = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(fontSize: composerFontSize(), height: 1.35),
-      ),
-      textDirection: TextDirection.ltr,
-      textScaler: MediaQuery.textScalerOf(context),
-      maxLines: 1,
-    )..layout(maxWidth: room);
-    final bool wraps = painter.didExceedMaxLines;
-    painter.dispose();
-    return wraps;
   }
 
   /// A one-line notice inside the composer: editing, or a queued message.

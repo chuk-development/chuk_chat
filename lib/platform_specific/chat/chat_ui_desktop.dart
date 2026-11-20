@@ -618,15 +618,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   );
 
   static const double _kMaxChatContentWidth = 760.0;
-
-  /// The empty composer box, 48 px: one row of 36 px targets, the padding
-  /// and the 2 px border. See [_buildSearchBar].
-  static const double _kSearchBarContentHeight =
-      36.0 + 2 * _kComposerBoxPadding + 4.0;
-  static const double _kComposerBoxPadding = 4.0;
-
-  /// The tallest the composer box grows with text before the field scrolls.
-  static const double _kComposerMaxHeight = 144.0;
+  static const double _kSearchBarContentHeight = 135.0;
   static const double _kAttachmentBarHeight = 40.0;
   static const double _kAttachmentBarMarginBottom =
       8.0; // Margin between attachment bar and search bar
@@ -2982,9 +2974,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   // NEW: Extracted Attachment Bar Widget
   Widget _buildSearchBar({required bool isCompactMode}) {
     const btnH = 36.0, btnW = 44.0;
-    // The main-surface corner (docs/DESIGN.md, 28), the same as the phone's.
-    // On the 48 px row it reads as a pill.
-    const containerRadius = 28.0;
+    // Rounder than it was (23): the composer is the one box the reader looks
+    // at all day, and the phone's is 26. The send button follows it up so the
+    // two corners still belong to each other.
+    const containerRadius = 30.0;
     const buttonRadius = 20.0;
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
@@ -2992,141 +2985,116 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     final bool hasAttachments = _fileHandler.attachedFiles.isNotEmpty;
 
-    // One row, as in the modern chat apps: plus, the field, the controls,
-    // send. The box is 48 px high while the field holds one line, and it
-    // grows with the text up to 144 px. Send is the only filled target; stop
-    // takes its place while a reply streams. The
-    // buttons stay at the bottom of the row, so they do not move while the
-    // field grows. The rows that come and go (attachments, edit notice, the
-    // `/` menu, the queue) sit above the row, across the full width.
     return Container(
-      key: const ValueKey<String>('desktop-composer-box'),
-      width: double.infinity,
+      width:
+          double.infinity, // Occupy full width of its parent AnimatedContainer
       constraints: const BoxConstraints(minHeight: _kSearchBarContentHeight),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(containerRadius),
         border: Border.all(color: iconFg.withValues(alpha: 0.3), width: 2),
       ),
-      padding: const EdgeInsets.all(_kComposerBoxPadding),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      padding: const EdgeInsets.all(14),
+      child: Stack(
+        fit: StackFit.passthrough,
         children: [
-          // Attachment previews inside the box.
-          if (hasAttachments)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(6, 6, 6, 8),
-              child: AttachmentPreviewBar(
-                files: _fileHandler.attachedFiles,
-                onRemove: removeComposerAttachment,
-              ),
-            ),
-          // Editing indicator
-          if (messageActionsHandler.isEditing)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
-              child: Row(
+          // Main content column: the field block on top, the action row
+          // pinned to the bottom of the box. Exactly two children, so
+          // spaceBetween puts all free height between them. An empty slot
+          // in the top block (a closed `/` menu, an empty queue dock) would
+          // otherwise take a share of it and push the field down under the
+          // floating send target.
+          Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  AppIcon(
-                    Icons.edit,
-                    size: 14,
-                    color: iconFg.withValues(alpha: 0.6),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Editing message',
-                    style: TextStyle(
-                      color: iconFg.withValues(alpha: 0.6),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: cancelEditMessage,
-                    child: Text(
-                      'Cancel',
-                      style: TextStyle(
-                        color: accent.withValues(alpha: 0.8),
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                  // Attachment previews inside the textbox (right-padded so cards don't go under send button)
+                  if (_fileHandler.attachedFiles.isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(
+                        bottom: 14,
+                        left: 2,
+                        right: btnW + 8,
+                      ),
+                      child: AttachmentPreviewBar(
+                        files: _fileHandler.attachedFiles,
+                        onRemove: removeComposerAttachment,
                       ),
                     ),
+                  // Editing indicator
+                  if (messageActionsHandler.isEditing)
+                    Padding(
+                      // Clear the floating top-right send button so the "Cancel"
+                      // action isn't hidden underneath it.
+                      padding: EdgeInsets.only(bottom: 6, right: btnW + 8),
+                      child: Row(
+                        children: [
+                          AppIcon(
+                            Icons.edit,
+                            size: 14,
+                            color: iconFg.withValues(alpha: 0.6),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Editing message',
+                            style: TextStyle(
+                              color: iconFg.withValues(alpha: 0.6),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const Spacer(),
+                          GestureDetector(
+                            onTap: cancelEditMessage,
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                color: accent.withValues(alpha: 0.8),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  // The `/` and `@` menu, while a trigger is open.
+                  ComposerTriggerMenu(
+                    controller: _trigger,
+                    trailingInset: btnW + 8,
                   ),
-                ],
-              ),
-            ),
-          // The `/` and `@` menu, while a trigger is open.
-          ComposerTriggerMenu(controller: _trigger),
-          // The queue dock: messages sent while the reply runs. They go
-          // out after it (queued) or into it at its next step (steer).
-          QueueDock(
-            queue: _followUps.queue,
-            onEdit: (String id, String text) =>
-                setState(() => _followUps.edit(id, text)),
-            onRemove: (String id) => setState(() => _followUps.remove(id)),
-            onSteerNow: _followUps.steerAvailable
-                ? (String id) => setState(() => _followUps.steerNow(id))
-                : null,
-          ),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: <Widget>[
-              // Add Button (File Upload). Rebuilds when model capabilities
-              // load, so a vision model's button reflects image support live
-              // on cold start without a second tap.
-              ValueListenableBuilder<int>(
-                valueListenable: ModelCapabilitiesService.revision,
-                builder: (context, _, _) => _buildIconBtn(
-                  icon: Icons.add_rounded,
-                  iconSize: 24,
-                  onTap: () => unawaited(_handleAddTap(context)),
-                  isActive: false,
-                  debugLabel: 'Add button',
-                ),
-              ),
-              // Workspace Selection Dropdown (only when feature enabled)
-              if (workspacesEnabled) ...[
-                const SizedBox(width: 6),
-                WorkspaceSelectionDropdown(
-                  selectedWorkspaceId: _selectedWorkspaceId,
-                  onWorkspaceSelected: (workspaceId) {
-                    setState(() {
-                      _selectedWorkspaceId = workspaceId;
-                    });
-                  },
-                  textFieldFocusNode: composerFocusNode,
-                ),
-              ],
-              const SizedBox(width: 8),
-              // The text field. While the microphone is open the live
-              // waveform is drawn over it: the field keeps its slot, so the
-              // composer is exactly as tall recording as at rest.
-              Expanded(
-                child: ConstrainedBox(
-                  // At least as tall as the buttons, so one line of text
-                  // sits on their centre line.
-                  constraints: const BoxConstraints(minHeight: btnH),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    // As tall as the field, not as tall as the space.
-                    heightFactor: 1,
+                  // The queue dock: messages sent while the reply runs. They go
+                  // out after it (queued) or into it at its next step (steer).
+                  QueueDock(
+                    queue: _followUps.queue,
+                    // Clear the floating top-right send/stop button.
+                    trailingInset: btnW + 8,
+                    onEdit: (String id, String text) =>
+                        setState(() => _followUps.edit(id, text)),
+                    onRemove: (String id) =>
+                        setState(() => _followUps.remove(id)),
+                    onSteerNow: _followUps.steerAvailable
+                        ? (String id) => setState(() => _followUps.steerNow(id))
+                        : null,
+                  ),
+                  // Text field with right padding to avoid send button overlap.
+                  // While the microphone is open the live waveform is drawn over
+                  // it, the phone's arrangement: the field keeps its slot, so the
+                  // composer is exactly as tall recording as at rest.
+                  Padding(
+                    padding: EdgeInsets.only(right: btnW + 8),
                     child: ComposerInputRow(
                       isRecording: _audioHandler.isMicActive,
                       audioLevels: _audioHandler.audioLevels,
                       accentColor: Colors.red,
                       timeColor: iconFg.withValues(alpha: 0.7),
                       child: ConstrainedBox(
-                        // The box grows to [_kComposerMaxHeight], then the field
-                        // scrolls. The internal scrollbar is hidden: it reads as
-                        // clutter.
-                        constraints: const BoxConstraints(
-                          maxHeight:
-                              _kComposerMaxHeight -
-                              2 * _kComposerBoxPadding -
-                              4.0,
-                        ),
+                        // Raised so the composer grows to a comfortable ~10 lines
+                        // before it starts scrolling, and the internal scrollbar is
+                        // hidden (scrollbars: false) since it reads as clutter.
+                        constraints: const BoxConstraints(maxHeight: 240),
                         child: _wrapWithSmartPasteActions(
                           ScrollConfiguration(
                             behavior: ScrollConfiguration.of(context)
@@ -3148,7 +3116,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 keyboardType: TextInputType.multiline,
                                 textInputAction: TextInputAction.done,
                                 scrollController: _composerScrollController,
-                                textAlignVertical: TextAlignVertical.center,
+                                textAlignVertical: TextAlignVertical.top,
                                 style: TextStyle(
                                   color: iconFg,
                                   fontWeight: FontWeight.w600,
@@ -3165,11 +3133,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                             .addMessageOrDocs
                                       : AppLocalizations.of(context)!
                                             .askMeAnything,
-                                  hintMaxLines: 1,
                                   hintStyle: TextStyle(
                                     color: iconFg.withValues(alpha: 0.8),
                                     fontWeight: FontWeight.w600,
-                                    overflow: TextOverflow.ellipsis,
                                   ),
                                   border: InputBorder.none,
                                   enabledBorder: InputBorder.none,
@@ -3180,7 +3146,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   filled: false,
                                   fillColor: Colors.transparent,
                                   contentPadding: const EdgeInsets.symmetric(
-                                    vertical: 6,
+                                    vertical: 8,
                                     horizontal: 0,
                                   ),
                                   isDense: true,
@@ -3195,96 +3161,170 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       ),
                     ),
                   ),
-                ),
+                  // Extra breathing room between text field and toolbar when attachments push content down
+                  if (hasAttachments) const SizedBox(height: 8),
+                ],
               ),
-              const SizedBox(width: 8),
-              if (!_audioHandler.isMicActive) ...[
-                // Active workspace indicator
-                Builder(
-                  builder: (context) {
-                    final a = _resolveWorkspaceForCurrentChat();
-                    if (a == null) return const SizedBox.shrink();
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 6),
-                      child: Tooltip(
-                        message: 'Workspace: ${a.name}',
-                        child: _buildIconBtn(
-                          icon: a.displayIcon,
-                          onTap: () {},
-                          isActive: true,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                // Reasoning toggle + model selector. It scales down, never
-                // past its cap, so the field keeps most of the row.
-                if (!widget.agentsThread)
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: isCompactMode ? 140 : 220,
-                    ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerRight,
-                      child: _buildModelControlPill(
-                        isCompactMode: isCompactMode,
-                      ),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: _audioHandler.isMicActive
+                          ? const SizedBox.shrink(
+                              key: ValueKey<String>('recording-controls'),
+                            )
+                          : Row(
+                              key: const ValueKey<String>(
+                                'default-mic-controls',
+                              ),
+                              children: [
+                                // Add Button (File Upload).
+                                // Rebuilds when model capabilities load, so a
+                                // vision model's button reflects image support
+                                // live on cold start without a second tap.
+                                ValueListenableBuilder<int>(
+                                  valueListenable:
+                                      ModelCapabilitiesService.revision,
+                                  builder: (context, _, _) => _buildIconBtn(
+                                    icon: Icons.add_rounded,
+                                    iconSize: 24,
+                                    onTap: () =>
+                                        unawaited(_handleAddTap(context)),
+                                    isActive: false,
+                                    debugLabel: 'Add button',
+                                  ),
+                                ),
+                                // Workspace Selection Dropdown (only when feature enabled)
+                                if (workspacesEnabled) ...[
+                                  const SizedBox(width: 8),
+                                  WorkspaceSelectionDropdown(
+                                    selectedWorkspaceId: _selectedWorkspaceId,
+                                    onWorkspaceSelected: (workspaceId) {
+                                      if (kDebugMode) {
+                                        debugPrint(
+                                          '📁 onWorkspaceSelected callback: $workspaceId (was: $_selectedWorkspaceId)',
+                                        );
+                                      }
+                                      setState(() {
+                                        _selectedWorkspaceId = workspaceId;
+                                      });
+                                      if (kDebugMode) {
+                                        debugPrint(
+                                          '📁 After setState: $_selectedWorkspaceId',
+                                        );
+                                      }
+                                    },
+                                    textFieldFocusNode: composerFocusNode,
+                                  ),
+                                ],
+                                Expanded(
+                                  // Expanded gives the FittedBox a bounded
+                                  // width, so the pill stays right-aligned at
+                                  // natural size and only scales DOWN when the
+                                  // toolbar is too narrow — no overflow, and it
+                                  // does not drift to the centre.
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    alignment: Alignment.centerRight,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        // Active assistant indicator
+                                        Builder(
+                                          builder: (context) {
+                                            final a =
+                                                _resolveWorkspaceForCurrentChat();
+                                            if (a == null) {
+                                              return const SizedBox.shrink();
+                                            }
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                right: 6,
+                                              ),
+                                              child: Tooltip(
+                                                message: 'Workspace: ${a.name}',
+                                                child: _buildIconBtn(
+                                                  icon: a.displayIcon,
+                                                  onTap: () {},
+                                                  isActive: true,
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        // Reasoning toggle + model selector,
+                                        // merged into one rounded segmented pill
+                                        // when the model supports reasoning.
+                                        _buildModelControlPill(
+                                          isCompactMode: isCompactMode,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                     ),
                   ),
-                if (!widget.agentsThread) const SizedBox(width: 6),
-              ],
-              // Mic Button (acts as record/stop toggle)
-              _buildIconBtn(
-                icon: _audioHandler.isMicActive
-                    ? Icons.stop_rounded
-                    : Icons.mic,
-                iconSize: 22,
-                onTap: _handleMicTap,
-                isActive: _audioHandler.isMicActive,
-                debugLabel: 'Mic button',
-              ),
-              const SizedBox(width: 6),
-              // Send / Stop / Voice. The phone composer draws the same
-              // widget.
-              ComposerSendButton(
-                controller: composerController,
-                hasOtherContent: hasAttachments || _audioHandler.isMicActive,
-                loading: _audioHandler.isTranscribingAudio,
-                // An open microphone keeps the send face, as on the phone:
-                // the recording is sent and queued, the stream is not
-                // stopped.
-                stopping: ComposerSendButton.stopsWhile(
-                  busy: _isStreaming || _isSending,
-                  micActive: _audioHandler.isMicActive,
-                ),
-                onStop: _cancelCurrentOperation,
-                onSend: _audioHandler.isMicActive
-                    ? _handleAudioSend
-                    : sendOrSubmitEdit,
-                // No call while a message is edited: the field is the edit.
-                onVoice: messageActionsHandler.isEditing
-                    ? null
-                    : composerVoiceAction(
-                        context,
-                        _voice,
-                        agentName: widget.agentsThread
-                            ? widget.agentsTitle
-                            : null,
-                      ),
-                width: btnW,
-                height: btnH,
-                radius: buttonRadius,
-                sendIcon: Icons.arrow_upward_rounded,
-                iconSize: 26,
-                stopIconSize: 22,
-                sendIconScaleY: 0.95,
-                spinnerSize: 20,
-                spinnerStroke: 2.5,
-                semanticsId: 'desktop_send_button',
-                sendTooltip: AppShortcuts.tooltip('Send', AppShortcuts.send),
+                  const SizedBox(width: 8),
+                  // Mic Button (acts as record/stop toggle)
+                  _buildIconBtn(
+                    icon: _audioHandler.isMicActive
+                        ? Icons.stop_rounded
+                        : Icons.mic,
+                    iconSize: 22,
+                    onTap: _handleMicTap,
+                    isActive: _audioHandler.isMicActive,
+                    debugLabel: 'Mic button',
+                  ),
+                ],
               ),
             ],
+          ),
+          // Send / Stop / Voice, pinned to the top right of the box. The
+          // phone composer draws the same widget.
+          Positioned(
+            top: 0,
+            right: 0,
+            child: ComposerSendButton(
+              controller: composerController,
+              hasOtherContent: hasAttachments || _audioHandler.isMicActive,
+              loading: _audioHandler.isTranscribingAudio,
+              // An open microphone keeps the send face, as on the phone: the
+              // recording is sent and queued, the stream is not stopped.
+              stopping: ComposerSendButton.stopsWhile(
+                busy: _isStreaming || _isSending,
+                micActive: _audioHandler.isMicActive,
+              ),
+              onStop: _cancelCurrentOperation,
+              onSend: _audioHandler.isMicActive
+                  ? _handleAudioSend
+                  : sendOrSubmitEdit,
+              // No call while a message is edited: the field is the edit.
+              onVoice: messageActionsHandler.isEditing
+                  ? null
+                  : composerVoiceAction(
+                      context,
+                      _voice,
+                      agentName: widget.agentsThread
+                          ? widget.agentsTitle
+                          : null,
+                    ),
+              width: btnW,
+              height: btnH,
+              radius: buttonRadius,
+              sendIcon: Icons.arrow_upward_rounded,
+              iconSize: 26,
+              stopIconSize: 22,
+              sendIconScaleY: 0.95,
+              spinnerSize: 20,
+              spinnerStroke: 2.5,
+              semanticsId: 'desktop_send_button',
+              sendTooltip: AppShortcuts.tooltip('Send', AppShortcuts.send),
+            ),
           ),
         ],
       ),
