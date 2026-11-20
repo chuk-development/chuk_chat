@@ -207,6 +207,13 @@ void main() {
     await _pump(tester);
     ChatStorageState.chatsById['c'] = _chat('c', 'Gamma chat', DateTime.now());
     ChatStorageState.notifyChangesImmediate('c');
+    // The broadcast stream hands the event over in a microtask, and
+    // pump() only draws a frame that was scheduled before it was called.
+    // Deliver the event first (the wrapper's listener calls setState and so
+    // schedules the frame), then draw. Without this the test passed only
+    // when an earlier test in the same isolate left a frame scheduled, and
+    // failed when CI's test-level sharding ran it on its own.
+    await tester.idle();
     await tester.pump();
     expect(
       tester
