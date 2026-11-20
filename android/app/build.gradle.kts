@@ -73,8 +73,8 @@ kotlin {
 android {
     namespace = "dev.chuk.chat"
     // Bumped from flutter.compileSdkVersion (36) to 37: flutter_secure_storage
-    // 11 and permission_handler_android 14 both require Android SDK 37. AGP
-    // 8.13.2 + Gradle 8.14 build against 37 fine (android-37 platform installed).
+    // 11 and permission_handler_android 14 both require Android SDK 37. AGP 9
+    // reports it as "android-37.0" (platform folder android-37.0).
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
@@ -188,6 +188,18 @@ androidComponents {
 
 flutter {
     source = "../.."
+}
+
+// unifiedpush_android (org.unifiedpush.android:connector 3.1.x) depends on the
+// JVM artifact com.google.crypto.tink:tink; flutter_secure_storage depends on
+// tink-android. Both hold the same classes, so checkReleaseDuplicateClasses
+// fails. tink-android is the Android build of the same library: use it for both.
+configurations.configureEach {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("com.google.crypto.tink:tink"))
+            .using(module("com.google.crypto.tink:tink-android:1.23.0"))
+            .because("tink and tink-android hold the same classes")
+    }
 }
 
 dependencies {

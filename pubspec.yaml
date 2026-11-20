@@ -19,8 +19,10 @@ environment:
 # The four Android-toolchain caps (dynamic_color, flutter_secure_storage,
 # permission_handler, app_links) are LIFTED. android/app/build.gradle.kts now
 # sets compileSdk = 37 (was flutter's default 36), which satisfies
-# flutter_secure_storage 11 and permission_handler_android 14. AGP 8.13.2 /
-# Gradle 8.14 build against 37 fine — no AGP 9 migration was needed. dynamic_color
+# flutter_secure_storage 11 and permission_handler_android 14. Flutter 3.50
+# needs AGP 9: android/ is on AGP 9.3.1, Gradle 9.5.0, KGP 2.4.20, with three
+# plugin workarounds (inappwebview, CargoKit, tink); see docs/ANDROID_BUILD.md.
+# dynamic_color
 # 2.x still hands its palette back as a `material_ui` ColorScheme; main.dart
 # imports material_ui directly and converts it to a Flutter ColorScheme.
 #

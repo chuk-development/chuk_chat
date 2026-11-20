@@ -193,8 +193,8 @@ The directory must not survive the task. `git worktree list` shows leftovers.
 ## Dependency Ceilings
 
 CI runs **Flutter 3.50.0 (Dart 3.14)** on every platform (pinned in
-`.github/workflows/*` and `codemagic.yaml`). The old re_editor 0.8.0 ceiling that
-held CI at 3.41.4 is gone — `vendor/markdraw` now uses `re_editor ^0.10.0`.
+`.github/workflows/*` and `codemagic.yaml`). Android needs AGP 9.3.1 and Gradle
+9.5.0, plus three plugin workarounds: `docs/ANDROID_BUILD.md`.
 
 When asked to "update everything", run `flutter pub upgrade --major-versions`,
 then fix the fallout and only hold a dep back when you have **verified** it breaks

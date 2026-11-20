@@ -99,7 +99,9 @@ fi
 
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 >/dev/null 2>&1 || true
 for _ in 1 2 3 4 5 6 7 8 9 10; do
-  PID="$(adb shell pidof "$PKG" | tr -d '\r')"
+  # pidof exits 1 while the process is not up yet; with set -e and pipefail
+  # that would end the script before the retry loop gets a second try.
+  PID="$(adb shell pidof "$PKG" | tr -d '\r' || true)"
   [ -n "$PID" ] && break
   sleep 1
 done
