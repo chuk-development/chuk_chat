@@ -7,10 +7,14 @@
 /// and thins out to nothing below the row.
 ///
 /// One widget, so the chat header and every full-screen reader wear the same
-/// veil (docs/DESIGN.md §4).
+/// veil (docs/DESIGN.md §4). Since 2026-11-20 [TopVeil] stands on the page
+/// header's frosted material ([PageHeaderBackdrop]), the same material as
+/// every page header; the gradient alone let text show through.
 library;
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/ui/components/page_header.dart';
 
 /// The gradient itself, for surfaces that place their own bar (a pinned
 /// `SliverAppBar` draws behind the status bar on its own).
@@ -34,22 +38,52 @@ class TopVeil extends StatelessWidget {
   /// The bar itself: the row of targets, the title, whatever floats.
   final Widget child;
 
-  /// How much room the gradient gets under [child] to reach zero.
+  /// How much room the fade gets under [child] to reach zero.
   final double fadeBelow;
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: topVeilDecoration(scheme),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          SizedBox(height: MediaQuery.paddingOf(context).top),
-          child,
-          SizedBox(height: fadeBelow),
-        ],
-      ),
+    // The bar sits on the page header's frosted material
+    // ([PageHeaderBackdrop]): what scrolls under it is blurred and covered,
+    // so it never runs legibly into the bar. Under the material a short
+    // fade in the page colour takes the edge off.
+    final Color page = Theme.of(context).scaffoldBackgroundColor;
+    final Color tint = page.withValues(alpha: page.a * kPageHeaderTint);
+    return Stack(
+      children: <Widget>[
+        Positioned(
+          left: 0,
+          right: 0,
+          top: 0,
+          bottom: fadeBelow,
+          child: PageHeaderBackdrop(color: page),
+        ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: fadeBelow,
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: <Color>[tint, tint.withValues(alpha: 0)],
+                ),
+              ),
+            ),
+          ),
+        ),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            SizedBox(height: MediaQuery.paddingOf(context).top),
+            child,
+            SizedBox(height: fadeBelow),
+          ],
+        ),
+      ],
     );
   }
 }

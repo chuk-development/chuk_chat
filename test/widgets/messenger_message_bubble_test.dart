@@ -11,6 +11,7 @@ import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/ui/expressive/bubble_shape.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';
@@ -220,10 +221,10 @@ void main() {
       ),
     );
     await tester.pump();
+    // A bubble inside a run: joined to its neighbours on the right
+    // (CHAT-152).
     BorderRadius radii = radiiOf();
-    expect(radii.topLeft, const Radius.circular(16));
-    expect(radii.topRight, const Radius.circular(16));
-    expect(radii.bottomRight, const Radius.circular(16));
+    expect(radii, bubbleRadius(true, BubblePosition.middle));
 
     await tester.pumpWidget(
       wrap(
@@ -238,7 +239,7 @@ void main() {
     );
     await tester.pump();
     radii = radiiOf();
-    expect(radii.bottomRight, const Radius.circular(5));
+    expect(radii, bubbleRadius(true, BubblePosition.single));
     expect(find.text('12:34'), findsNothing);
     expect(find.text('11:20'), findsNothing);
     expect(findIcon(Icons.done_all), findsNothing);

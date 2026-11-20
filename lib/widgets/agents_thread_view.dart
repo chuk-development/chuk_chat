@@ -3,20 +3,19 @@ import 'dart:convert';
 
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 
-import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kDebugMode, kIsWeb, TargetPlatform;
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/agent_thread_accent.dart';
 
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -2602,17 +2601,13 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   }
 
   /// Desktop chrome for desktop, web and tablets; the phone layout only for a
-  /// real phone-sized mobile screen. Same rule as chuk's `root_wrapper_io`.
+  /// real phone-sized mobile screen. Same rule as chuk's `root_wrapper_io`
+  /// ([MobileLayout.isPhoneSize] on a touch device).
   bool _useDesktopChat(BuildContext context) {
     if (widget.phoneLayout) return false;
     if (kPlatformMobile) return false;
-    if (kPlatformDesktop) return true;
-    if (kIsWeb) return true;
-    final platform = defaultTargetPlatform;
-    final isMobilePlatform =
-        platform == TargetPlatform.android || platform == TargetPlatform.iOS;
-    if (!isMobilePlatform) return true;
-    return MediaQuery.sizeOf(context).width >= kTabletBreakpoint;
+    if (!MobileLayout.isTouchPlatform) return true;
+    return !MobileLayout.isPhone(context);
   }
 
   // --- how the connection shows -----------------------------------------------
@@ -3084,7 +3079,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     return _ledger.isRunning(widget.threadKey) ? q : null;
   }
 
-  /// The goal strip, the todo card, the plan-mode chip and the sandbox
+  /// The goal strip, the todo card and the sandbox
   /// banner, above the composer.
   Widget? _composerAbove({required bool dense}) {
     if (widget.threadKey.isEmpty) return null;

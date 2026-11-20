@@ -7,7 +7,9 @@
 /// guesses a value:
 ///
 ///  * `goal` / `run_state.goal` / `done.goal`: the goal card;
-///  * `plan_mode` / `run_state.plan_mode`: the "Plan mode" chip;
+///  * `plan_mode` / `run_state.plan_mode`: whether the host still keeps the
+///    thread in plan mode (the app has no plan-mode button any more; such a
+///    thread falls back to the normal mode on its next task);
 ///  * `todo` / `run_state.todos`: the sticky todo card;
 ///  * `question_request`: the question card in the composer seat;
 ///  * `approval_request`: the inbox label "Approval" / "Plan review".
@@ -497,7 +499,6 @@ class AgentsThreadModes extends ChangeNotifier {
 
   final Map<String, AgentsGoal> _goals = <String, AgentsGoal>{};
   final Map<String, bool> _planMode = <String, bool>{};
-  final Map<String, bool> _planWanted = <String, bool>{};
   final Map<String, List<AgentsTodo>> _todos = <String, List<AgentsTodo>>{};
   final Map<String, AgentsQuestionRequest> _questions =
       <String, AgentsQuestionRequest>{};
@@ -547,10 +548,6 @@ class AgentsThreadModes extends ChangeNotifier {
   /// What the host says about plan mode in [key].
   bool planModeOf(String key) => _planMode[key] ?? false;
 
-  /// What the composer's toggle shows: the user's pending choice, else the
-  /// host's state.
-  bool planToggleOf(String key) => _planWanted[key] ?? planModeOf(key);
-
   List<AgentsTodo> todosOf(String key) => _todos[key] ?? const <AgentsTodo>[];
 
   AgentsQuestionRequest? questionOf(String key) => _questions[key];
@@ -564,32 +561,11 @@ class AgentsThreadModes extends ChangeNotifier {
   /// The agent works on the user's computer without a container.
   bool get sandboxFallback => _sandbox?.fallback ?? false;
 
-  /// The plan-mode toggle in the composer. The next task of [key] carries
-  /// `plan: on` (see [takePlanFlag]); until the host confirms, the chip
-  /// shows the choice.
-  void setPlanWanted(String key, bool on) {
-    if (key.isEmpty) return;
-    if (on == planModeOf(key)) {
-      if (_planWanted.remove(key) == null) return;
-    } else {
-      if (_planWanted[key] == on) return;
-      _planWanted[key] = on;
-    }
-    notifyListeners();
-  }
-
   /// The `plan` value the next task of [key] carries, or null to leave the
-  /// key off (no change). Read once per send.
-  bool? takePlanFlag(String key) => _planWanted.remove(key);
-
-  /// Puts back a [takePlanFlag] value whose task never left (the send
-  /// threw), so the next task carries it. A newer wish of the user wins.
-  void restorePlanFlag(String key, bool plan) {
-    if (key.isEmpty || _planWanted.containsKey(key)) return;
-    if (plan == planModeOf(key)) return;
-    _planWanted[key] = plan;
-    notifyListeners();
-  }
+  /// key off. The app has no plan mode any more (owner, 2026-11-20). A
+  /// thread that the host still keeps in plan mode gets `plan: false`, so
+  /// it falls back to the normal mode.
+  bool? planFlagFor(String key) => planModeOf(key) ? false : null;
 
   /// What [key] waits on the user for, or null. A plan review beats an
   /// approval, an approval beats a question, a question beats a blocked goal.
@@ -759,10 +735,7 @@ class AgentsThreadModes extends ChangeNotifier {
   bool _setPlanMode(String key, bool active) {
     final bool? before = _planMode[key];
     _planMode[key] = active;
-    // The host now says what the user asked for: the choice is applied.
-    final bool applied = _planWanted[key] == active;
-    if (applied) _planWanted.remove(key);
-    return before != active || applied;
+    return before != active;
   }
 
   bool _setTodos(String key, Object? raw) {
@@ -997,7 +970,6 @@ class AgentsThreadModes extends ChangeNotifier {
   void reset() {
     _goals.clear();
     _planMode.clear();
-    _planWanted.clear();
     _todos.clear();
     _questions.clear();
     _runSource.clear();

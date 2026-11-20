@@ -96,12 +96,17 @@ The agent settings are ONE content, `AgentSettingsView`
 (`lib/pages/mobile_agents_settings_page.dart`). A phone, and a wide window
 that opens the agent from the chat pill or the roster, shows it as a page
 (`MobileAgentsSettingsPage`, the shared transparent header). The desktop
-details pane shows the same content under the pane header ("Settings"). The
-rows come in one order: what the agent is (profile, model), what it may do
-(permissions, skills, connectors, API keys, schedules), its channels (mail),
-its computer (runs on the host, host and activity, screen, files), the
-conversation, the app, then hide and remove at the bottom. There is no
-messenger channel: Telegram is not supported.
+details pane shows the same content under the pane's floating header
+("Settings"). **The default view is short (owner, CHAT-152):** the face and
+the name, then one group with only what a normal user needs: profile,
+permissions (what it may do on the computer), connected apps (global, one
+row), schedules and automations, files and the screen. Everything else is
+in the closed "Advanced" fold, in this order: the model (Auto by default),
+skills, API keys, logins, make main agent, mail, the host, host and activity,
+checkpoints, the conversation switches, the app's own pages (phone only:
+the desktop has them in the sidebar), then hide and remove. The pane has no
+Chat button: the chat is open next to it. There is no messenger channel:
+Telegram is not supported.
 
 `ExpressiveScreen` (`lib/ui/expressive/expressive_screen.dart`) stays for the
 full-screen viewers it already frames (document, image, browser view, the
@@ -164,10 +169,53 @@ a bare X over a light map or a photo disappears. In a bar, take the chip's
 3 px slop out of the margins (7 px edge instead of 10, 5 px gap instead of 8)
 so the painted chips keep the settings header's spacing.
 
+### 2.2 One header, one list item (owner, 2026-11-20)
+
+The owner found two faults on many screens. A row showed one shape on hover
+and a different shape when pressed or selected. Text that scrolled under a
+page header stayed legible next to the title. Two shared parts in
+`lib/ui/components/` now remove both faults. Use them. Do not copy them.
+
+**The page header.** `FloatingAppBar` is the one header row: the back chip
+on the left, the title pill, the actions, and in a settings surface the
+close chip on the right. Settings pages, pane pages
+(`SettingsSurfaceNavigator`), full-screen viewers (`ExpressiveScreen`) and
+the document reader all draw it. The title style is
+`pageHeaderTitleStyle(theme)`: 15 px, weight 800, the app font.
+
+**The header material.** `PageHeaderBackdrop`
+(`lib/ui/components/page_header.dart`) is behind every header and behind
+`TopVeil`. It blurs what scrolls under it (`kPageHeaderBlur`) and puts the
+page colour over the blur (`kPageHeaderTint`, 0.82). With nothing under
+it, it looks like the page. With text under it, the text is a soft shadow
+and you cannot read it. It takes the taps on its area.
+
+**The list item.** `StateSurface`
+(`lib/ui/components/state_surface.dart`) is the interactive surface of a
+row: sidebar items, settings rows (`ExpressiveTile`), menu rows
+(`MenuActionRow`), the settings rail, the phone menu tiles. It has one
+`borderRadius`. Rest, hover, focus, press and selection all paint in that
+shape. The state layer is `listItemStateLayer(theme)`: `onSurface` at 8 %
+for hover, 10 % for focus and press. A press can shrink the row a little
+(`squeeze`). A press never changes the corners.
+
+**Shape tokens.** A group of rows uses `listItemRadius(index:, length:)`:
+outer corners `kListItemRadius` (20, `kRadiusXl`), joints
+`kListItemJointRadius` (6), gap `kListItemGap` (3). The settings group and
+the sidebar block use the same numbers.
+
+**The check.** `test/repo_checks/ui_library_test.dart` fails on a
+`SliverAppBar` or a `BackdropFilter` outside the library. It also counts
+`InkWell`, `InkResponse` and `ListTile` per file against
+`test/repo_checks/ui_library_baseline.json`. A count may only go down. When
+you move a row to `StateSurface`, lower the baseline
+(`UI_LIBRARY_WRITE=1 flutter test test/repo_checks/ui_library_test.dart`).
+
 ## 3. The veil, top and bottom
 
-`lib/ui/expressive/top_veil.dart`. Never a solid band: a band has an edge and the
-edge draws a line across the content.
+`lib/ui/expressive/top_veil.dart`. Since 2026-11-20 the top veil stands on
+the header material (`PageHeaderBackdrop`, §2.2) with a short fade under
+it. The gradient below is only the bottom veil and `topVeilDecoration`.
 
 - Top: `surface` at alpha 0.78 → 0.58 → 0.26 → 0, stops 0 / 0.36 / 0.74 / 1.
   Heaviest behind the status bar, gone below the row.
@@ -202,8 +250,8 @@ chat follows the finger, and on release it moves on 0.12 of a page and fades
 The menu chip's sheet (`showMobileMenuSheet`) is a Material 3 Expressive
 bottom sheet: `surfaceContainerLow`, top corners 28, the official 32 x 4
 handle. On top the app's pages as one connected row of large tonal tiles
-(`secondaryContainer`, outer corners 24, inner 8, a press rounds every
-corner). Under it, headed by the name of the chat or agent in view, its
+(`secondaryContainer`, outer corners 24, inner 8, `StateSurface`: a press
+keeps the corners). Under it, headed by the name of the chat or agent in view, its
 actions as one `ExpressiveGroup` of rows, delete last in the error colours.
 
 The filter control above a list (`ConnectedGroup`) is one pill, the selected
@@ -246,8 +294,12 @@ silhouette in the colour of the row's name. A lab with no logo keeps the empty
 slot, so the names stay in line. The lab comes from the model id prefix
 (`moonshotai/…`); add a lab in `kModelLogoByLab`.
 
-File kinds get their own glyph, read from the extension first and the mime type
-second (`sandbox_artifact_block.dart`): sheet for tables, text for markdown,
+File kinds get their own glyph and their own colour, read from the extension
+first and the mime type second (`FileKind` and `FileKindTile` in
+`lib/ui/expressive/file_kind.dart`, used by the file message and the files
+list). The colour is a fixed hue per kind on a quiet tonal tile (PDF red,
+sheet green, document blue, slides orange, code purple, archive amber,
+image pink, video violet, audio cyan), flat, no glow. The glyphs: sheet for tables, text for markdown,
 braces for JSON, source-code for markup and code, terminal for shell, pdf,
 presentation, zip, database, image, video, book.
 
@@ -344,10 +396,14 @@ Every messenger draws a run of consecutive messages from one sender as ONE
 group. The thread does the same. The bubble itself is chuk_chat's
 (AGENTS_UI_UNIFY.md, Result B).
 
-- **Corners.** The user bubble is 16 on every corner; the last bubble of a run
-  gets a 5 tail corner at the bottom on the sender's side
-  (`message_bubble/layout.dart`). In chuk_chat the AI answer is plain text
-  with no bubble.
+- **Corners.** In chuk_chat the user bubble is 16 on every corner; the last
+  bubble of a run gets a 5 tail corner at the bottom on the sender's side
+  (`message_bubble/layout.dart`), and the AI answer is plain text with no
+  bubble. **An Agents thread joins a run like a messenger (CHAT-152):**
+  `bubbleRadius` in `ui/expressive/bubble_shape.dart`, 22 outside and 7 on
+  the sender's side where two blocks of one run touch. An answer and the
+  files under it are one stack of the run; a work line above an answer
+  starts a new stack.
 - **Agents thread = messenger (owner, 2026-11-12, CHAT-52).** Every message is
   its own bubble. The user's bubble is right, in the agent's colour
   (`AgentThreadAccent` above the chat screen, `agentAccent`), text
@@ -523,8 +579,15 @@ panes, dense rows, hover states, keyboard control.
 - **Centre pane: the thread.** Floating header chips at the top (the same
   chips as the phone; `kAgentsThreadHeaderInset` keeps the first message
   clear), the transcript in the middle, chuk_chat's composer at the bottom.
-- **Right pane: details.** The agent's screen and routines, and behind the
-  gear the same agent settings the phone page shows (`AgentSettingsView`).
+- **Right pane: details.** The agent's screen, routines, files and the
+  thread's actions, and behind the ONE gear the same agent settings the
+  phone page shows (`AgentSettingsView`). Every page of the pane (Details,
+  Settings, the model, the files, Control Rooms, and every page a row opens)
+  has the same header: `FloatingPageScaffold` + `FloatingAppBar` in a
+  `SettingsSurfaceNavigator`, title pill left, actions and the close chip
+  right. A model choice from anywhere (the composer's "More models", the
+  settings row, "All models") opens as a page in this pane, never as a
+  modal over the chat.
   It is a docked, resizable pane (300–420 px), opened and closed from the
   title bar. It is not an overlay drawer. It pushes the thread; it does not
   cover it.
@@ -579,6 +642,21 @@ in `mobile_chat_chrome.dart`), so both layouts read the same.
   one the phone uses in `chat_ui_mobile.dart`), with its own shape and
   buttons. There is no second desktop composer and no keyboard hint line
   (AGENTS_UI_UNIFY.md, Result A).
+- One row: plus, the field, the mode control (chat only), microphone, send.
+  Empty, the box is 48 px high. It grows with the text to 144 px, then the
+  field scrolls. Send is the only filled target; stop takes its place while a
+  reply streams. Notices (attachments, edit, reply, queue, `/` menu) sit above
+  the row.
+- Phone: when the draft no longer fits on one line, the field takes the full
+  width and the buttons go to a second row under it. The mode control is
+  icon-only there.
+- Under the composer, `ComposerBottomBand` is opaque in the screen colour from
+  the composer's top down to the screen edge, with a 16 px fade above it. The
+  transcript scrolls behind it; no message text shows next to the composer,
+  under it or through the disclaimer line.
+- The "N sources" list shows each page once (`source_list.dart`). On a wide
+  screen it is a popover at the pill, at most 420 px wide; on a phone it is a
+  bottom sheet.
 
 ### 14.6 Dialogs and menus
 
@@ -616,8 +694,8 @@ in `mobile_chat_chrome.dart`), so both layouts read the same.
   Widths, the folded roster and the open details pane persist per device.
 - The numbers above: `lib/widgets/agents_desktop/desktop_metrics.dart`. The
   bar button, the hairline and the resize handle: `desktop_controls.dart`.
-  The quick switcher and the centred dialogs sit next to them. The pane header is chuk's artifact panel header:
-  `lib/widgets/pane_header.dart`.
+  The quick switcher and the centred dialogs sit next to them. The right
+  pane's header is the settings header (`FloatingAppBar`), see 14.1.
 - The roster: `lib/widgets/agent_roster_view.dart` (desktop only; the phone
   inbox is `MobileAgentList`). The title bar: the non-dense shape of
   `AgentsThreadHeader`. The composer: chuk_chat's `_buildSearchBar` in

@@ -15,9 +15,16 @@
 /// - [AccentIconButton]: the accent-filled round "new chat" button.
 /// - [ExpressiveIconButton]: the squircle target for content inside a page
 ///   body (a card action, a row action). Not for headers or overlays.
+/// - [PageHeaderBackdrop], [pageHeaderTitleStyle]: the frosted material
+///   behind every page header, and the one title style.
+/// - [StateSurface], [listItemRadius], [listItemStateLayer]: the one
+///   interactive list item. Rest, hover, focus, press and selection paint in
+///   one shape.
 library;
 
 export 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+export 'package:chuk_chat/ui/components/page_header.dart';
+export 'package:chuk_chat/ui/components/state_surface.dart';
 export 'package:chuk_chat/ui/expressive/motion.dart' show ExpressiveIconButton;
 export 'package:chuk_chat/widgets/accent_icon_button.dart';
 export 'package:chuk_chat/widgets/floating_app_bar.dart';

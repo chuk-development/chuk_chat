@@ -18,12 +18,12 @@
 // When PLATFORM_DESKTOP=true or PLATFORM_MOBILE=true is set, the Dart compiler
 // can completely remove the unused branch at compile time, resulting in smaller binaries.
 
-import 'package:flutter/foundation.dart'
-    show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
-import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+
 import 'root_wrapper_desktop.dart';
 import 'root_wrapper_mobile.dart';
 
@@ -58,18 +58,14 @@ class RootWrapper extends StatelessWidget {
     // Web always uses desktop UI
     if (kIsWeb) return false;
 
-    // Check platform type - these constants allow tree-shaking
-    final TargetPlatform platform = defaultTargetPlatform;
-    final bool isMobilePlatform =
-        (platform == TargetPlatform.android || platform == TargetPlatform.iOS);
+    // Only Android and iOS pick a layout here; a desktop OS keeps the
+    // desktop one at every width, as before.
+    if (!MobileLayout.isTouchPlatform) return false;
 
-    if (!isMobilePlatform) return false;
-
-    // For mobile platforms, check screen size
-    // sizeOf, not of(): `of` subscribes to every MediaQuery aspect, so the
-    // whole signed-in tree would rebuild on each frame of the keyboard
-    // slide-up (viewInsets ticks ~60 times a second).
-    final double screenWidth = MediaQuery.sizeOf(context).width;
-    return screenWidth < kTabletBreakpoint;
+    // The shortest side of the window decides (MobileLayout.isPhoneSize):
+    // a phone keeps the phone layout in landscape too, and a tablet keeps
+    // the desktop-like layout in portrait too. A rotation therefore never
+    // swaps the wrapper, and the open chat keeps its state.
+    return MobileLayout.isPhone(context);
   }
 }

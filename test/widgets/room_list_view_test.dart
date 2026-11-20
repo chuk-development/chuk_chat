@@ -52,8 +52,8 @@ void main() {
   testWidgets('an empty list says so and offers New room', (tester) async {
     var created = 0;
     await pump(tester, LocalRoomSource(), onCreate: () => created++);
-    expect(find.text('No rooms yet.'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, 'New room'));
+    expect(find.text('No groups yet.'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'New group'));
     expect(created, 1);
   });
 
@@ -138,15 +138,15 @@ void main() {
     tester,
   ) async {
     await pump(tester, LocalRoomSource());
-    expect(find.text('No rooms yet.'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'New room'), findsNothing);
+    expect(find.text('No groups yet.'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'New group'), findsNothing);
     expect(findIcon(Icons.group_add_outlined), findsNothing);
   });
 
   testWidgets('adding a room updates the list live', (tester) async {
     final source = LocalRoomSource(random: Random(3));
     await pump(tester, source);
-    expect(find.text('No rooms yet.'), findsOneWidget);
+    expect(find.text('No groups yet.'), findsOneWidget);
 
     source.addRoom(_draft('launch', 2));
     await tester.pumpAndSettle();
@@ -163,7 +163,7 @@ void main() {
     await pump(tester, source, onDelete: deleted.add);
     await tester.tap(findIcon(Icons.more_vert));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete room'));
+    await tester.tap(find.text('Delete group'));
     await tester.pumpAndSettle();
     expect(deleted, [a.id]);
   });
@@ -185,7 +185,7 @@ void main() {
     await pump(tester, source, onRename: (id, name) => renamed.add((id, name)));
     await tester.tap(findIcon(Icons.more_vert));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Rename room'));
+    await tester.tap(find.text('Rename group'));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), 'launch v2');

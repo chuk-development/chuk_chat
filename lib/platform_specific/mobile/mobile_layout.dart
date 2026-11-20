@@ -14,7 +14,6 @@ library;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/constants.dart' show kTabletBreakpoint;
 import 'package:chuk_chat/platform_config.dart';
 
 class MobileLayout {
@@ -65,24 +64,52 @@ class MobileLayout {
   /// uses for its sidebar swipe, so the two gestures feel alike.
   static const double swipeVelocity = 500;
 
-  /// True when the phone layout applies: a real phone, or any window narrower
-  /// than [phoneBreakpoint].
+  /// Material's "expanded" window class starts here. At this width and more,
+  /// a tablet shows everything side by side; between [phoneBreakpoint] and
+  /// this width (a tablet in portrait, "medium") the wide layout folds its
+  /// side panes to rails or overlays by its own width rules.
+  static const double expandedBreakpoint = 840;
+
+  /// True on a touch device that is not forced to the desktop build: Android
+  /// or iOS, not the web. The wide layout on such a device is a tablet: it
+  /// has no hover, its targets are fingers, and it has a system back.
+  static bool get isTouchPlatform {
+    if (kPlatformDesktop || kIsWeb) return false;
+    final platform = defaultTargetPlatform;
+    return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+  }
+
+  /// The one rule for "phone layout or wide layout", from the window size.
+  ///
+  /// * A phone build (`PLATFORM_MOBILE=true`) is always the phone layout.
+  /// * Android and iOS: the window's SHORTEST side decides (Material window
+  ///   size classes: below [phoneBreakpoint] is a phone). A rotation never
+  ///   changes the answer, so a phone in landscape stays the phone layout and
+  ///   a tablet in portrait stays the wide one. Only a split-screen or
+  ///   freeform window that crosses [phoneBreakpoint] changes it.
+  /// * Desktop and web: the WIDTH decides, as before. A narrow desktop window
+  ///   therefore shows the phone layout, which is how the layout is checked
+  ///   on Linux without an emulator.
+  static bool isPhoneSize(Size size) {
+    if (kPlatformMobile) return true;
+    if (isTouchPlatform) return size.shortestSide < phoneBreakpoint;
+    return size.width < phoneBreakpoint;
+  }
+
+  /// [isPhoneSize] for the window of [context].
   ///
   /// Reads `MediaQuery.sizeOf`, never `MediaQuery.of`: the latter subscribes
   /// to `viewInsets` and would rebuild the caller on every keyboard frame.
-  static bool isPhone(BuildContext context) {
-    if (kPlatformMobile) return true;
-    final double width = MediaQuery.sizeOf(context).width;
-    if (width < phoneBreakpoint) return true;
-    if (kPlatformDesktop || kIsWeb) return false;
-    final platform = defaultTargetPlatform;
-    final bool mobilePlatform =
-        platform == TargetPlatform.android || platform == TargetPlatform.iOS;
-    return mobilePlatform && width < kTabletBreakpoint;
-  }
+  static bool isPhone(BuildContext context) =>
+      isPhoneSize(MediaQuery.sizeOf(context));
 
-  /// The same rule for a width the caller already has (a `LayoutBuilder`
-  /// constraint): a real phone, or anything narrower than [phoneBreakpoint].
+  /// True when the wide layout runs on a touch device: a tablet.
+  static bool isTablet(BuildContext context) =>
+      isTouchPlatform && !isPhone(context);
+
+  /// The width-only rule, for a caller that has a `LayoutBuilder` constraint
+  /// and no window: a phone build, or anything narrower than
+  /// [phoneBreakpoint]. Prefer [isPhoneSize] when the window is known.
   static bool isPhoneWidth(double width) =>
       kPlatformMobile || width < phoneBreakpoint;
 

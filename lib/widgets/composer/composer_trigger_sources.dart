@@ -15,7 +15,6 @@ import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/services/agents/agent_roster_store.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
-import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
 import 'package:chuk_chat/services/chat_reference_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/composer/composer_trigger.dart';
@@ -103,7 +102,6 @@ ComposerTriggerSource buildComposerTriggerSource({
   required AppLocalizations l,
   required String? chatId,
   required List<Map<String, String>> messages,
-  required bool agentsThread,
   String? workspaceId,
   VoidCallback? onCompact,
   VoidCallback? onModel,
@@ -118,7 +116,6 @@ ComposerTriggerSource buildComposerTriggerSource({
   List<TriggerItem> slash() {
     final List<Skill> skillList =
         skills ?? (kFeatureSkills ? SkillRegistry.all : const <Skill>[]);
-    final String? planKey = agentsThread ? chatId : null;
     return <TriggerItem>[
       for (final Skill s in skillList)
         TriggerItem(
@@ -129,18 +126,6 @@ ComposerTriggerSource buildComposerTriggerSource({
           icon: Icons.auto_awesome,
           chipLiteral: '/${s.name}',
           chipKind: ComposerChipKind.skill,
-        ),
-      if (planKey != null && planKey.isNotEmpty)
-        TriggerItem(
-          id: 'mode:plan',
-          label: l.composerModePlan,
-          detail: l.composerModePlanDetail,
-          group: TriggerGroup.modes,
-          icon: Icons.list,
-          onPicked: () {
-            final AgentsThreadModes modes = AgentsThreadModes.instance;
-            modes.setPlanWanted(planKey, !modes.planToggleOf(planKey));
-          },
         ),
       if (onCompact != null)
         TriggerItem(

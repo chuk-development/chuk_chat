@@ -296,6 +296,8 @@ class AppLocalizations {
   String get agentsCwSchedulesSubtitle => _get('agentsCwSchedulesSubtitle');
   String get agentsCwConnections => _get('agentsCwConnections');
   String get agentsCwConnectedApps => _get('agentsCwConnectedApps');
+  String get agentsCwConnectedAppsSubtitle =>
+      _get('agentsCwConnectedAppsSubtitle');
   String get agentsCwApiKeys => _get('agentsCwApiKeys');
   String get agentsCwControlRooms => _get('agentsCwControlRooms');
   String get agentsCwOpenScreen => _get('agentsCwOpenScreen');
@@ -771,7 +773,6 @@ class AppLocalizations {
   String get composerSecretSend => _get('composerSecretSend');
   String get composerSecretEdit => _get('composerSecretEdit');
   String get composerMenuSkills => _get('composerMenuSkills');
-  String get composerMenuModes => _get('composerMenuModes');
   String get composerMenuCommands => _get('composerMenuCommands');
   String get composerMenuFiles => _get('composerMenuFiles');
   String get composerMenuAgents => _get('composerMenuAgents');
@@ -788,8 +789,6 @@ class AppLocalizations {
   String get composerCmdModel => _get('composerCmdModel');
   String get composerCmdExport => _get('composerCmdExport');
   String get composerCmdNewChat => _get('composerCmdNewChat');
-  String get composerModePlan => _get('composerModePlan');
-  String get composerModePlanDetail => _get('composerModePlanDetail');
   String get composerQuestionTitle => _get('composerQuestionTitle');
   String queuedMessagesCount(String count) =>
       _get('queuedMessagesCount').replaceAll('{count}', count);
@@ -1145,6 +1144,65 @@ class AppLocalizations {
   // ── UI audit fixes B (agent B) ──
   String get agentsRoomEmptyHint => _get('agentsRoomEmptyHint');
   String get agentsRoomConnectHostHint => _get('agentsRoomConnectHostHint');
+  String get agentsGroups => _get('agentsGroups');
+  String get agentsGroupNew => _get('agentsGroupNew');
+  String get agentsNewAgentOrGroup => _get('agentsNewAgentOrGroup');
+  String get agentsGroupNoneYet => _get('agentsGroupNoneYet');
+  String get agentsGroupName => _get('agentsGroupName');
+  String get agentsGroupNameHint => _get('agentsGroupNameHint');
+  String get agentsGroupNameMissing => _get('agentsGroupNameMissing');
+  String get agentsGroupRename => _get('agentsGroupRename');
+  String get agentsGroupDelete => _get('agentsGroupDelete');
+  String get agentsGroupManageMembers => _get('agentsGroupManageMembers');
+  String get agentsGroupMembers => _get('agentsGroupMembers');
+  String agentsGroupSelected(String count) =>
+      _get('agentsGroupSelected').replaceAll('{count}', count);
+  String get agentsGroupSearchAgents => _get('agentsGroupSearchAgents');
+  String get agentsGroupNoAgents => _get('agentsGroupNoAgents');
+  String get agentsGroupNoMatch => _get('agentsGroupNoMatch');
+  String get agentsGroupCreate => _get('agentsGroupCreate');
+  String get agentsGroupWhoAnswers => _get('agentsGroupWhoAnswers');
+  String get agentsGroupResponderEveryone => _get('agentsGroupResponderEveryone');
+  String get agentsGroupResponderEveryoneHint => _get('agentsGroupResponderEveryoneHint');
+  String get agentsGroupResponderMentions => _get('agentsGroupResponderMentions');
+  String get agentsGroupResponderMentionsHint => _get('agentsGroupResponderMentionsHint');
+  String get agentsGroupResponderAuto => _get('agentsGroupResponderAuto');
+  String get agentsGroupResponderAutoHint => _get('agentsGroupResponderAutoHint');
+  String get agentsGroupResponderLead => _get('agentsGroupResponderLead');
+  String get agentsGroupResponderLeadHint => _get('agentsGroupResponderLeadHint');
+  String get agentsGroupLeadMember => _get('agentsGroupLeadMember');
+  String get agentsGroupFallbackMember => _get('agentsGroupFallbackMember');
+  String get agentsGroupFallbackHint => _get('agentsGroupFallbackHint');
+  String get agentsGroupNoMember => _get('agentsGroupNoMember');
+  String get agentsGroupInstructions => _get('agentsGroupInstructions');
+  String get agentsGroupInstructionsHint => _get('agentsGroupInstructionsHint');
+  String get agentsGroupSharedFolder => _get('agentsGroupSharedFolder');
+  String get agentsGroupSharedFolderHint => _get('agentsGroupSharedFolderHint');
+  String get agentsGroupSave => _get('agentsGroupSave');
+  String get agentsGroupAgentToAgent => _get('agentsGroupAgentToAgent');
+  String get agentsGroupAgentToAgentHint => _get('agentsGroupAgentToAgentHint');
+  String get agentsGroupAddMember => _get('agentsGroupAddMember');
+  String get agentsGroupRemoveMember => _get('agentsGroupRemoveMember');
+  String get agentsGroupMinMembers => _get('agentsGroupMinMembers');
+  String get agentsGroupDetails => _get('agentsGroupDetails');
+  String get agentsGroupMessageHint => _get('agentsGroupMessageHint');
+  String get agentsGroupReopenToSend => _get('agentsGroupReopenToSend');
+  String get agentsGroupConnectionChanged => _get('agentsGroupConnectionChanged');
+  String agentsGroupWorking(String name) =>
+      _get('agentsGroupWorking').replaceAll('{name}', name);
+  String agentsGroupPickedByAuto(String percent) =>
+      _get('agentsGroupPickedByAuto').replaceAll('{percent}', percent);
+  String get agentsGroupPickedByAutoPlain => _get('agentsGroupPickedByAutoPlain');
+  String get agentsGroupPickedByAutoFallback => _get('agentsGroupPickedByAutoFallback');
+  String get agentsGroupStop => _get('agentsGroupStop');
+  String get agentsGroupStopNoMoreMentions => _get('agentsGroupStopNoMoreMentions');
+  String get agentsGroupStopRounds => _get('agentsGroupStopRounds');
+  String get agentsGroupStopMessages => _get('agentsGroupStopMessages');
+  String get agentsGroupStopStopped => _get('agentsGroupStopStopped');
+  String get agentsGroupStopTurnFailed => _get('agentsGroupStopTurnFailed');
+  String get agentsGroupStopNoSuchRoom => _get('agentsGroupStopNoSuchRoom');
+  String get agentsGroupStopAgentToAgentOff => _get('agentsGroupStopAgentToAgentOff');
+  String get agentsGroupStopNoAddressee => _get('agentsGroupStopNoAddressee');
   String get agentsHostYourComputer => _get('agentsHostYourComputer');
   String get agentsModeChats => _get('agentsModeChats');
   String get agentsModeHome => _get('agentsModeHome');
@@ -1677,8 +1735,6 @@ class AppLocalizations {
   String get agentsGoalResume => _get('agentsGoalResume');
   String get agentsGoalClear => _get('agentsGoalClear');
   String get agentsNotConnected => _get('agentsNotConnected');
-  String get agentsPlanMode => _get('agentsPlanMode');
-  String get agentsPlanModeHint => _get('agentsPlanModeHint');
   String get agentsPlanReviewTitle => _get('agentsPlanReviewTitle');
   String get agentsPlanApprove => _get('agentsPlanApprove');
   String get agentsPlanKeepPlanning => _get('agentsPlanKeepPlanning');

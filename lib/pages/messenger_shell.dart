@@ -180,13 +180,14 @@ import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/agents_desktop/quick_switcher.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
-import 'package:chuk_chat/widgets/pane_header.dart';
+import 'package:chuk_chat/widgets/floating_page_scaffold.dart';
 import 'package:chuk_chat/widgets/settings_surface.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
 import 'package:chuk_chat/widgets/room_create_sheet.dart';
+import 'package:chuk_chat/widgets/room_details_panel.dart';
 import 'package:chuk_chat/widgets/room_list_view.dart';
 import 'package:chuk_chat/widgets/room_members_sheet.dart';
 import 'package:chuk_chat/widgets/room_thread_page.dart';
@@ -638,6 +639,9 @@ class _MessengerShellState extends State<MessengerShell>
 
   @override
   bool get _homeInFront => _agentsHomeShown.value;
+
+  @override
+  bool get _agentsHalfInFront => _shownMode == AppMode.agents;
 
   /// The places of the Agents half, in order: Home, the main agent, the
   /// other agents (pinned first, then the roster's order), the rooms. The
@@ -1125,6 +1129,9 @@ class _MessengerShellState extends State<MessengerShell>
   }
 
   void _openChatModel(String chatKey) {
+    // A desktop window opens the model in the right pane, as a page of
+    // Details, next to the thread: no modal over the chat (CHAT-152).
+    if (!_isPhone && _deskOpenDetailsPage(chatKey, 'model')) return;
     unawaited(
       openSettingsSurface(
         context,
@@ -1159,8 +1166,12 @@ class _MessengerShellState extends State<MessengerShell>
       // halves, the sidebar and its whole chat list included.
       builder: (context, _) => Builder(
         builder: (context) {
-          final double width = MediaQuery.sizeOf(context).width;
-          final bool phone = MobileLayout.isPhoneWidth(width);
+          final Size window = MediaQuery.sizeOf(context);
+          final double width = window.width;
+          // The shortest side on a phone or tablet, the width on a desktop
+          // ([MobileLayout.isPhoneSize]): a tablet gets the wide layout in
+          // both orientations, a phone keeps the phone layout in both.
+          final bool phone = MobileLayout.isPhoneSize(window);
           _isPhone = phone;
           final agent = _selectedAgent;
 

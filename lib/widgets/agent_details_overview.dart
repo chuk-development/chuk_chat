@@ -30,6 +30,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/automation_editor_sheet.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/settings_surface.dart';
 
@@ -46,7 +47,12 @@ class AgentDetailsOverview extends StatelessWidget {
     this.onOpenFiles,
     this.actions = const <AgentDetailsAction>[],
     this.modelReader,
+    this.headerInset = false,
   });
+
+  /// True under a floating header ([FloatingPageScaffold]): the list starts
+  /// below the header and scrolls up behind it.
+  final bool headerInset;
 
   /// Opens the agent's model setting. Null hides the Model row.
   final VoidCallback? onOpenModel;
@@ -78,14 +84,20 @@ class AgentDetailsOverview extends StatelessWidget {
     final VoidCallback? openModel = onOpenModel;
     return ListView(
       key: const ValueKey<String>('details-overview'),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      padding: const EdgeInsets.fromLTRB(
+        16,
+        16,
+        16,
+        24,
+      ).add(headerInset ? floatingHeaderInset(context) : EdgeInsets.zero),
       children: <Widget>[
         AgentScreenPreview(
           name: name,
           onOpen: onOpenScreen,
           onParked: onScreenParked,
         ),
-        const SizedBox(height: 24),
+        // The routines' section label carries its own space above.
+        const SizedBox(height: 8),
         AgentRoutinesList(
           sessionKey: sessionKey,
           agentName: name,
@@ -402,18 +414,11 @@ class _AgentRoutinesListState extends State<AgentRoutinesList> {
           key: const ValueKey<String>('details-routines'),
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.only(left: 4, bottom: 8),
-              child: Text(
-                'Routines',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
+            // The same section label as every settings page.
+            const ExpressiveSectionHeader('Routines'),
             if (routines.isEmpty)
               Padding(
-                padding: const EdgeInsets.only(left: 4),
+                padding: const EdgeInsets.only(left: 6),
                 child: Text(
                   _source.listed(widget.sessionKey)
                       ? 'No routines yet.'

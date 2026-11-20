@@ -239,7 +239,7 @@ void main() {
     expect(sendButton(), findsNothing);
   });
 
-  testWidgets('the composer sends and resets the thread', (tester) async {
+  testWidgets('the composer sends and keeps the conversation', (tester) async {
     final sent = <String>[];
     final ctrl = await pump(tester, onSend: sent.add);
 
@@ -261,8 +261,9 @@ void main() {
     await tester.pump();
 
     expect(sent, ['new question']);
-    // Sending resets: the old turn is gone, the sent message is the subject.
-    expect(said('old turn'), findsNothing);
+    // A group reads like a group chat: the earlier turn stays, the new line
+    // follows it.
+    expect(said('old turn'), findsOneWidget);
     expect(find.text('new question'), findsOneWidget);
   });
 
@@ -395,7 +396,7 @@ void main() {
     final ctrl = await pump(tester);
     ctrl.add(const AgentsRelayRoomDone(roomId: 'r1', reason: 'no_such_room'));
     await tester.pump();
-    expect(find.text('This room is not on your host yet'), findsOneWidget);
+    expect(find.text('This group is not on your computer yet'), findsOneWidget);
   });
 
   testWidgets('when the inbound stream closes, a reconnect banner appears', (
@@ -421,7 +422,7 @@ void main() {
     await tester.pump();
 
     expect(
-      find.text('Connection changed. Reopen the room to continue.'),
+      find.text('Connection changed. Reopen the group to continue.'),
       findsOneWidget,
     );
     expect(talking(), findsNothing);
@@ -464,7 +465,7 @@ void main() {
     await tester.tap(sendButton());
     await tester.pump();
     expect(sent, isEmpty);
-    expect(find.text('Reopen the room to send'), findsOneWidget);
+    expect(find.text('Reopen the group to send'), findsOneWidget);
   });
 
   testWidgets('following the rebind, a new controller re-subscribes the room', (
@@ -783,6 +784,279 @@ void main() {
       await tester.pump();
       expect(inPicker('@agent-12'), findsOneWidget);
       expect(inPicker('@agent-1'), findsNothing);
+    });
+  });
+
+  group('a group reads like a group chat', () {
+    // A broadcast stream delivers after the frame; the second pump draws it.
+    Future<void> land(WidgetTester tester) async {
+      await tester.pump();
+      await tester.pump();
+    }
+
+    Future<StreamController<AgentsRelayInbound>> pumpGroup(
+      WidgetTester tester, {
+      void Function(String)? onSend,
+      VoidCallback? onStop,
+      List<AgentsAgent> agents = const <AgentsAgent>[],
+    }) async {
+      final ctrl = StreamController<AgentsRelayInbound>.broadcast();
+      addTearDown(ctrl.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RoomThreadPage(
+              roomId: 'r1',
+              roomName: 'launch',
+              inbound: ctrl.stream,
+              members: const <AgentsRoomMember>[
+                AgentsRoomMember(agentId: 'a', handle: 'amber'),
+                AgentsRoomMember(agentId: 'b', handle: 'cobalt'),
+              ],
+              agents: agents,
+              onSend: onSend,
+              onStop: onStop,
+            ),
+          ),
+        ),
+      );
+      await land(tester);
+      return ctrl;
+    }
+
+    AgentsRelayRoomTurn turn(String agentId, String handle, String text) =>
+        AgentsRelayRoomTurn(
+          roomId: 'r1',
+          round: 1,
+          agentId: agentId,
+          handle: handle,
+          text: text,
+        );
+
+    testWidgets('two exchanges keep both user lines and every turn, in order', (
+      tester,
+    ) async {
+      final ctrl = await pumpGroup(tester, onSend: (_) {});
+
+      await tester.enterText(find.byType(TextField), 'first question');
+      await tester.tap(sendButton());
+      await land(tester);
+      ctrl.add(turn('a', 'amber', 'first answer'));
+      ctrl.add(
+        const AgentsRelayRoomDone(roomId: 'r1', reason: 'no_more_mentions'),
+      );
+      await land(tester);
+
+      await tester.enterText(find.byType(TextField), 'second question');
+      await tester.tap(sendButton());
+      await land(tester);
+      ctrl.add(turn('b', 'cobalt', 'second answer'));
+      await land(tester);
+
+      expect(find.text('first question'), findsOneWidget);
+      expect(said('first answer'), findsOneWidget);
+      expect(find.text('second question'), findsOneWidget);
+      expect(said('second answer'), findsOneWidget);
+      // Top to bottom, the way they happened.
+      final double y1 = tester.getTopLeft(find.text('first question')).dy;
+      final double y2 = tester.getTopLeft(said('first answer')).dy;
+      final double y3 = tester.getTopLeft(find.text('second question')).dy;
+      final double y4 = tester.getTopLeft(said('second answer')).dy;
+      expect(y1 < y2 && y2 < y3 && y3 < y4, isTrue);
+    });
+
+    testWidgets('history replays the whole conversation, user lines too', (
+      tester,
+    ) async {
+      final ctrl = await pumpGroup(tester);
+      ctrl.add(
+        const AgentsRelayRoomHistory(
+          roomId: 'r1',
+          turns: [
+            AgentsRelayRoomTurn(
+              roomId: 'r1',
+              round: 0,
+              agentId: '',
+              handle: '',
+              text: 'what is the plan?',
+              kind: 'user',
+            ),
+            AgentsRelayRoomTurn(
+              roomId: 'r1',
+              round: 1,
+              agentId: 'a',
+              handle: 'amber',
+              text: 'we ship friday',
+            ),
+            AgentsRelayRoomTurn(
+              roomId: 'r1',
+              round: 0,
+              agentId: '',
+              handle: '',
+              text: 'and the post?',
+              kind: 'user',
+            ),
+          ],
+        ),
+      );
+      await land(tester);
+
+      final List<MessageBubble> bubbles = tester
+          .widgetList<MessageBubble>(find.byType(MessageBubble))
+          .toList();
+      expect(bubbles.map((b) => b.isUser), [true, false, true]);
+      expect(find.text('what is the plan?'), findsOneWidget);
+      expect(find.text('and the post?'), findsOneWidget);
+      expect(talking(), findsNothing);
+    });
+
+    testWidgets('a member is named by its roster name; an auto pick says so', (
+      tester,
+    ) async {
+      final ctrl = await pumpGroup(
+        tester,
+        agents: const <AgentsAgent>[
+          AgentsAgent(id: 'a', name: 'Amber', threads: <AgentsThreadInfo>[]),
+        ],
+      );
+      ctrl.add(
+        const AgentsRelayRoomTurn(
+          roomId: 'r1',
+          round: 1,
+          agentId: 'a',
+          handle: 'amber',
+          text: 'picked',
+          routedMode: 'auto',
+          routedConfidence: 0.94,
+        ),
+      );
+      ctrl.add(
+        const AgentsRelayRoomTurn(
+          roomId: 'r1',
+          round: 1,
+          agentId: 'b',
+          handle: 'cobalt',
+          text: 'unsure pick',
+          routedMode: 'auto',
+          routedFallback: true,
+        ),
+      );
+      await land(tester);
+
+      expect(find.text('Amber'), findsOneWidget);
+      expect(find.text('@cobalt'), findsWidgets);
+      expect(find.text('Picked by auto · 94%'), findsOneWidget);
+      expect(find.text('Picked by auto (fallback)'), findsOneWidget);
+    });
+
+    testWidgets('a handoff is one quiet line with an icon, not a bubble', (
+      tester,
+    ) async {
+      final ctrl = await pumpGroup(tester);
+      ctrl.add(
+        const AgentsRelayRoomTurn(
+          roomId: 'r1',
+          round: 1,
+          agentId: 'a',
+          handle: 'amber',
+          text: 'write the post',
+          kind: 'handoff',
+          toAgentId: 'b',
+          toHandle: 'cobalt',
+        ),
+      );
+      await land(tester);
+
+      final Finder line = find.byKey(const ValueKey<String>('room-handoff'));
+      expect(line, findsOneWidget);
+      expect(find.byType(MessageBubble), findsNothing);
+      expect(
+        find.descendant(
+          of: line,
+          matching: find.text('@cobalt: write the post'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: line,
+          matching: findIcon(Icons.arrow_forward_rounded),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('room_working shows who is working until its turn lands', (
+      tester,
+    ) async {
+      final ctrl = await pumpGroup(tester);
+      ctrl.add(
+        const AgentsRelayRoomWorking(
+          roomId: 'r1',
+          agentId: 'b',
+          handle: 'cobalt',
+        ),
+      );
+      await land(tester);
+      final Finder row = find.byKey(const ValueKey<String>('room-working'));
+      expect(row, findsOneWidget);
+      expect(find.text('@cobalt is working…'), findsOneWidget);
+      // Not a turn: no bubble for it.
+      expect(find.byType(MessageBubble), findsNothing);
+
+      ctrl.add(turn('b', 'cobalt', 'done'));
+      await land(tester);
+      expect(row, findsNothing);
+      expect(said('done'), findsOneWidget);
+      // Still running: the plain typing pill stands in.
+      expect(talking(), findsOneWidget);
+    });
+
+    testWidgets('Stop replaces Send while the group runs and calls onStop', (
+      tester,
+    ) async {
+      var stops = 0;
+      final ctrl = await pumpGroup(
+        tester,
+        onSend: (_) {},
+        onStop: () => stops++,
+      );
+      expect(findIcon(Icons.stop_rounded), findsNothing);
+      expect(sendButton(), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'go');
+      await tester.tap(sendButton());
+      await land(tester);
+      expect(sendButton(), findsNothing);
+      await tester.tap(findIcon(Icons.stop_rounded));
+      await land(tester);
+      expect(stops, 1);
+
+      ctrl.add(const AgentsRelayRoomDone(roomId: 'r1', reason: 'stopped'));
+      await land(tester);
+      expect(findIcon(Icons.stop_rounded), findsNothing);
+      expect(sendButton(), findsOneWidget);
+      expect(find.text('Stopped'), findsOneWidget);
+    });
+
+    testWidgets('no_addressee names how to address the group', (tester) async {
+      final ctrl = await pumpGroup(tester);
+      ctrl.add(const AgentsRelayRoomDone(roomId: 'r1', reason: 'no_addressee'));
+      await land(tester);
+      expect(
+        find.text('Nobody was mentioned. Write @name or @all.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the room_list frame is not taken for a history', (
+      tester,
+    ) async {
+      final ctrl = await pumpGroup(tester);
+      ctrl.add(turn('a', 'amber', 'kept'));
+      ctrl.add(const AgentsRelayRoomList(rooms: <AgentsRelayRoomListEntry>[]));
+      await land(tester);
+      expect(said('kept'), findsOneWidget);
     });
   });
 }

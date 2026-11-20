@@ -68,11 +68,7 @@ void main() {
       addTearDown(store.dispose);
       addTearDown(source.dispose);
 
-      await tester.pumpWidget(
-        testApp(
-          _page('alex', source, store),
-        ),
-      );
+      await tester.pumpWidget(testApp(_page('alex', source, store)));
       await tester.pumpAndSettle();
 
       final Rect header = tester.getRect(find.byType(AppBar));
@@ -88,19 +84,15 @@ void main() {
     setUp(() async {
       SharedPreferences.setMockInitialValues(<String, Object>{});
       ChatModelSelectionService.instance.clearMemoryForTesting();
-      AgentModel.debugCatalogue = () async =>
-          const <AgentCatalogueModel>[
-            AgentCatalogueModel(
-              id: 'z-ai/glm-5.3-flash',
-              name: 'Z.ai: GLM 5.3 Flash',
-              providers: <AgentProvider>[
-                AgentProvider(
-                  slug: 'runanywhere/serverless',
-                  name: 'RunAnywhere',
-                ),
-              ],
-            ),
-          ];
+      AgentModel.debugCatalogue = () async => const <AgentCatalogueModel>[
+        AgentCatalogueModel(
+          id: 'z-ai/glm-5.3-flash',
+          name: 'Z.ai: GLM 5.3 Flash',
+          providers: <AgentProvider>[
+            AgentProvider(slug: 'runanywhere/serverless', name: 'RunAnywhere'),
+          ],
+        ),
+      ];
       kv = await useTempKvCache();
       await ModelCapabilitiesService.initialize();
     });
@@ -137,16 +129,12 @@ void main() {
       addTearDown(store.dispose);
       addTearDown(source.dispose);
 
-      await tester.pumpWidget(
-        testApp(
-          _page('alex', source, store),
-        ),
-      );
+      await tester.pumpWidget(testApp(_page('alex', source, store)));
       await tester.pumpAndSettle();
+      // The model is a rare setting: it sits in "Advanced" (CHAT-152).
+      await openAdvanced(tester);
 
-      final Finder tile = find.byKey(
-        const ValueKey<String>('settings_Model'),
-      );
+      final Finder tile = find.byKey(const ValueKey<String>('settings_Model'));
       expect(tile, findsOneWidget);
       expect(
         find.descendant(
@@ -155,6 +143,9 @@ void main() {
         ),
         findsOneWidget,
       );
+      // Into the middle: at the top it would sit under the floating header.
+      await Scrollable.ensureVisible(tester.element(tile), alignment: 0.5);
+      await tester.pumpAndSettle();
       await tester.tap(tile);
       await tester.pumpAndSettle();
       expect(find.byType(AgentModelPage), findsOneWidget);
@@ -171,12 +162,9 @@ void main() {
       );
       addTearDown(store.dispose);
       addTearDown(source.dispose);
-      await tester.pumpWidget(
-        testApp(
-          _page('alex', source, store),
-        ),
-      );
+      await tester.pumpWidget(testApp(_page('alex', source, store)));
       await tester.pumpAndSettle();
+      await openAdvanced(tester);
       // A plain row that runs the shell's action, not the model tile: there
       // is no thread to store a choice under.
       expect(
@@ -222,11 +210,7 @@ void main() {
       final source = LocalAgentRosterSource(seed: <AgentsAgent>[agent]);
       addTearDown(store.dispose);
       addTearDown(source.dispose);
-      await tester.pumpWidget(
-        testApp(
-          _page(agent.id, source, store),
-        ),
-      );
+      await tester.pumpWidget(testApp(_page(agent.id, source, store)));
       await tester.pumpAndSettle();
       // The host row sits in the closed "Advanced" fold (chuk_chat-pjom).
       final Finder toggle = find.byKey(
@@ -299,12 +283,9 @@ void main() {
     test('the host listing an agent marks it as known to the host', () {
       final source = LocalAgentRosterSource(seed: <AgentsAgent>[wahlradar()]);
       addTearDown(source.dispose);
-      source.applyHostNames(
-        const <AgentsHostAgentName>[
-          AgentsHostAgentName(agentId: localId, name: 'Wahlradar'),
-        ],
-        peerDeviceId: 'laptop',
-      );
+      source.applyHostNames(const <AgentsHostAgentName>[
+        AgentsHostAgentName(agentId: localId, name: 'Wahlradar'),
+      ], peerDeviceId: 'laptop');
       final AgentsAgent agent = source.byId(localId)!;
       expect(agent.knownToHost, isTrue);
       expect(agent.runsOnHost, isTrue);
@@ -323,4 +304,13 @@ void main() {
       expect(notified, 1);
     });
   });
+}
+
+/// Opens the closed "Advanced" fold of the agent settings.
+Future<void> openAdvanced(WidgetTester tester) async {
+  final Finder toggle = find.byKey(const ValueKey<String>('settings_Advanced'));
+  await tester.ensureVisible(toggle);
+  await tester.pumpAndSettle();
+  await tester.tap(toggle);
+  await tester.pumpAndSettle();
 }

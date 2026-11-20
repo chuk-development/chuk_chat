@@ -16,7 +16,6 @@ import 'package:chuk_chat/widgets/chat_document_inline.dart';
 import 'package:chuk_chat/widgets/charts/chuk_chart.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/ui/components/components.dart';
-import 'package:chuk_chat/ui/expressive/top_veil.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
 import 'package:chuk_chat/widgets/html_artifact_view.dart';
 
@@ -559,9 +558,8 @@ class _DocumentCell extends StatelessWidget {
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: value));
             if (context.mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('Link copied')));
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(const SnackBar(content: Text('Link copied')));
             }
           },
         ),
@@ -597,81 +595,36 @@ class _DocumentScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    // The bar is as tall as its buttons plus the padding around them; the
-    // document starts under it and scrolls through the veil.
-    const double barHeight = 48 + 12;
-    return Scaffold(
-      body: Stack(
-        children: <Widget>[
-          Positioned.fill(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ChatDocumentView(
-                document: document,
-                showActions: false,
-                // The document starts below the bar and then travels up behind
-                // it, which is the only way the veil has anything to veil.
-                topInset: MediaQuery.paddingOf(context).top + barHeight,
-              ),
-            ),
+    // The app's one page header: back chip, the title pill, share and save.
+    // The document starts under it and then scrolls up behind it.
+    return FloatingPageScaffold(
+      appBar: FloatingAppBar(
+        title: _MiddleEllipsis(
+          text: '${document['title']}',
+          style: pageHeaderTitleStyle(theme),
+        ),
+        actions: <Widget>[
+          FloatingHeaderButton(
+            hugeIcon: HugeIcons.share01,
+            tooltip: 'Share',
+            onPressed: () => ChatDocumentView.share(document),
           ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: TopVeil(
-              child: Padding(
-                // The header chrome of every page: round opaque chips, the
-                // title in the floating pill.
-                padding: const EdgeInsets.fromLTRB(7, 6, 7, 6),
-                child: Row(
-                  children: <Widget>[
-                    FloatingHeaderButton(
-                      hugeIcon: HugeIcons.cancel01,
-                      tooltip: 'Close',
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const SizedBox(width: 5),
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: FloatingChromeSurface(
-                          radius: 18,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 11,
-                          ),
-                          child: _MiddleEllipsis(
-                            text: '${document['title']}',
-                            style: TextStyle(
-                              color: theme.resolvedIconColor.withValues(
-                                alpha: 0.92,
-                              ),
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 5),
-                    FloatingHeaderButton(
-                      hugeIcon: HugeIcons.share01,
-                      tooltip: 'Share',
-                      onPressed: () => ChatDocumentView.share(document),
-                    ),
-                    const SizedBox(width: 2),
-                    FloatingHeaderButton(
-                      hugeIcon: HugeIcons.download01,
-                      tooltip: 'Save',
-                      onPressed: () => ChatDocumentView.save(document),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          FloatingHeaderButton(
+            hugeIcon: HugeIcons.download01,
+            tooltip: 'Save',
+            onPressed: () => ChatDocumentView.save(document),
           ),
         ],
+      ),
+      body: Builder(
+        builder: (BuildContext context) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ChatDocumentView(
+            document: document,
+            showActions: false,
+            topInset: floatingHeaderInset(context).top,
+          ),
+        ),
       ),
     );
   }

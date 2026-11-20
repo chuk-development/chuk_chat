@@ -1,10 +1,8 @@
 // The desktop composer's layout on an empty chat, at desktop width.
 //
-// The send/voice target floats in the top right corner of the box, beside the
-// text field's first line. The action row (+, mode pill, microphone) sits
-// under the field. Regression: the empty `/`-menu and queue dock in the box's
-// column took a share of the free height, so the field slid down below the
-// target and the target stood alone on its own row.
+// One row: +, the field, the microphone, send, from left to right on one
+// centre line, in a 48 px box. Regression guard: an empty `/`-menu or queue
+// dock in the box's column must not add height or push the row down.
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -78,7 +76,7 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  testWidgets('desktop composer: target beside the field, one action row', (
+  testWidgets('desktop composer: one 48 px row, field between + and mic', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(1440, 900);
@@ -98,12 +96,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(ChukChatUIDesktop), findsOneWidget);
 
-    final Finder composer = find
-        .ancestor(
-          of: find.byType(ComposerSendButton),
-          matching: find.byType(Stack),
-        )
-        .first;
+    final Finder composer = find.byKey(
+      const ValueKey<String>('desktop-composer-box'),
+    );
+    expect(tester.getSize(composer).height, inInclusiveRange(46, 50));
     final Rect send = tester.getRect(find.byType(ComposerSendButton));
     final Rect field = tester.getRect(
       find.descendant(of: composer, matching: find.byType(TextField)).first,
@@ -120,21 +116,12 @@ void main() {
       findsNothing,
     );
 
-    // The target shares the field's first line: it does not stand on a row
-    // of its own above the text.
-    expect(send.left, greaterThanOrEqualTo(field.right));
-    expect(
-      field.top,
-      lessThanOrEqualTo(send.top + 1),
-      reason: 'the field starts at the top of the box, level with the target',
-    );
-    expect(field.top, lessThan(send.center.dy));
-
-    // Every action-row target shares one vertical centre, under the field.
-    for (final Rect r in <Rect>[add, mic]) {
-      expect(r.center.dy, closeTo(mic.center.dy, 1));
-      expect(r.top, greaterThanOrEqualTo(field.bottom));
+    // One row, one centre line.
+    expect(field.left, greaterThanOrEqualTo(add.right));
+    expect(mic.left, greaterThanOrEqualTo(field.right));
+    expect(send.left, greaterThanOrEqualTo(mic.right));
+    for (final Rect r in <Rect>[add, field, send]) {
+      expect(r.center.dy, closeTo(mic.center.dy, 2));
     }
-    expect(send.bottom, lessThanOrEqualTo(mic.top));
   });
 }

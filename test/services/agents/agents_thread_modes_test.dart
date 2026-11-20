@@ -90,27 +90,23 @@ void main() {
   });
 
   group('plan mode', () {
-    test('the toggle is pending until the host confirms', () {
-      expect(modes.planToggleOf('t1'), isFalse);
-      modes.setPlanWanted('t1', true);
-      expect(modes.planToggleOf('t1'), isTrue);
-      expect(modes.planModeOf('t1'), isFalse);
-      // The next task carries it once.
-      expect(modes.takePlanFlag('t1'), isTrue);
-      expect(modes.takePlanFlag('t1'), isNull);
+    test('a thread the host keeps in plan mode falls back to normal', () {
+      // No plan mode on the host: the next task leaves the key off.
+      expect(modes.planFlagFor('t1'), isNull);
       modes.ingest(<String, dynamic>{
         'type': 'plan_mode',
         'session_key': 't1',
         'active': true,
       });
       expect(modes.planModeOf('t1'), isTrue);
-      expect(modes.planToggleOf('t1'), isTrue);
-    });
-
-    test('toggling back to the host state leaves the key off', () {
-      modes.setPlanWanted('t1', true);
-      modes.setPlanWanted('t1', false);
-      expect(modes.takePlanFlag('t1'), isNull);
+      // The app has no plan mode: the next task turns it off.
+      expect(modes.planFlagFor('t1'), isFalse);
+      modes.ingest(<String, dynamic>{
+        'type': 'plan_mode',
+        'session_key': 't1',
+        'active': false,
+      });
+      expect(modes.planFlagFor('t1'), isNull);
     });
 
     test('run_state is the whole mode state', () {

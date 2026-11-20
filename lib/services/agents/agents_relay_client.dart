@@ -1376,6 +1376,12 @@ class AgentsRelayRoomTurn extends AgentsRelayInbound {
     required this.agentId,
     required this.handle,
     required this.text,
+    this.kind = 'agent',
+    this.routedMode,
+    this.routedConfidence,
+    this.routedFallback = false,
+    this.toAgentId,
+    this.toHandle,
   });
 
   /// Which room this turn belongs to, so the app routes it to the right open
@@ -1386,6 +1392,58 @@ class AgentsRelayRoomTurn extends AgentsRelayInbound {
   final String agentId;
   final String handle;
   final String text;
+
+  /// `agent` (a member's answer), `user` (what the user sent; history only)
+  /// or `handoff` (the lead handed [text] to [toHandle]).
+  final String kind;
+
+  /// `routed_by.mode` (`auto` / `lead`), or null when the host sent none.
+  final String? routedMode;
+
+  /// `routed_by.confidence`, 0..1.
+  final double? routedConfidence;
+
+  /// `routed_by.fallback`: auto routing was unsure, the fallback answered.
+  final bool routedFallback;
+
+  /// For a handoff: the member the task went to.
+  final String? toAgentId;
+  final String? toHandle;
+}
+
+/// A group member just started its turn (`room_working`). It extends
+/// [AgentsRelayRoomTurn] only because [AgentsRelayInbound] is sealed and the
+/// thread view switches over it exhaustively; it is not a turn and carries no
+/// text. Match it BEFORE [AgentsRelayRoomTurn].
+class AgentsRelayRoomWorking extends AgentsRelayRoomTurn {
+  const AgentsRelayRoomWorking({
+    required super.roomId,
+    required super.agentId,
+    required super.handle,
+  }) : super(round: 0, text: '', kind: 'working');
+}
+
+/// One group as the host's `room_list` names it.
+@immutable
+class AgentsRelayRoomListEntry {
+  const AgentsRelayRoomListEntry(this.payload);
+
+  /// The raw entry: `room_id`, `name`, `members` [{agent_id, handle}],
+  /// `agent_to_agent`, `responder`, `lead_agent_id`, `fallback_agent_id`,
+  /// `bulletin`, `workdir`. `AgentsRoom.fromJson` reads it.
+  final Map<String, Object?> payload;
+}
+
+/// Every group the host keeps (`room_list`, the answer to
+/// `room_list_request`). It extends [AgentsRelayRoomHistory] only because
+/// [AgentsRelayInbound] is sealed and the thread view switches over it
+/// exhaustively; its [roomId] is empty, so no open group takes it for its own
+/// history. Match it BEFORE [AgentsRelayRoomHistory].
+class AgentsRelayRoomList extends AgentsRelayRoomHistory {
+  const AgentsRelayRoomList({required this.rooms})
+    : super(roomId: '', turns: const <AgentsRelayRoomTurn>[]);
+
+  final List<AgentsRelayRoomListEntry> rooms;
 }
 
 /// A group-room exchange ended. [reason] is a raw stop string from the host
@@ -1851,15 +1909,31 @@ abstract interface class AgentsRelayController {
   /// True is what a room has always done, so the key rides ONLY when it is
   /// false: an old host that does not know the key keeps behaving exactly as
   /// before.
+  ///
+  /// [settings] are the group's optional keys (`responder`, `lead_agent_id`,
+  /// `fallback_agent_id`, `bulletin`, `workdir`); a key that is absent leaves
+  /// the host's stored value alone.
   Future<void> createRoom(
     String roomId,
     String name,
     List<Map<String, String>> members, {
     bool agentToAgent,
+    Map<String, Object?> settings,
   });
 
   /// Flips [roomId]'s `agent_to_agent` policy on the host (§16.1).
   Future<void> setRoomAgentToAgent(String roomId, bool enabled);
+
+  /// Changes a group's settings on the host (`room_settings`). Only the keys
+  /// in [settings] change; see [createRoom] for the keys.
+  Future<void> setRoomSettings(String roomId, Map<String, Object?> settings);
+
+  /// Asks the host for every group it keeps (`room_list_request`); the answer
+  /// arrives on [inbound] as [AgentsRelayRoomList].
+  Future<void> requestRoomList();
+
+  /// Stops [roomId]'s running exchange after the current turn (`room_stop`).
+  Future<void> stopRoom(String roomId);
 
   /// Seals and sends a group-room task (§16.1): the host looks [roomId]'s
   /// members up and drives them, streaming `room_turn` / `room_done` back.
@@ -2959,32 +3033,25 @@ class AgentsRelayClient
     final herenow = _hereNowStore == null
         ? null
         : await _hereNowStore.forwardPayload();
-    // Plan mode (docs/WIRE_CONTRACT.md, "Plan mode"): the composer's toggle
-    // rides once, on the next task; absent leaves the host's state alone.
-    // It is put back when the frame never left, so the wish is not lost.
-    final bool? plan = AgentsThreadModes.instance.takePlanFlag(sessionKey);
-    try {
-      await _sendTaskFrame(
-        plan: plan,
-        prompt: prompt,
-        sessionKey: sessionKey,
-        taskId: taskId,
-        modelId: modelId,
-        providerSlug: providerSlug,
-        reasoningEffort: reasoningEffort,
-        mcpServers: mcpServers,
-        herenow: herenow,
-        debug: debug,
-        regenerate: regenerate,
-        budgetOverride: budgetOverride,
-        attachments: attachments,
-      );
-    } catch (_) {
-      if (plan != null) {
-        AgentsThreadModes.instance.restorePlanFlag(sessionKey, plan);
-      }
-      rethrow;
-    }
+    // Plan mode (docs/WIRE_CONTRACT.md, "Plan mode"): the app has no
+    // plan-mode button any more. A thread that the host still keeps in plan
+    // mode gets `plan: false`, so it falls back to the normal mode; every
+    // other task leaves the key off.
+    await _sendTaskFrame(
+      plan: AgentsThreadModes.instance.planFlagFor(sessionKey),
+      prompt: prompt,
+      sessionKey: sessionKey,
+      taskId: taskId,
+      modelId: modelId,
+      providerSlug: providerSlug,
+      reasoningEffort: reasoningEffort,
+      mcpServers: mcpServers,
+      herenow: herenow,
+      debug: debug,
+      regenerate: regenerate,
+      budgetOverride: budgetOverride,
+      attachments: attachments,
+    );
   }
 
   Future<void> _sendTaskFrame({
@@ -3044,6 +3111,7 @@ class AgentsRelayClient
     String name,
     List<Map<String, String>> members, {
     bool agentToAgent = true,
+    Map<String, Object?> settings = const <String, Object?>{},
   }) => _sendFramePayload(<String, dynamic>{
     'type': 'room_create',
     'room_id': roomId,
@@ -3052,6 +3120,7 @@ class AgentsRelayClient
     // Only a room that turned the policy OFF says so, so an old host sees the
     // frame it has always seen.
     if (!agentToAgent) 'agent_to_agent': false,
+    ...roomSettingsWire(settings),
   });
 
   @override
@@ -3061,6 +3130,65 @@ class AgentsRelayClient
         'room_id': roomId,
         'enabled': enabled,
       });
+
+  @override
+  Future<void> setRoomSettings(String roomId, Map<String, Object?> settings) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'room_settings',
+        'room_id': roomId,
+        ...roomSettingsWire(settings),
+      });
+
+  @override
+  Future<void> requestRoomList() async {
+    // Auth first, like [requestAgentList]: a request that overtakes the
+    // account authentication is dropped by the host.
+    await _awaitProvisionGate();
+    if (_disposed) return;
+    return _sendFramePayload(<String, dynamic>{'type': 'room_list_request'});
+  }
+
+  @override
+  Future<void> stopRoom(String roomId) => _sendFramePayload(<String, dynamic>{
+    'type': 'room_stop',
+    'room_id': roomId,
+  });
+
+  /// The group settings keys the host knows, from [settings]: unknown keys
+  /// are dropped, a mode must be one of the four and the instructions are
+  /// cut to [_kRoomBulletinMax] characters. A null lead or fallback rides as
+  /// null (it clears the member on the host).
+  @visibleForTesting
+  static Map<String, Object?> roomSettingsWire(Map<String, Object?> settings) {
+    final out = <String, Object?>{};
+    final responder = settings['responder'];
+    if (responder is String &&
+        const <String>{
+          'everyone',
+          'mentions',
+          'auto',
+          'lead',
+        }.contains(responder)) {
+      out['responder'] = responder;
+    }
+    for (final key in const <String>['lead_agent_id', 'fallback_agent_id']) {
+      if (!settings.containsKey(key)) continue;
+      final v = settings[key];
+      out[key] = v is String && v.isNotEmpty ? v : null;
+    }
+    final bulletin = settings['bulletin'];
+    if (bulletin is String) {
+      out['bulletin'] = bulletin.length > _kRoomBulletinMax
+          ? bulletin.substring(0, _kRoomBulletinMax)
+          : bulletin;
+    }
+    final workdir = settings['workdir'];
+    if (workdir is String) out['workdir'] = workdir;
+    return out;
+  }
+
+  /// The longest `bulletin` the host keeps (WIRE_CONTRACT).
+  static const int _kRoomBulletinMax = 12000;
 
   @override
   Future<void> sendRoomTask(String roomId, String message) =>
@@ -4049,6 +4177,34 @@ class AgentsRelayClient
       case 'room_history':
         final hist = _roomHistoryFromPayload(payload);
         if (hist != null) _addRouted(hist);
+      case 'room_working':
+        final roomId = payload['room_id'];
+        final agentId = payload['agent_id'];
+        final handle = payload['handle'];
+        if (roomId is String && agentId is String) {
+          _addRouted(
+            AgentsRelayRoomWorking(
+              roomId: roomId,
+              agentId: agentId,
+              handle: handle is String ? handle : '',
+            ),
+          );
+        }
+      case 'room_list':
+        final rawRooms = payload['rooms'];
+        if (rawRooms is List) {
+          _addRouted(
+            AgentsRelayRoomList(
+              rooms: <AgentsRelayRoomListEntry>[
+                for (final Object? r in rawRooms)
+                  if (r is Map)
+                    AgentsRelayRoomListEntry(
+                      r.map((Object? k, Object? v) => MapEntry('$k', v)),
+                    ),
+              ],
+            ),
+          );
+        }
       case 'room_done':
         final roomId = payload['room_id'];
         final reason = payload['reason'];
@@ -4115,22 +4271,50 @@ class AgentsRelayClient
     Map<String, dynamic> payload,
   ) {
     final roomId = payload['room_id'];
-    final agentId = payload['agent_id'];
-    final handle = payload['handle'];
-    final text = payload['text'];
-    final round = AgentsRelayTool._asInt(payload['round']);
-    if (roomId is! String ||
-        agentId is! String ||
-        handle is! String ||
-        round == null) {
+    if (roomId is! String) return null;
+    return _roomTurnFrom(roomId, payload);
+  }
+
+  /// One turn of a `room_turn` frame or of a `room_history` list. A `user`
+  /// or `handoff` entry may come without a round (it is not a member's turn
+  /// in the host's loop); an agent turn must carry one.
+  static AgentsRelayRoomTurn? _roomTurnFrom(String roomId, Map raw) {
+    final agentId = raw['agent_id'];
+    final handle = raw['handle'];
+    final text = raw['text'];
+    final rawKind = raw['kind'];
+    final kind = rawKind is String && rawKind.isNotEmpty ? rawKind : 'agent';
+    final round =
+        AgentsRelayTool._asInt(raw['round']) ?? (kind == 'agent' ? null : 0);
+    if (round == null) return null;
+    if (kind == 'agent' && (agentId is! String || handle is! String)) {
       return null;
     }
+    final routed = raw['routed_by'];
+    String? routedMode;
+    double? confidence;
+    var fallback = false;
+    if (routed is Map) {
+      final mode = routed['mode'];
+      if (mode is String && mode.isNotEmpty) routedMode = mode;
+      final c = routed['confidence'];
+      if (c is num) confidence = c.toDouble();
+      fallback = routed['fallback'] == true;
+    }
+    final toAgentId = raw['to_agent_id'];
+    final toHandle = raw['to_handle'];
     return AgentsRelayRoomTurn(
       roomId: roomId,
       round: round,
-      agentId: agentId,
-      handle: handle,
+      agentId: agentId is String ? agentId : '',
+      handle: handle is String ? handle : '',
       text: text is String ? text : '',
+      kind: kind,
+      routedMode: routedMode,
+      routedConfidence: confidence,
+      routedFallback: fallback,
+      toAgentId: toAgentId is String && toAgentId.isNotEmpty ? toAgentId : null,
+      toHandle: toHandle is String && toHandle.isNotEmpty ? toHandle : null,
     );
   }
 
@@ -4146,20 +4330,8 @@ class AgentsRelayClient
     final turns = <AgentsRelayRoomTurn>[];
     for (final raw in rawTurns) {
       if (raw is! Map) continue;
-      final round = AgentsRelayTool._asInt(raw['round']);
-      final agentId = raw['agent_id'];
-      final handle = raw['handle'];
-      final text = raw['text'];
-      if (round == null || agentId is! String || handle is! String) continue;
-      turns.add(
-        AgentsRelayRoomTurn(
-          roomId: roomId,
-          round: round,
-          agentId: agentId,
-          handle: handle,
-          text: text is String ? text : '',
-        ),
-      );
+      final turn = _roomTurnFrom(roomId, raw);
+      if (turn != null) turns.add(turn);
     }
     return AgentsRelayRoomHistory(roomId: roomId, turns: turns);
   }

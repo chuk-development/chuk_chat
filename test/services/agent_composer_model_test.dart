@@ -143,11 +143,13 @@ void main() {
     await composer.setReasoningEffort('high');
     await tester.pump();
 
-    final own = await ChatModelSelectionService.instance.load(_chat);
-    expect(own!.modelId, before.modelId);
-    expect(own.providerSlug, before.providerSlug);
-    expect(own.reasoningEffort, 'high');
-    expect(composer.reasoningEffort, 'high');
+    // The agent stays on its default model on Auto: the level pins no
+    // provider and writes no own record (CHAT-152).
+    expect(await ChatModelSelectionService.instance.load(_chat), isNull);
+    final AgentModelState state = await AgentModel.resolve(_chat);
+    expect(state.modelId, AgentModel.defaultModelId);
+    expect(state.providerSlug, isEmpty);
+    expect(state.reasoningEffort, composer.reasoningEffort);
     expect(
       (await ChatModeService.loadConfig(ChatMode.standard)).reasoningEffort,
       before.reasoningEffort,

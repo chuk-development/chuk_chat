@@ -173,18 +173,20 @@ void main() {
   testWidgets('the top is one short group; the rest waits in a closed '
       'Advanced fold', (tester) async {
     await smallPhone(tester, page(optional: true), advanced: false);
+    // Only what a normal user needs (CHAT-152).
     for (final String key in <String>[
       'settings_Profile & preferences',
-      'settings_Model',
       'settings_Permissions',
+      'settings_Connected apps',
+      'settings_Schedules & automations',
       'settings_Documents & pages',
       'settings_Advanced',
     ]) {
       expect(find.byKey(ValueKey(key)), findsOneWidget, reason: key);
     }
     for (final String key in <String>[
+      'settings_Model',
       'settings_Skills',
-      'settings_Connected apps',
       'settings_Mail',
       'settings_Host & activity',
       'settings_Hide',
@@ -282,13 +284,14 @@ void main() {
       expect(find.textContaining('Telegram'), findsNothing);
       final List<String> order = <String>[
         'settings_Profile & preferences',
-        'settings_Model',
         'settings_Permissions',
+        'settings_Connected apps',
+        'settings_Schedules & automations',
         'settings_Documents & pages',
         'settings_Open screen',
         'settings_Advanced',
+        'settings_Model',
         'settings_Skills',
-        'settings_Connected apps',
         'settings_Mail',
         'settings_Host & activity',
         'settings_Hide',
@@ -404,6 +407,8 @@ void main() {
 
     testWidgets('the model row says it follows the app default and opens the '
         'agent s model page, not the shell action', (tester) async {
+      // The model is a rare setting: it sits in "Advanced" (CHAT-152),
+      // which smallPhone opens.
       await smallPhone(tester, page(chatId: 'host:alex'));
       final Finder row = find.byKey(const ValueKey('settings_Model'));
       expect(row, findsOneWidget);
@@ -417,6 +422,7 @@ void main() {
         ),
         findsOneWidget,
       );
+      await revealControl(tester, row);
       await tester.tap(row);
       await tester.pumpAndSettle();
       expect(find.byType(AgentModelPage), findsOneWidget);

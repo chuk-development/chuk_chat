@@ -314,18 +314,20 @@ class _MobileAgentListState extends State<MobileAgentList> {
   /// agents and rooms simply gain a way in.
   Future<void> _openAddMenu(BuildContext anchor) async {
     final ColorScheme scheme = Theme.of(anchor).colorScheme;
+    final String newGroup =
+        AppLocalizations.of(anchor)?.agentsGroupNew ?? 'New group';
     final String? choice = await showAnchoredMenu<String>(
       anchor,
       color: scheme.surfaceContainerLow,
       borderColor: scheme.outlineVariant,
-      items: const <PopupMenuEntry<String>>[
-        PopupMenuItem<String>(
+      items: <PopupMenuEntry<String>>[
+        const PopupMenuItem<String>(
           value: 'agent',
           child: _MenuRow(icon: Icons.person_add_alt_1, label: 'New agent'),
         ),
         PopupMenuItem<String>(
           value: 'room',
-          child: _MenuRow(icon: Icons.group_add_outlined, label: 'New room'),
+          child: _MenuRow(icon: Icons.group_add_outlined, label: newGroup),
         ),
       ],
     );

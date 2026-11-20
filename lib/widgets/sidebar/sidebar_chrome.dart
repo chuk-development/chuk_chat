@@ -18,6 +18,8 @@ import 'package:chuk_chat/constants.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/queued_message.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/ui/components/state_surface.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
@@ -192,109 +194,61 @@ class SbCard extends StatefulWidget {
 }
 
 class _SbCardState extends State<SbCard> {
-  bool _pressed = false;
   bool _hovered = false;
-
-  /// Where the finger went down. A long press is always preceded by a tap
-  /// down on the same card, and InkWell's long-press callback carries no
-  /// position of its own.
-  Offset? _lastDown;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final m3 = theme.m3;
     final Color accent = theme.colorScheme.primary;
-    final bool enabled = widget.onTap != null;
 
-    final Color fill = widget.selected
-        ? m3.selection
-        : (_pressed || _hovered
-            ? m3.surfaceContainerHigh
-            : m3.surfaceContainer);
+    // A touch device (a tablet in the wide layout) has no right click and no
+    // hover: there a long press opens the row's context menu, as on the
+    // phone. A desktop OS keeps right click only.
+    final void Function(Offset)? longPressAt =
+        widget.onLongPressAt ??
+        (MobileLayout.isTouchPlatform ? widget.onSecondaryTap : null);
 
     final BorderRadius shape = widget.radius != null
         ? BorderRadius.circular(widget.radius!)
         : SbCardShape.of(context) ?? BorderRadius.circular(kSbCardRadius);
 
-    // Each card has its own TickerMode (below): see ChatMessageListItem. 120
-    // chats hold 240 of these, and one shared notifier made each unmount scan
-    // all of them.
-    Widget card = AnimatedScale(
-      scale: _pressed ? 0.985 : 1,
-      duration: const Duration(milliseconds: 130),
-      curve: Curves.easeOutCubic,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 130),
-        curve: Curves.easeOutCubic,
-        constraints: widget.minHeight == null
-            ? null
-            : BoxConstraints(minHeight: widget.minHeight!),
-        decoration: BoxDecoration(color: fill, borderRadius: shape),
-        // The ring goes in front of the content, not behind it: a border in
-        // the background decoration is painted under the clip, which eats
-        // half its width on the tight corners of a block joint and leaves
-        // the stroke looking uneven from corner to corner.
-        // A selected chat is the accent fill alone — a ring around it as
-        // well made the row read as a control instead of as the chat the
-        // user is in.
-        foregroundDecoration: widget.outlined
-            ? BoxDecoration(
-                borderRadius: shape,
-                border: Border.all(
-                  color: accent.withValues(alpha: 0.55),
-                  width: 1.5,
-                ),
-              )
-            : null,
-        clipBehavior: Clip.antiAlias,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            onTap: widget.onTap,
-            onLongPress: widget.onLongPress == null &&
-                    widget.onLongPressAt == null
-                ? null
-                : () {
-                    widget.onLongPress?.call();
-                    final at = _lastDown;
-                    if (at != null) widget.onLongPressAt?.call(at);
-                  },
-            onTapDown: enabled
-                ? (details) {
-                    _lastDown = details.globalPosition;
-                    setState(() => _pressed = true);
-                  }
-                : null,
-            onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
-            onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
-            child: Padding(
-              padding: widget.padding,
-              child: SbCardHoverScope(hovered: _hovered, child: widget.child),
-            ),
-          ),
-        ),
-      ),
+    // One shape in every state (StateSurface): rest, hover, press, focus
+    // and selection all paint inside the card's place in its block.
+    Widget card = StateSurface(
+      borderRadius: shape,
+      color: m3.surfaceContainer,
+      selected: widget.selected,
+      selectedColor: m3.selection,
+      // The exact hover fill: the row's hover actions cover the time on it.
+      hoverColor: m3.surfaceContainerHigh,
+      squeeze: widget.onTap != null,
+      minHeight: widget.minHeight,
+      padding: widget.padding,
+      onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
+      onLongPressAt: longPressAt,
+      onSecondaryTapAt: widget.onSecondaryTap,
+      onHover: (bool hovered) {
+        if (hovered != _hovered) setState(() => _hovered = hovered);
+      },
+      child: SbCardHoverScope(hovered: _hovered, child: widget.child),
     );
-
-    if (widget.onSecondaryTap != null) {
-      card = GestureDetector(
-        onSecondaryTapDown: (details) =>
-            widget.onSecondaryTap!(details.globalPosition),
+    if (widget.outlined) {
+      // The ring goes in front of the content, in the same shape.
+      card = DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          borderRadius: shape,
+          border: Border.all(color: accent.withValues(alpha: 0.55), width: 1.5),
+        ),
         child: card,
       );
     }
-
-    return RepaintBoundary(
-      child: TickerMode(
-        enabled: true,
-        child: MouseRegion(
-          onEnter: (_) => setState(() => _hovered = true),
-          onExit: (_) => setState(() => _hovered = false),
-          child: card,
-        ),
-      ),
-    );
+    // Each card has its own TickerMode: see ChatMessageListItem. 120 chats
+    // hold 240 of these, and one shared notifier made each unmount scan all
+    // of them.
+    return RepaintBoundary(child: TickerMode(enabled: true, child: card));
   }
 }
 
@@ -408,9 +362,8 @@ class SbCardShape extends InheritedWidget {
 
   final BorderRadius radius;
 
-  static BorderRadius? of(BuildContext context) => context
-      .dependOnInheritedWidgetOfExactType<SbCardShape>()
-      ?.radius;
+  static BorderRadius? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<SbCardShape>()?.radius;
 
   @override
   bool updateShouldNotify(SbCardShape old) => radius != old.radius;
@@ -448,7 +401,9 @@ class SbNavIcon extends StatelessWidget {
     return SizedBox(
       width: size,
       height: size,
-      child: Center(child: AppIcon(icon, size: size * 0.8, color: color)),
+      child: Center(
+        child: AppIcon(icon, size: size * 0.8, color: color),
+      ),
     );
   }
 }
@@ -530,8 +485,8 @@ class SbRoundAction extends StatelessWidget {
     final Color foreground = fill == null
         ? theme.colorScheme.onSurface
         : ThemeData.estimateBrightnessForColor(background) == Brightness.dark
-            ? Colors.white
-            : Colors.black;
+        ? Colors.white
+        : Colors.black;
     return Tooltip(
       message: tooltip,
       child: SizedBox(
@@ -627,7 +582,11 @@ class SbGroupHeader extends StatelessWidget {
                   turns: collapsed ? 0 : 0.5,
                   duration: const Duration(milliseconds: 150),
                   curve: Curves.easeOutCubic,
-                  child: AppIcon(Icons.expand_more_rounded, size: 20, color: fg),
+                  child: AppIcon(
+                    Icons.expand_more_rounded,
+                    size: 20,
+                    color: fg,
+                  ),
                 ),
               ],
             ),
@@ -720,8 +679,7 @@ class _SbSearchFieldState extends State<SbSearchField> {
             ? Colors.transparent
             : theme.m3.surfaceContainer,
         borderRadius: widget.transparent
-            ? (SbCardShape.of(context) ??
-                BorderRadius.circular(kSbCardRadius))
+            ? (SbCardShape.of(context) ?? BorderRadius.circular(kSbCardRadius))
             : BorderRadius.circular(999),
       ),
       child: TextField(
@@ -735,13 +693,16 @@ class _SbSearchFieldState extends State<SbSearchField> {
         // padded version sits high whenever the pill is taller than the line.
         textAlignVertical: TextAlignVertical.center,
         decoration: InputDecoration(
-          hintText: widget.hintText ??
+          hintText:
+              widget.hintText ??
               AppLocalizations.of(context)?.searchChatsHint ??
               'Search chats',
           hintStyle: TextStyle(color: muted, fontSize: 14),
           prefixIcon: AppIcon(Icons.search_rounded, size: 19, color: muted),
-          prefixIconConstraints:
-              const BoxConstraints(minWidth: 40, minHeight: 44),
+          prefixIconConstraints: const BoxConstraints(
+            minWidth: 40,
+            minHeight: 44,
+          ),
           // The app theme fills every field and rounds it to kRadiusField.
           // Left on, that fill is painted OVER the pill below it, which
           // is why the bar kept looking square however round the box was.
@@ -769,8 +730,10 @@ class _SbSearchFieldState extends State<SbSearchField> {
                     child: AppIcon(Icons.close_rounded, size: 17, color: muted),
                   ),
                 ),
-          suffixIconConstraints:
-              const BoxConstraints(minWidth: 32, minHeight: 32),
+          suffixIconConstraints: const BoxConstraints(
+            minWidth: 32,
+            minHeight: 32,
+          ),
         ),
       ),
     );
@@ -897,11 +860,14 @@ class SbAccountLine extends StatelessWidget {
                   onPressed: onSettings,
                   icon: const AppIcon(Icons.settings_rounded, size: 20),
                   color: theme.m3.onSurfaceVariant,
-                  tooltip: settingsTooltip ??
+                  tooltip:
+                      settingsTooltip ??
                       AppLocalizations.of(context)?.settings ??
                       'Settings',
-                  constraints:
-                      const BoxConstraints.tightFor(width: 40, height: 40),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 40,
+                    height: 40,
+                  ),
                   padding: EdgeInsets.zero,
                   splashRadius: 22,
                 ),
@@ -909,7 +875,8 @@ class SbAccountLine extends StatelessWidget {
                 const SizedBox(width: 2),
                 SbRoundAction(
                   icon: Icons.edit_square,
-                  tooltip: newChatTooltip ??
+                  tooltip:
+                      newChatTooltip ??
                       AppLocalizations.of(context)?.newChat ??
                       'New chat',
                   onTap: onNewChat!,
@@ -1074,10 +1041,7 @@ class _SbChatTileBody extends StatelessWidget {
         children: [
           Expanded(child: name),
           const SizedBox(width: 8),
-          WorkingDots(
-            color: theme.m3.onSurfaceVariant,
-            animate: false,
-          ),
+          WorkingDots(color: theme.m3.onSurfaceVariant, animate: false),
         ],
       );
     }
@@ -1276,8 +1240,7 @@ class _SbChatTileBody extends StatelessWidget {
               excluding: !hovered,
               child: ExcludeSemantics(
                 excluding: !hovered,
-                child:
-                    IgnorePointer(ignoring: !hovered, child: hoverTrailing!),
+                child: IgnorePointer(ignoring: !hovered, child: hoverTrailing!),
               ),
             ),
           ),
@@ -1364,8 +1327,11 @@ List<SbChatGroup<T>> sbGroupByTime<T>(
   DateTime? now,
 }) {
   final DateTime reference = now ?? DateTime.now();
-  final DateTime startOfToday =
-      DateTime(reference.year, reference.month, reference.day);
+  final DateTime startOfToday = DateTime(
+    reference.year,
+    reference.month,
+    reference.day,
+  );
   final DateTime startOfWeek = startOfToday.subtract(const Duration(days: 6));
   final DateTime startOfMonth = DateTime(reference.year, reference.month);
 
@@ -1479,7 +1445,8 @@ class SbOfflineNotice extends StatelessWidget {
               ),
               // This retries the connection, not an app update: the banner
               // is about being offline.
-              tooltip: retryTooltip ??
+              tooltip:
+                  retryTooltip ??
                   AppLocalizations.of(context)?.retryConnection ??
                   'Try again',
               padding: EdgeInsets.zero,
@@ -1542,7 +1509,10 @@ class SbRailSlot extends StatelessWidget {
                 type: MaterialType.transparency,
                 shape: const CircleBorder(),
                 clipBehavior: Clip.antiAlias,
-                child: InkWell(customBorder: const CircleBorder(), onTap: onTap),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onTap,
+                ),
               ),
             ),
             if (selected)

@@ -1,10 +1,10 @@
 // lib/widgets/agents_mode_bar.dart
 //
 // What sits right above the Agents composer: the sandbox warning when the
-// host runs the agent without a container, the goal strip, the todo card, and
-// the "Plan mode" toggle chip (docs/WIRE_CONTRACT.md, "Agent modes" and
-// "Sandbox fallback"). Everything is read from [AgentsThreadModes]; the bar
-// draws nothing when there is nothing to say except the toggle.
+// host runs the agent without a container, the goal strip and the todo card
+// (docs/WIRE_CONTRACT.md, "Agent modes" and "Sandbox fallback"). Everything is
+// read from [AgentsThreadModes]; the bar draws nothing when there is nothing
+// to say. There is no plan-mode toggle (owner, 2026-11-20).
 
 import 'dart:async';
 
@@ -14,7 +14,6 @@ import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/agents_goal_strip.dart';
 import 'package:chuk_chat/widgets/agents_todo_card.dart';
 
@@ -77,62 +76,6 @@ class AgentsSandboxBanner extends StatelessWidget {
   }
 }
 
-/// "Plan mode": a toggle chip. On, the next task carries `plan: true`.
-class AgentsPlanModeChip extends StatelessWidget {
-  const AgentsPlanModeChip({
-    super.key,
-    required this.on,
-    required this.onChanged,
-  });
-
-  final bool on;
-  final ValueChanged<bool> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
-    final AppLocalizations l =
-        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
-    final Color fg = on ? scheme.onSecondaryContainer : scheme.onSurfaceVariant;
-    return Tooltip(
-      message: l.agentsPlanModeHint,
-      child: Semantics(
-        toggled: on,
-        button: true,
-        identifier: 'agents-plan-mode-chip',
-        child: MorphTap(
-          key: const ValueKey<String>('agents-plan-mode-chip'),
-          onTap: () => onChanged(!on),
-          color: on ? scheme.secondaryContainer : scheme.surfaceContainerHigh,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(kRadiusSm),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              HugeIcon(
-                on ? HugeIcons.checkmarkCircle02 : HugeIcons.clipboardList,
-                size: 14,
-                color: fg,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                l.agentsPlanMode,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: fg,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// The stack above the composer for one thread.
 class AgentsModeBar extends StatelessWidget {
   const AgentsModeBar({
@@ -160,7 +103,6 @@ class AgentsModeBar extends StatelessWidget {
       builder: (BuildContext context, Widget? _) {
         final AgentsGoal? goal = store.goalOf(threadKey);
         final List<AgentsTodo> todos = store.todosOf(threadKey);
-        final bool plan = store.planToggleOf(threadKey);
         final List<Widget> rows = <Widget>[
           if (store.sandboxFallback) const AgentsSandboxBanner(),
           if (goal != null)
@@ -174,14 +116,8 @@ class AgentsModeBar extends StatelessWidget {
               ),
             ),
           if (todos.isNotEmpty) AgentsTodoCard(todos: todos),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: AgentsPlanModeChip(
-              on: plan,
-              onChanged: (bool on) => store.setPlanWanted(threadKey, on),
-            ),
-          ),
         ];
+        if (rows.isEmpty) return const SizedBox.shrink();
         return Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Column(

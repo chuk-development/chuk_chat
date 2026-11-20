@@ -7,12 +7,32 @@
 #
 # Usage:
 #   scripts/emulator.sh start    # create the AVD if needed, boot it, wait
+#   scripts/emulator.sh start --tablet  # the tablet AVD instead (see below)
 #   scripts/emulator.sh wait     # block until sys.boot_completed=1
 #   scripts/emulator.sh status   # AVD, serial, boot state, GPU mode
 #   scripts/emulator.sh shot [out.png]
 #   scripts/emulator.sh keyboard 1  # bring the on-screen keyboard back
 #   scripts/emulator.sh stop     # graceful shutdown
+#
+# --tablet (in any position) selects the tablet AVD `cowork_tablet_x64`:
+# Pixel Tablet profile, 2560x1600 at 320 dpi (1280x800 dp), the same
+# system image as the phone AVD (no new download) and a 6 GB data partition.
+# Only one emulator runs at a time: `start` stops an emulator of the other
+# AVD first, so `scripts/build_apk.sh --emulator` installs on the AVD that
+# was started last.
 set -euo pipefail
+
+TABLET=0
+ARGS=()
+for a in "$@"; do
+  if [ "$a" = "--tablet" ]; then TABLET=1; else ARGS+=("$a"); fi
+done
+set -- "${ARGS[@]+"${ARGS[@]}"}"
+if [ "$TABLET" = "1" ]; then
+  : "${AGENTS_AVD:=cowork_tablet_x64}"
+  : "${AGENTS_AVD_DEVICE:=pixel_tablet}"
+  : "${AGENTS_AVD_DATA:=6}"
+fi
 
 SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Android/Sdk}}"
 EMULATOR="$SDK/emulator/emulator"
@@ -70,10 +90,25 @@ open(cfg, "w").write("\n".join(out) + "\n")
 PY
 }
 
+running_avd() {
+  # `emu avd name` prints the AVD name, then "OK".
+  "$ADB" -s "$1" emu avd name 2>/dev/null | head -n1 | tr -d '\r'
+}
+
 start() {
   [ -x "$EMULATOR" ] || { echo "emulator not found at $EMULATOR" >&2; exit 1; }
   [ -r /dev/kvm ] && [ -w /dev/kvm ] || { echo "no access to /dev/kvm (group kvm?)" >&2; exit 1; }
-  if [ -n "$(serial)" ]; then echo "already running: $(serial)"; return 0; fi
+  local s; s="$(serial)"
+  if [ -n "$s" ]; then
+    local name; name="$(running_avd "$s")"
+    if [ "$name" = "$AVD" ]; then echo "already running: $s ($AVD)"; return 0; fi
+    # One emulator at a time: the other AVD stops, so build_apk.sh --emulator
+    # cannot pick the wrong one.
+    echo "==> stopping $s (${name:-unknown AVD}) to start $AVD"
+    "$ADB" -s "$s" emu kill >/dev/null 2>&1 || true
+    local deadline=$(( $(date +%s) + 60 ))
+    while [ -n "$(serial)" ] && [ "$(date +%s)" -lt "$deadline" ]; do sleep 2; done
+  fi
   create_avd
   echo "==> booting $AVD (gpu=$GPU_MODE, log: $LOG)"
   # The guest holds its whole RAM plus the GPU buffers, so it sits near 5 GB RSS
@@ -132,6 +167,7 @@ wait_boot() {
 status() {
   local s; s="$(serial)"
   echo "avd:    $AVD ($( [ -d "$(avd_dir)" ] && echo present || echo missing ))"
+  [ -n "$s" ] && echo "runs:   $(running_avd "$s")"
   echo "image:  $IMAGE"
   echo "serial: ${s:-none}"
   if [ -n "$s" ]; then
@@ -164,5 +200,5 @@ case "${1:-start}" in
   status) status ;;
   shot) shift; shot "${1:-}" ;;
   stop) stop ;;
-  *) echo "usage: $0 {start|wait|status|shot [out.png]|keyboard [0|1]|stop}" >&2; exit 2 ;;
+  *) echo "usage: $0 [--tablet] {start|wait|status|shot [out.png]|keyboard [0|1]|stop}" >&2; exit 2 ;;
 esac

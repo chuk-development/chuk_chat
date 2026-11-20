@@ -129,7 +129,7 @@ void main() {
   // The phone draws the desktop composer's target in the desktop's place:
   // pinned to the top right of the box, beside the text, at 44 x 36. It is
   // not in the action row under the text (owner: "muss genau gleich sein").
-  testWidgets('the target sits top right of the composer, desktop size', (
+  testWidgets('the target ends the one composer row, desktop size', (
     tester,
   ) async {
     await pumpPhoneChat(tester);
@@ -144,11 +144,10 @@ void main() {
     final Rect field = tester.getRect(find.byType(TextField).first);
     final Rect mic = tester.getRect(findId('mic_button'));
 
-    // Beside the text, on its first line, not below it.
-    expect(send.left, greaterThanOrEqualTo(field.right));
-    expect(send.top, lessThan(field.bottom));
-    expect(send.bottom, lessThanOrEqualTo(mic.top));
-    // Right edge flush with the action row's last target (the microphone).
-    expect(send.right, closeTo(mic.right, 1));
+    // One row: field, microphone, send, from left to right, on one line.
+    expect(mic.left, greaterThanOrEqualTo(field.right));
+    expect(send.left, greaterThanOrEqualTo(mic.right));
+    expect(send.center.dy, closeTo(mic.center.dy, 1));
+    expect(field.center.dy, closeTo(mic.center.dy, 2));
   });
 }

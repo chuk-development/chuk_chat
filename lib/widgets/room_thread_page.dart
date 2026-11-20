@@ -1,6 +1,9 @@
-/// A live group-room conversation (§16.1/4c): subscribes to the relay client's
-/// inbound and accumulates the room's turns into a [RoomThreadView] as they
-/// arrive, then names the stop reason when the exchange ends.
+/// A live group conversation (§16.1/4c): subscribes to the relay client's
+/// inbound and keeps the whole conversation — every message the user sent,
+/// every member's turn and every handoff, across exchanges — in a
+/// [RoomThreadView], the way a group chat reads. The host's `room_history`
+/// (the whole stored conversation) replaces the local list; a send appends
+/// the user's line at once; `room_working` shows who is typing.
 ///
 /// [RoomThreadView] is a pure render; this is the stateful half that turns a
 /// stream of `room_turn` / `room_done` events into the list it draws. The stream
@@ -18,6 +21,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/composer_metrics.dart';
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
@@ -41,6 +45,7 @@ class RoomThreadPage extends StatefulWidget {
     this.agents = const <AgentsAgent>[],
     this.rebind,
     this.onSend,
+    this.onStop,
     this.onReady,
   });
 
@@ -84,6 +89,10 @@ class RoomThreadPage extends StatefulWidget {
   /// hidden — the page is read-only.
   final void Function(String message)? onSend;
 
+  /// Stops the running exchange after the current turn (`room_stop`). When
+  /// set, a Stop button takes the send target's place while the group runs.
+  final VoidCallback? onStop;
+
   /// Called once after the page subscribes, so the caller can request the stored
   /// history (which then arrives as a `room_history` event on [inbound]).
   final VoidCallback? onReady;
@@ -93,7 +102,11 @@ class RoomThreadPage extends StatefulWidget {
 }
 
 class _RoomThreadPageState extends State<RoomThreadPage> {
-  final List<AgentsRoomTurn> _turns = <AgentsRoomTurn>[];
+  // The whole conversation, in order: the user's lines, the members' turns
+  // and the lead's handoffs. The caller's [userMessage] opens it.
+  late final List<AgentsRoomTurn> _entries = <AgentsRoomTurn>[
+    if (widget.userMessage case final String first) AgentsRoomTurn.user(first),
+  ];
   final TextEditingController _composer = TextEditingController();
   AgentsRoomStop? _stop;
   // Running only once something was sent: an opened room shows no typing
@@ -101,9 +114,8 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
   late bool _running = widget.userMessage != null;
   bool _disconnected = false;
   StreamSubscription<AgentsRelayInbound>? _sub;
-  // The message the user actually sent, shown at the top once sent. Until then
-  // the caller's placeholder ([userMessage]) stands in.
-  String? _sentMessage;
+  // The member working right now (`room_working`), until its turn lands.
+  AgentsRoomMember? _working;
 
   // --- the @mention picker -------------------------------------------------
   //
@@ -186,7 +198,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Connection changed. Reopen the room to continue.',
+                _l10n.agentsGroupConnectionChanged,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onErrorContainer,
                 ),
@@ -198,19 +210,58 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
     );
   }
 
+  AppLocalizations get _l10n =>
+      AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+
   void _send() {
     final text = _composer.text.trim();
     final onSend = widget.onSend;
     if (text.isEmpty || onSend == null || _disconnected) return;
     onSend(text);
     setState(() {
-      _sentMessage = text;
-      // A new exchange: clear the previous turns and re-enter the running state.
-      _turns.clear();
+      // A new exchange in the same conversation: the user's line joins the
+      // list (the earlier turns stay), and the group runs again.
+      _entries.add(AgentsRoomTurn.user(text));
       _stop = null;
+      _working = null;
       _running = true;
       _composer.clear();
     });
+  }
+
+  void _stopRun() {
+    final onStop = widget.onStop;
+    if (onStop == null || !_running || _disconnected) return;
+    onStop();
+  }
+
+  /// The app's own model of one relay turn.
+  static AgentsRoomTurn _turnFrom(AgentsRelayRoomTurn t) => AgentsRoomTurn(
+    round: t.round,
+    agentId: t.agentId,
+    handle: t.handle,
+    text: t.text,
+    kind: AgentsRoomTurnKind.fromWire(t.kind),
+    routedBy: t.routedMode == null
+        ? null
+        : AgentsRoomRouting(
+            mode: t.routedMode ?? '',
+            confidence: t.routedConfidence,
+            fallback: t.routedFallback,
+          ),
+    toAgentId: t.toAgentId,
+    toHandle: t.toHandle,
+  );
+
+  /// Whether [turn] is the user line this page already appended on send (a
+  /// host that echoes the user's message live must not draw it twice).
+  bool _echoOfLastUserLine(AgentsRoomTurn turn) {
+    for (int i = _entries.length - 1; i >= 0; i--) {
+      final AgentsRoomTurn e = _entries[i];
+      if (e.isUser) return e.text == turn.text;
+      if (e.kind == AgentsRoomTurnKind.agent) return false;
+    }
+    return false;
   }
 
   // --- the @mention picker -------------------------------------------------
@@ -360,50 +411,50 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
   void _onInbound(AgentsRelayInbound event) {
     if (!mounted) return;
     switch (event) {
-      case AgentsRelayRoomTurn(
-        :final roomId,
-        :final round,
-        :final agentId,
-        :final handle,
-        :final text,
-      ):
+      // Before the turn case: a working signal is not a turn.
+      case AgentsRelayRoomWorking(:final roomId, :final agentId, :final handle):
+        if (roomId != widget.roomId) break;
+        setState(() {
+          if (!_disconnected) _running = true;
+          _stop = null;
+          _working = AgentsRoomMember(agentId: agentId, handle: handle);
+        });
+      case AgentsRelayRoomTurn(:final roomId):
         if (roomId != widget.roomId) break; // another room on the same socket
+        final AgentsRoomTurn turn = _turnFrom(event);
         setState(() {
           // A live turn means the room is talking, also when the exchange
           // was started somewhere else.
           if (_stop == null && !_disconnected) _running = true;
-          _turns.add(
-            AgentsRoomTurn(
-              round: round,
-              agentId: agentId,
-              handle: handle,
-              text: text,
-            ),
-          );
+          if (turn.isUser && _echoOfLastUserLine(turn)) return;
+          if (turn.kind == AgentsRoomTurnKind.agent &&
+              _working?.agentId == turn.agentId) {
+            _working = null;
+          }
+          _entries.add(turn);
         });
+      // Before the history case: the host's group list is not a history.
+      case AgentsRelayRoomList():
+        break;
       case AgentsRelayRoomHistory(:final roomId, :final turns):
         if (roomId != widget.roomId) break;
         setState(() {
-          // History replaces the view: it is the last exchange, and it is over.
-          _turns
+          // History is the whole stored conversation: it replaces the list.
+          // An empty one is a group with nothing stored yet; keep what is on
+          // screen then (a send may be on its way).
+          if (turns.isEmpty) return;
+          _entries
             ..clear()
-            ..addAll(
-              turns.map(
-                (t) => AgentsRoomTurn(
-                  round: t.round,
-                  agentId: t.agentId,
-                  handle: t.handle,
-                  text: t.text,
-                ),
-              ),
-            );
-          if (_turns.isNotEmpty) _running = false;
+            ..addAll(turns.map(_turnFrom));
+          _running = false;
+          _working = null;
         });
       case AgentsRelayRoomDone(:final roomId, :final reason):
         if (roomId != widget.roomId) break;
         setState(() {
           _stop = AgentsRoomStop.fromWire(reason);
           _running = false;
+          _working = null;
         });
       default:
         // Not a room event — it belongs to the agent thread, not here.
@@ -420,20 +471,24 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
     setState(() {
       _disconnected = true;
       _running = false;
+      _working = null;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final AppLocalizations l = _l10n;
     Widget thread = RoomThreadView(
       roomName: widget.roomName,
-      userMessage: _sentMessage ?? widget.userMessage,
       emptyHint: widget.emptyHint,
-      turns: _turns,
+      turns: List<AgentsRoomTurn>.unmodifiable(_entries),
       members: widget.members,
+      agents: widget.agents,
       stop: _stop,
       running: _running,
+      working: _working,
     );
+    final bool showStop = _running && !_disconnected && widget.onStop != null;
     Widget? banner;
     if (_disconnected) {
       // The banner takes the top of the page. Keep it below a floating
@@ -498,24 +553,37 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
                         // dead room.
                         enabled: !_disconnected,
                         hintText: _disconnected
-                            ? 'Reopen the room to send'
-                            : 'Message the room…',
+                            ? l.agentsGroupReopenToSend
+                            : l.agentsGroupMessageHint,
                         onSubmitted: _onSubmitted,
                       ),
                     ),
                     actions: <Widget>[
                       const Spacer(),
-                      buildTinyActionButton(
-                        icon: Icons.north_rounded,
-                        // The same size as the chat composer's send button.
-                        buttonSize: ComposerMetrics.targetSize,
-                        iconSize: 18,
-                        onTap: _disconnected ? () {} : _send,
-                        color: _disconnected
-                            ? Theme.of(context).disabledColor
-                            : Theme.of(context).colorScheme.primary,
-                        semanticsId: 'send_button',
-                      ),
+                      if (showStop)
+                        Tooltip(
+                          message: l.agentsGroupStop,
+                          child: buildTinyActionButton(
+                            icon: Icons.stop_rounded,
+                            buttonSize: ComposerMetrics.targetSize,
+                            iconSize: 18,
+                            onTap: _stopRun,
+                            color: Theme.of(context).colorScheme.primary,
+                            semanticsId: 'room_stop_button',
+                          ),
+                        )
+                      else
+                        buildTinyActionButton(
+                          icon: Icons.north_rounded,
+                          // The same size as the chat composer's send button.
+                          buttonSize: ComposerMetrics.targetSize,
+                          iconSize: 18,
+                          onTap: _disconnected ? () {} : _send,
+                          color: _disconnected
+                              ? Theme.of(context).disabledColor
+                              : Theme.of(context).colorScheme.primary,
+                          semanticsId: 'send_button',
+                        ),
                     ],
                   ),
                 ],

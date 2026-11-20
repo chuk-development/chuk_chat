@@ -12,6 +12,7 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/ui/components/state_surface.dart';
 import 'package:chuk_chat/constants.dart' show kCompactModeBreakpoint;
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
@@ -170,80 +171,74 @@ class MenuActionRow extends StatelessWidget {
     // with a custom leading (an avatar, a lab logo) keeps it and shows the
     // check after the label instead, so the logo column stays aligned.
     final bool leadCheck = selected && leading == null;
-    final Widget row = InkWell(
-      onTap: enabled ? onTap : null,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(
-          children: <Widget>[
-            if (leading != null)
-              leading!
-            else if (leadCheck)
-              AppIcon(Icons.check, size: 20, color: fg)
-            else if (icon != null)
-              AppIcon(icon!, size: 20, color: fg),
-            if (leading != null || icon != null || leadCheck)
-              const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
+    final Widget row = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Row(
+        children: <Widget>[
+          if (leading != null)
+            leading!
+          else if (leadCheck)
+            AppIcon(Icons.check, size: 20, color: fg)
+          else if (icon != null)
+            AppIcon(icon!, size: 20, color: fg),
+          if (leading != null || icon != null || leadCheck)
+            const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  label,
+                  maxLines: maxLines,
+                  overflow: maxLines == null ? null : TextOverflow.ellipsis,
+                  style: text.bodyLarge?.copyWith(
+                    color: fg,
+                    // Emphasized type for the chosen row.
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+                if (subtitle != null)
                   Text(
-                    label,
-                    maxLines: maxLines,
-                    overflow: maxLines == null ? null : TextOverflow.ellipsis,
-                    style: text.bodyLarge?.copyWith(
-                      color: fg,
-                      // Emphasized type for the chosen row.
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    subtitle!,
+                    style: text.bodySmall?.copyWith(
+                      color:
+                          (selected
+                                  ? scheme.onTertiaryContainer
+                                  : scheme.onSurfaceVariant)
+                              .withValues(alpha: enabled ? 1 : 0.5),
                     ),
                   ),
-                  if (subtitle != null)
-                    Text(
-                      subtitle!,
-                      style: text.bodySmall?.copyWith(
-                        color:
-                            (selected
-                                    ? scheme.onTertiaryContainer
-                                    : scheme.onSurfaceVariant)
-                                .withValues(alpha: enabled ? 1 : 0.5),
-                      ),
-                    ),
-                ],
-              ),
+              ],
             ),
-            if (trailing != null) ...<Widget>[
-              const SizedBox(width: 12),
-              trailing!,
-            ] else if (selected && !leadCheck) ...<Widget>[
-              const SizedBox(width: 12),
-              AppIcon(Icons.check, size: 20, color: fg),
-            ],
-            if (shortcut != null) ...<Widget>[
-              const SizedBox(width: 16),
-              Text(
-                shortcut!,
-                style: text.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
-              ),
-            ],
+          ),
+          if (trailing != null) ...<Widget>[
+            const SizedBox(width: 12),
+            trailing!,
+          ] else if (selected && !leadCheck) ...<Widget>[
+            const SizedBox(width: 12),
+            AppIcon(Icons.check, size: 20, color: fg),
           ],
-        ),
+          if (shortcut != null) ...<Widget>[
+            const SizedBox(width: 16),
+            Text(
+              shortcut!,
+              style: text.labelSmall?.copyWith(color: scheme.onSurfaceVariant),
+            ),
+          ],
+        ],
       ),
     );
-    // Every row's ink, and the selected pill, sit inset in the group
-    // container with a smaller corner, as in the spec's vertical menu.
+    // Every row's state layer, and the selected pill, sit inset in the
+    // group container with a smaller corner, as in the spec's vertical
+    // menu. Hover, press and selection share that one shape.
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: kMenuRowInset),
-      child: Material(
-        type: selected ? MaterialType.canvas : MaterialType.transparency,
-        color: selected ? scheme.tertiaryContainer : null,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(kMenuInnerRadius),
-        ),
+      child: StateSurface(
+        borderRadius: BorderRadius.circular(kMenuInnerRadius),
+        selected: selected,
+        selectedColor: scheme.tertiaryContainer,
+        onTap: enabled ? onTap : null,
         child: row,
       ),
     );

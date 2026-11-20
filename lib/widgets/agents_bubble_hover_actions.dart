@@ -20,7 +20,12 @@ class AgentsBubbleHoverActions extends StatefulWidget {
     required this.onMore,
     this.onReact,
     this.onReply,
+    this.touch = false,
   });
+
+  /// A touch device (a tablet) has no hover: only "more" shows, always, at
+  /// the touch target size. Its menu also holds react and reply.
+  final bool touch;
 
   final Widget child;
   final bool alignEnd;
@@ -53,10 +58,10 @@ class _AgentsBubbleHoverActionsState extends State<AgentsBubbleHoverActions> {
       message: tooltip,
       child: InkResponse(
         key: key,
-        radius: 16,
+        radius: widget.touch ? 24 : 16,
         onTapUp: (TapUpDetails d) => onTap(d.globalPosition),
         child: SizedBox.square(
-          dimension: 32,
+          dimension: widget.touch ? kMinInteractiveDimension : 32,
           child: Center(child: HugeIcon(icon, size: 17, color: color)),
         ),
       ),
@@ -65,21 +70,24 @@ class _AgentsBubbleHoverActionsState extends State<AgentsBubbleHoverActions> {
 
   @override
   Widget build(BuildContext context) {
+    final bool shown = widget.touch || _hover;
     final List<Widget> targets = <Widget>[
-      if (widget.onReact case final void Function(Offset) react)
-        _target(
-          'React',
-          HugeIcons.smile,
-          react,
-          const ValueKey<String>('bubble-hover-react'),
-        ),
-      if (widget.onReply case final VoidCallback reply)
-        _target(
-          'Reply',
-          HugeIcons.undo02,
-          (_) => reply(),
-          const ValueKey<String>('bubble-hover-reply'),
-        ),
+      if (!widget.touch)
+        if (widget.onReact case final void Function(Offset) react)
+          _target(
+            'React',
+            HugeIcons.smile,
+            react,
+            const ValueKey<String>('bubble-hover-react'),
+          ),
+      if (!widget.touch)
+        if (widget.onReply case final VoidCallback reply)
+          _target(
+            'Reply',
+            HugeIcons.undo02,
+            (_) => reply(),
+            const ValueKey<String>('bubble-hover-reply'),
+          ),
       _target(
         'More',
         HugeIcons.moreHorizontal,
@@ -88,10 +96,10 @@ class _AgentsBubbleHoverActionsState extends State<AgentsBubbleHoverActions> {
       ),
     ];
     final Widget actions = AnimatedOpacity(
-      opacity: _hover ? 1 : 0,
+      opacity: shown ? 1 : 0,
       duration: const Duration(milliseconds: 120),
       child: IgnorePointer(
-        ignoring: !_hover,
+        ignoring: !shown,
         child: Row(mainAxisSize: MainAxisSize.min, children: targets),
       ),
     );

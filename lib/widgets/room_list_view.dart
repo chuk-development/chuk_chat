@@ -9,6 +9,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
@@ -86,10 +87,15 @@ class RoomListView extends StatelessWidget {
       padding: const EdgeInsets.only(left: 16, right: 8, top: 12, bottom: 12),
       child: Row(
         children: [
-          Expanded(child: Text('Rooms', style: theme.textTheme.titleSmall)),
+          Expanded(
+            child: Text(
+              _l(context).agentsGroups,
+              style: theme.textTheme.titleSmall,
+            ),
+          ),
           if (onCreate != null)
             IconButton(
-              tooltip: 'New room',
+              tooltip: _l(context).agentsGroupNew,
               icon: const AppIcon(Icons.group_add_outlined),
               onPressed: onCreate,
             ),
@@ -107,7 +113,7 @@ class RoomListView extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'No rooms yet.',
+              _l(context).agentsGroupNoneYet,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
@@ -115,7 +121,10 @@ class RoomListView extends StatelessWidget {
             ),
             if (onCreate != null) ...[
               const SizedBox(height: 12),
-              FilledButton(onPressed: onCreate, child: const Text('New room')),
+              FilledButton(
+                onPressed: onCreate,
+                child: Text(_l(context).agentsGroupNew),
+              ),
             ],
           ],
         ),
@@ -149,33 +158,33 @@ class RoomListView extends StatelessWidget {
               },
               itemBuilder: (context) => [
                 if (onManageMembers != null)
-                  const PopupMenuItem<String>(
+                  PopupMenuItem<String>(
                     value: 'members',
                     child: ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      leading: AppIcon(Icons.group_outlined, size: 18),
-                      title: Text('Manage members'),
+                      leading: const AppIcon(Icons.group_outlined, size: 18),
+                      title: Text(_l(context).agentsGroupManageMembers),
                     ),
                   ),
                 if (onRename != null)
-                  const PopupMenuItem<String>(
+                  PopupMenuItem<String>(
                     value: 'rename',
                     child: ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      leading: AppIcon(Icons.edit_outlined, size: 18),
-                      title: Text('Rename room'),
+                      leading: const AppIcon(Icons.edit_outlined, size: 18),
+                      title: Text(_l(context).agentsGroupRename),
                     ),
                   ),
                 if (onDelete != null)
-                  const PopupMenuItem<String>(
+                  PopupMenuItem<String>(
                     value: 'delete',
                     child: ListTile(
                       dense: true,
                       contentPadding: EdgeInsets.zero,
-                      leading: AppIcon(Icons.delete_outline, size: 18),
-                      title: Text('Delete room'),
+                      leading: const AppIcon(Icons.delete_outline, size: 18),
+                      title: Text(_l(context).agentsGroupDelete),
                     ),
                   ),
               ],
@@ -274,11 +283,11 @@ class _RenameDialogState extends State<_RenameDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Rename room'),
+      title: Text(_l(context).agentsGroupRename),
       content: TextField(
         controller: _controller,
         autofocus: true,
-        decoration: const InputDecoration(labelText: 'Room name'),
+        decoration: InputDecoration(labelText: _l(context).agentsGroupName),
         onSubmitted: (v) => Navigator.of(context).pop(v),
       ),
       actions: [
@@ -294,3 +303,6 @@ class _RenameDialogState extends State<_RenameDialog> {
     );
   }
 }
+
+AppLocalizations _l(BuildContext context) =>
+    AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));

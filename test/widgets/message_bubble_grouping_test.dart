@@ -1,25 +1,33 @@
 // A run of messages from one sender is ONE group.
 //
-// The messenger thread draws chuk_chat's bubbles: the user's accent bubble
-// has full 16 px corners and a 5 px tail only on the last bubble of a run,
-// the answer has no bubble at all, and the gap inside a run is far tighter
-// than the gap between two runs. These pins hold that geometry in the
-// messenger mode, so a thread cannot drift back to a look of its own.
+// The Agents thread (messenger mode) joins a run like a messenger
+// (CHAT-152): full corners outside, small corners on the sender's side
+// where two bubbles of one run touch (`bubbleRadius`, bubble_shape.dart).
+// The gap inside a run is far tighter than the gap between two runs. These
+// pins hold that geometry, so a thread cannot drift to a look of its own.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/ui/expressive/bubble_shape.dart';
 import 'package:chuk_chat/widgets/chat_document_inline.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 
-const Radius full = Radius.circular(16);
-const Radius tail = Radius.circular(5);
+/// The corners of the bubble at [index] of [threeMessageRun].
+BorderRadius runRadius(bool isUser, int index) => bubbleRadius(
+  isUser,
+  const <BubblePosition>[
+    BubblePosition.first,
+    BubblePosition.middle,
+    BubblePosition.last,
+    BubblePosition.single,
+  ][index],
+);
 
 /// chuk_chat's bubble margins: 10 above the first bubble of a run, 2 above
 /// the others, 2 below every bubble.
@@ -88,22 +96,18 @@ void main() {
   ContentBlock.decodesFileBlocks = true;
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
 
-  testWidgets('the user\'s run: full corners, the tail only at its end', (
+  testWidgets('the user\'s run: joined corners on the right, full outside', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(wrap(threeMessageRun(isUser: true)));
     await tester.pump();
 
     for (int i = 0; i < 4; i++) {
-      final BorderRadius radius = radiusOf(tester, i);
-      expect(radius.topLeft, full);
-      expect(radius.topRight, full);
-      expect(radius.bottomLeft, full);
+      expect(radiusOf(tester, i), runRadius(true, i), reason: '$i');
     }
-    expect(radiusOf(tester, 0).bottomRight, full);
-    expect(radiusOf(tester, 1).bottomRight, full);
-    expect(radiusOf(tester, 2).bottomRight, tail);
-    expect(radiusOf(tester, 3).bottomRight, tail);
+    // The run's middle bubble touches its neighbours on the right only.
+    expect(radiusOf(tester, 1).topRight, const Radius.circular(7));
+    expect(radiusOf(tester, 1).topLeft, const Radius.circular(22));
   });
 
   testWidgets('the gap inside a run is tighter than between two runs', (
@@ -123,7 +127,7 @@ void main() {
   });
 
   // CHAT-52: in the messenger thread every answer is its own bubble, the
-  // last one of a run with the tail at the bottom left.
+  // bubbles of one run joined on the left.
   testWidgets('an agent\'s run draws one bubble per answer', (
     WidgetTester tester,
   ) async {
@@ -131,12 +135,8 @@ void main() {
     await tester.pump();
 
     expect(decoratedBoxes, findsNWidgets(4));
-    expect(radiusOf(tester, 0).bottomLeft, full);
-    expect(radiusOf(tester, 1).bottomLeft, full);
-    expect(radiusOf(tester, 2).bottomLeft, tail);
-    expect(radiusOf(tester, 3).bottomLeft, tail);
     for (int i = 0; i < 4; i++) {
-      expect(radiusOf(tester, i).bottomRight, full);
+      expect(radiusOf(tester, i), runRadius(false, i), reason: '$i');
     }
     // The run gap lives in the margin above the answer's column.
     double marginTop(int index) {
@@ -194,7 +194,8 @@ void main() {
     );
     await tester.pump();
 
-    // The document is drawn inline, under the answer, in the card radius.
+    // The document is drawn inline, under the answer, as the last block of
+    // the answer's stack: joined to the answer at the top left.
     final Container documentBox = tester.widget<Container>(
       find
           .descendant(
@@ -205,7 +206,7 @@ void main() {
     );
     expect(
       (documentBox.decoration! as BoxDecoration).borderRadius,
-      kBorderRadiusCard,
+      bubbleRadius(false, BubblePosition.last),
     );
     final Rect text = tester.getRect(
       find.text('Erledigt: das Dokument steht.').first,

@@ -30,7 +30,6 @@ import 'package:chuk_chat/services/chat_profile_service.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/model_prefetch_service.dart';
-import 'package:chuk_chat/services/provider_resolution_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
@@ -253,23 +252,31 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
     await refreshSelectedModelName(own.modelId);
   }
 
-  /// The provider the agent's model runs on now, for a write that keeps
-  /// the model and changes something else.
-  Future<String?> _currentProviderFor(String modelId) async {
-    final String? shown = selectedProviderSlug;
-    if (modelId == selectedModelId && shown != null && shown.isNotEmpty) {
-      return ProviderResolutionService.resolveForSend(modelId, shown);
-    }
-    return AgentModel.providerFor(modelId);
-  }
-
   /// A model picked in an agent's composer becomes that agent's own
   /// model, at the level it already runs at.
+  ///
+  /// The agent default model stays on Auto (no provider) unless the agent
+  /// already has a provider of its own for it: a pick in the composer never
+  /// pins a provider the user did not choose (CHAT-152).
   Future<void> _pickAgentModel(String chatId, String modelId) async {
     final own = await ChatModelSelectionService.instance.load(chatId);
     String? provider = own?.modelId == modelId
         ? own!.providerSlug
+        : modelId == AgentModel.defaultModelId
+        ? ''
         : await AgentModel.providerFor(modelId);
+    if (provider != null && provider.isEmpty) {
+      await AgentModel.setOwn(
+        chatId,
+        modelId: modelId,
+        providerSlug: '',
+        reasoningEffort: own?.reasoningEffort ?? reasoningEffort,
+      );
+      if (!mounted) return;
+      await syncChatScopedModel();
+      await refreshPickedModels();
+      return;
+    }
     if (provider == null) {
       // A cold catalogue: fetch it once and ask again.
       await ModelPrefetchService.prefetch();
@@ -453,11 +460,25 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
     final String? chatId = modelSelectionChatId;
     if (chatId != null) {
       final own = await ChatModelSelectionService.instance.load(chatId);
-      final String modelId = own?.modelId ?? selectedModelId;
-      final String? provider =
-          own?.providerSlug ?? await _currentProviderFor(modelId);
+      if (own == null) {
+        // No own model: the agent runs the agent default on Auto. A new
+        // level keeps it there and pins no provider (CHAT-152).
+        final saved = await AgentModel.setOwn(
+          chatId,
+          modelId: AgentModel.defaultModelId,
+          providerSlug: '',
+          reasoningEffort: level,
+        );
+        if (!mounted) return;
+        setState(() {
+          reasoningEffort = saved.reasoningEffort ?? level;
+        });
+        return;
+      }
+      final String modelId = own.modelId;
+      final String provider = own.providerSlug;
       if (!mounted) return;
-      if (modelId.isNotEmpty && provider != null && provider.isNotEmpty) {
+      if (modelId.isNotEmpty && provider.isNotEmpty) {
         final saved = await AgentModel.setOwn(
           chatId,
           modelId: modelId,

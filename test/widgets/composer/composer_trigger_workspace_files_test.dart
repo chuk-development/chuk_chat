@@ -80,7 +80,6 @@ void main() {
               'attachments': '[{"fileName":"plan.pdf","markdownContent":"m"}]',
             },
           ],
-          agentsThread: false,
           skills: const <Skill>[],
           chats: const <StoredChat>[],
           workspace: workspace,
@@ -121,7 +120,6 @@ void main() {
         l: l,
         chatId: 'me',
         messages: const <Map<String, String>>[],
-        agentsThread: false,
         skills: const <Skill>[],
         chats: const <StoredChat>[],
         workspace: _workspace(<WorkspaceFile>[

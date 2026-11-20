@@ -46,9 +46,12 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     if (widget.message.trim().isEmpty) return child;
     // A desktop Agents thread also shows react, reply and more beside the
     // bubble on hover (CHAT-52); the phone keeps the long press.
-    // The phone thread (messengerMode) never hovers.
+    // The phone thread (messengerMode) never hovers. A tablet has the
+    // desktop thread but no hover: there only "more" shows, always, as a
+    // finger-sized target (the long press selects text there).
     if (!kPlatformMobile && !widget.messengerMode && _agentsBubbles) {
       child = AgentsBubbleHoverActions(
+        touch: MobileLayout.isTouchPlatform,
         alignEnd: widget.isUser,
         onReact: widget.onReaction == null ? null : _showMessengerMenu,
         onReply: widget.onReply,
@@ -338,12 +341,23 @@ extension _MessageBubbleLayout on _MessageBubbleState {
 
     final BoxDecoration decoration = BoxDecoration(
       color: bubbleFill,
-      borderRadius: BorderRadius.only(
-        topLeft: const Radius.circular(16),
-        topRight: const Radius.circular(16),
-        bottomLeft: const Radius.circular(16),
-        bottomRight: Radius.circular(widget.endsGroup ? 5 : 16),
-      ),
+      // An Agents thread joins a run of bubbles like a messenger: full
+      // corners outside, small corners where two bubbles of the run touch
+      // (bubble_shape.dart). chuk_chat keeps its own bubble.
+      borderRadius: _agentsBubbles
+          ? bubbleRadius(
+              true,
+              bubblePositionFromFlags(
+                startsNewGroup: widget.startsNewGroup,
+                endsGroup: widget.endsGroup,
+              ),
+            )
+          : BorderRadius.only(
+              topLeft: const Radius.circular(16),
+              topRight: const Radius.circular(16),
+              bottomLeft: const Radius.circular(16),
+              bottomRight: Radius.circular(widget.endsGroup ? 5 : 16),
+            ),
       border: agentFill == null
           ? Border.all(color: Theme.of(context).m3.userBubbleBorder)
           : null,
@@ -633,6 +647,21 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: answerKids,
     );
+    // An Agents answer and the files under it are one stack of the run:
+    // the answer bubble on top, each file a block under it. A work line
+    // above the bubble starts the stack anew.
+    final int stackLength =
+        (bubbleCarriesContent ? 1 : 0) + _artifactPayloads.length;
+    final bool stackStarts = widget.startsNewGroup || workKids.isNotEmpty;
+    BorderRadius stackRadius(int index) => bubbleRadius(
+      false,
+      bubblePositionInStack(
+        index: index,
+        length: stackLength,
+        startsNewGroup: stackStarts,
+        endsGroup: widget.endsGroup,
+      ),
+    );
     final Widget bubbleContent = Container(
       // A sender label opens the run and carries its gap (see
       // [MessageBubble.senderLabel]).
@@ -650,12 +679,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       decoration: answerBubble
           ? BoxDecoration(
               color: pageTheme.m3.userBubble,
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(16),
-                topRight: const Radius.circular(16),
-                bottomLeft: Radius.circular(widget.endsGroup ? 5 : 16),
-                bottomRight: const Radius.circular(16),
-              ),
+              borderRadius: stackRadius(0),
               border: Border.all(color: pageTheme.m3.userBubbleBorder),
             )
           : null,
@@ -741,7 +765,9 @@ extension _MessageBubbleLayout on _MessageBubbleState {
                 ),
                 child: SandboxArtifactBlock(
                   payload: _artifactPayloads[i],
-                  borderRadius: kBorderRadiusCard,
+                  borderRadius: _agentsBubbles
+                      ? stackRadius((bubbleCarriesContent ? 1 : 0) + i)
+                      : kBorderRadiusCard,
                 ),
               ),
             // An Agents answer's pictures: their own tiles under the bubble

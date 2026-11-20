@@ -7,8 +7,7 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 
 /// Whether [context] is laid out as the desktop (not the phone).
-bool isAgentsDesktop(BuildContext context) =>
-    !MobileLayout.isPhoneWidth(MediaQuery.sizeOf(context).width);
+bool isAgentsDesktop(BuildContext context) => !MobileLayout.isPhone(context);
 
 /// A form that is a bottom sheet on the phone and a centred dialog, at most
 /// [kDeskDialogMaxWidth] wide, on a desktop window.

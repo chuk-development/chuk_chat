@@ -19,12 +19,7 @@ const Set<String> _frameFiles = {
 
 /// Not migrated yet. Another change moves these pages to
 /// FloatingPageScaffold; remove each entry when its page is done.
-const Set<String> _notMigratedYet = {
-  'lib/pages/messenger_shell.dart',
-  // Another session owns this file right now. It already floats its header
-  // over the page; only the switch to FloatingPageScaffold is missing.
-  'lib/pages/media_manager_page.dart',
-};
+const Set<String> _notMigratedYet = {'lib/pages/messenger_shell.dart'};
 
 /// [source] with the text of every comment and string literal replaced by
 /// spaces. Offsets and line breaks stay, so line numbers stay right, and a

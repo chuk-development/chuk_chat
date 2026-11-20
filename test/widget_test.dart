@@ -123,10 +123,23 @@ class _IdleRelayController implements AgentsRelayController {
     String name,
     List<Map<String, String>> members, {
     bool agentToAgent = true,
+    Map<String, Object?> settings = const <String, Object?>{},
   }) async {}
 
   @override
   Future<void> setRoomAgentToAgent(String roomId, bool enabled) async {}
+
+  @override
+  Future<void> setRoomSettings(
+    String roomId,
+    Map<String, Object?> settings,
+  ) async {}
+
+  @override
+  Future<void> requestRoomList() async {}
+
+  @override
+  Future<void> stopRoom(String roomId) async {}
 
   @override
   Future<void> sendRoomTask(String roomId, String message) async {}

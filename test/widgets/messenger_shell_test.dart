@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -27,6 +29,7 @@ import 'package:chuk_chat/models/agents_agent.dart' show AgentActivity;
 import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/widgets/room_create_sheet.dart';
+import 'package:chuk_chat/widgets/room_details_panel.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_templates.dart';
 import 'package:chuk_chat/widgets/agent_template_picker.dart';
@@ -66,6 +69,7 @@ import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
 
+import '../perf/perf_support.dart' show silenceUnrelatedPlugins;
 import '../support/test_app.dart';
 import '../platform_specific/mobile/mobile_support.dart' show findId;
 
@@ -145,14 +149,35 @@ class _FakeRelayController implements AgentsRelayController {
     String name,
     List<Map<String, String>> members, {
     bool agentToAgent = true,
+    Map<String, Object?> settings = const <String, Object?>{},
   }) async {
     createdRooms.add(roomId);
     createdRoomPolicies.add(agentToAgent);
+    createdRoomSettings.add(settings);
   }
+
+  final List<Map<String, Object?>> createdRoomSettings =
+      <Map<String, Object?>>[];
+  final List<(String, Map<String, Object?>)> roomSettings =
+      <(String, Map<String, Object?>)>[];
+  int roomListRequests = 0;
+  final List<String> stoppedRooms = <String>[];
 
   @override
   Future<void> setRoomAgentToAgent(String roomId, bool enabled) async =>
       agentToAgentSets.add((roomId, enabled));
+
+  @override
+  Future<void> setRoomSettings(
+    String roomId,
+    Map<String, Object?> settings,
+  ) async => roomSettings.add((roomId, settings));
+
+  @override
+  Future<void> requestRoomList() async => roomListRequests++;
+
+  @override
+  Future<void> stopRoom(String roomId) async => stoppedRooms.add(roomId);
 
   @override
   Future<void> sendRoomTask(String roomId, String message) async =>
@@ -385,11 +410,12 @@ void main() {
   /// Opens Control Rooms from the roster: its card in the open pane, its
   /// icon in the folded rail. The thread header no longer carries it.
   Finder controlRoomsEntry() {
-    final Finder rail = find.byTooltip('Control Rooms');
+    final Finder rail = find.byTooltip('Groups');
     if (rail.evaluate().isNotEmpty) return rail;
+    // The navigation card, not the lid of the roster's groups.
     return find.descendant(
-      of: find.byType(AgentRosterView),
-      matching: find.text('Control Rooms'),
+      of: find.byType(SbNavCard),
+      matching: find.text('Groups'),
     );
   }
 
@@ -436,8 +462,9 @@ void main() {
       const ValueKey<String>('settings_Advanced'),
     );
     if (row.evaluate().isEmpty && advanced.evaluate().isNotEmpty) {
-      // The rarely used rows are folded behind Advanced.
-      await tester.ensureVisible(advanced);
+      // The rarely used rows are folded behind Advanced. Into the middle:
+      // at the bottom edge the page's bottom chrome covers it.
+      await Scrollable.ensureVisible(tester.element(advanced), alignment: 0.5);
       await tester.pumpAndSettle();
       await tester.tap(advanced);
       await tester.pumpAndSettle();
@@ -524,7 +551,7 @@ void main() {
     );
     // Control Rooms is the roster's, not the header's.
     expect(
-      find.descendant(of: header, matching: find.byTooltip('Control Rooms')),
+      find.descendant(of: header, matching: find.byTooltip('Groups')),
       findsNothing,
     );
     // The header has a band: the page colour behind the row and a fade.
@@ -536,12 +563,18 @@ void main() {
       find.byKey(const ValueKey<String>('details-screen')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey<String>('details-model')), findsOneWidget);
+    // The model is in the settings, under "Advanced" (CHAT-152).
+    expect(find.byKey(const ValueKey<String>('details-model')), findsNothing);
     expect(find.byKey(const ValueKey<String>('details-files')), findsOneWidget);
     expect(find.text('Copy full chat'), findsOneWidget);
     expect(find.byTooltip('Settings'), findsOneWidget);
     expect(find.text('Rename'), findsOneWidget);
-    expect(find.byType(AppBar), findsNothing);
+    // The pane's pages use the settings header (FloatingAppBar); the thread
+    // header has no Material AppBar.
+    expect(
+      find.descendant(of: header, matching: find.byType(AppBar)),
+      findsNothing,
+    );
     // The composer's "More models" way out is wired.
     final view = tester.widget<AgentsThreadView>(find.byType(AgentsThreadView));
     expect(view.onOpenModelScreen, isNotNull);
@@ -674,6 +707,53 @@ void main() {
     expect(controllerBuilds, 1);
   });
 
+  testWidgets('Android: a tablet keeps the wide layout in both orientations, '
+      'a phone keeps the phone layout in landscape (CHAT-150)', (tester) async {
+    // The chat screen's recorder asks a plugin; a shot runs real async.
+    silenceUnrelatedPlugins(tester);
+    final (controller, _) = await pumpShell(
+      tester,
+      size: const Size(1280, 800),
+    );
+    controller.pair();
+    await tester.pumpAndSettle();
+    // CHUK_TABLET_SHOT=<dir> also writes a PNG of each tablet layout.
+    final String shotDir = Platform.environment['CHUK_TABLET_SHOT'] ?? '';
+    Future<void> shot(String name) async {
+      if (shotDir.isEmpty) return;
+      final Element shell = find.byType(MessengerShell).evaluate().single;
+      await tester.runAsync(() async {
+        final ui.Image image = await captureImage(shell);
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (data == null) return;
+        await File('$shotDir/$name.png')
+            .writeAsBytes(data.buffer.asUint8List());
+      });
+    }
+
+    const Key pager = ValueKey<String>('phone-agents-pager');
+    expect(find.byType(AgentRosterView), findsOneWidget);
+    expect(find.byKey(pager), findsNothing);
+    await shot('agents_landscape');
+
+    // Tablet portrait (800 dp wide): still the wide layout, same socket.
+    await resize(tester, const Size(800, 1280));
+    expect(find.byType(AgentRosterView), findsOneWidget);
+    expect(find.byKey(pager), findsNothing);
+    await shot('agents_portrait');
+
+    // A phone in landscape: 844 dp wide, but its shortest side is 390 dp.
+    await resize(tester, const Size(844, 390));
+    expect(find.byKey(pager, skipOffstage: false), findsOneWidget);
+    await resize(tester, const Size(390, 844));
+    expect(find.byKey(pager, skipOffstage: false), findsOneWidget);
+
+    await resize(tester, const Size(1280, 800));
+    expect(find.byKey(pager), findsNothing);
+    expect(threadView, findsOneWidget);
+    expect(controllerBuilds, 1);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
   testWidgets('a tapped notification selects the thread it names (WS-7)', (
     tester,
   ) async {
@@ -708,7 +788,7 @@ void main() {
       tester.widget<AgentsThreadView>(threadView).threadKey,
       other.threads.single.key,
     );
-    expect(roster.byId(other.id)!.threads, hasLength(1));
+    expect(roster.byId(other.id)?.threads, hasLength(1));
   });
 
   testWidgets(
@@ -989,9 +1069,9 @@ void main() {
     await tester.tap(find.widgetWithText(ExpressiveButton, 'Rename'));
     await tester.pumpAndSettle();
 
-    expect(roster.byId(agent.id)!.name, 'Amber Desk');
+    expect(roster.byId(agent.id)?.name, 'Amber Desk');
     // The id and the thread key are untouched: a name is a label.
-    expect(roster.byId(agent.id)!.threads.single.key, agent.threads.single.key);
+    expect(roster.byId(agent.id)?.threads.single.key, agent.threads.single.key);
     expect(controller.renamedAgents, [(agent.id, 'Amber Desk')]);
     expect(find.text('Amber Desk'), findsWidgets);
   });
@@ -1022,9 +1102,9 @@ void main() {
     await tester.enterText(field, '  Research Assistant  ');
     await tester.tap(find.widgetWithText(TextButton, 'Save'));
     await tester.pumpAndSettle();
-    expect(roster.byId(agent.id)!.name, 'Research Assistant');
+    expect(roster.byId(agent.id)?.name, 'Research Assistant');
     expect(controller.renamedAgents, [(agent.id, 'Research Assistant')]);
-    expect(roster.byId(agent.id)!.threads.single.key, agent.threads.single.key);
+    expect(roster.byId(agent.id)?.threads.single.key, agent.threads.single.key);
   });
 
   testWidgets('the host\'s agent_list names the host row, adds the agents '
@@ -1072,8 +1152,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(roster.byId(hostId)!.name, 'Laptop Bot');
-    expect(roster.byId('local:phone:2:7')!.name, 'From Phone');
+    expect(roster.byId(hostId)?.name, 'Laptop Bot');
+    expect(roster.byId('local:phone:2:7')?.name, 'From Phone');
     expect(roster.byId(gone.id), isNull);
     expect(find.text('Laptop Bot'), findsWidgets);
     expect(find.text('From Phone'), findsWidgets);
@@ -1135,7 +1215,7 @@ void main() {
     await tester.pumpAndSettle();
     final made = roster.addAgent(name: 'Wahlradar');
     await tester.pumpAndSettle();
-    expect(roster.byId(made.id)!.runsOnHost, isFalse);
+    expect(roster.byId(made.id)?.runsOnHost, isFalse);
 
     // A replayed terminal is a run the host has stored for this thread.
     controller.emit(
@@ -1146,8 +1226,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(roster.byId(made.id)!.runsOnHost, isTrue);
-    expect(roster.byId(made.id)!.onHost, isFalse);
+    expect(roster.byId(made.id)?.runsOnHost, isTrue);
+    expect(roster.byId(made.id)?.onHost, isFalse);
   });
 
   testWidgets(
@@ -1871,7 +1951,7 @@ void main() {
       Navigator.of(tester.element(find.byType(MobileMediaPage))).pop();
       await tester.pumpAndSettle();
 
-      await tapPhoneMenu(tester, 'Control rooms');
+      await tapPhoneMenu(tester, 'Groups');
       await tester.pumpAndSettle();
       expect(find.byType(RoomListView), findsOneWidget);
     });
@@ -1973,7 +2053,7 @@ void main() {
     expect(find.byType(RoomListView), findsOneWidget);
     // The pane's own header names it; at 800 px the roster folded to the
     // rail to make room.
-    expect(find.text('Control Rooms'), findsWidgets);
+    expect(find.text('Groups'), findsWidgets);
     // Listed in the pane (and in the roster when it is open).
     expect(find.text('launch'), findsWidgets);
     expect(find.text('2 members'), findsOneWidget);
@@ -1992,7 +2072,7 @@ void main() {
     await tester.pump(
       const Duration(milliseconds: 400),
     ); // finish the transition
-    expect(find.text('Message the room to start.'), findsOneWidget);
+    expect(find.text('Message the group to start.'), findsOneWidget);
     // Opening the room re-syncs it to the host (idempotent) and asks for its
     // stored history.
     expect(controller.historyRequests, [room.id]);
@@ -2014,6 +2094,14 @@ void main() {
     expect(find.text('@amber'), findsWidgets);
     expect(find.text('ship it'), findsOneWidget);
 
+    // While the group runs, Stop takes the send target's place and sends
+    // room_stop for this group.
+    await tester.tap(findIcon(Icons.stop_rounded));
+    await tester.pump();
+    expect(controller.stoppedRooms, [room.id]);
+    controller.emit(AgentsRelayRoomDone(roomId: room.id, reason: 'stopped'));
+    await tester.pump();
+
     // The composer routes to sendRoomTask with the room id.
     await tester.enterText(find.byType(TextField).last, 'kick off');
     // The room composer is the chat's composer now, so its send glyph is the
@@ -2021,6 +2109,76 @@ void main() {
     await tester.tap(findIcon(Icons.north_rounded));
     await tester.pump();
     expect(controller.roomTasks, [(room.id, 'kick off')]);
+
+    // The group's details chip puts its details in the right pane.
+    await tester.tap(find.byTooltip('Group details'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.byType(RoomDetailsPanel), findsOneWidget);
+  });
+
+  testWidgets('a connect asks for the host\'s groups; room_list adds the '
+      'missing ones and updates the known ones', (tester) async {
+    final rooms = LocalRoomSource();
+    final local = rooms.addRoom(
+      const AgentsRoomDraft(
+        name: 'old name',
+        members: [
+          AgentsRoomMember(agentId: 'a', handle: 'amber'),
+          AgentsRoomMember(agentId: 'b', handle: 'cobalt'),
+        ],
+      ),
+    );
+    final controller = _FakeRelayController();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: MessengerShell(
+          appMode: _agentsInFront(),
+          relayControllerBuilder: () async => controller,
+          sessionSource: const _FakeSessionSource(),
+          pairingStore: AgentsPairingStore(backend: _MemoryStore()),
+          rosterSource: LocalAgentRosterSource(),
+          roomSource: rooms,
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(controller.roomListRequests, greaterThanOrEqualTo(1));
+
+    controller.emit(
+      AgentsRelayRoomList(
+        rooms: <AgentsRelayRoomListEntry>[
+          AgentsRelayRoomListEntry(<String, Object?>{
+            'room_id': local.id,
+            'name': 'host name',
+            'members': <Object?>[
+              <String, Object?>{'agent_id': 'a', 'handle': 'amber'},
+              <String, Object?>{'agent_id': 'b', 'handle': 'cobalt'},
+            ],
+            'responder': 'auto',
+            'bulletin': 'be brief',
+          }),
+          const AgentsRelayRoomListEntry(<String, Object?>{
+            'room_id': 'room:host',
+            'name': 'made on the laptop',
+            'members': <Object?>[
+              <String, Object?>{'agent_id': 'a', 'handle': 'amber'},
+              <String, Object?>{'agent_id': 'c', 'handle': 'jade'},
+            ],
+          }),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(rooms.rooms, hasLength(2));
+    expect(rooms.byId(local.id)?.name, 'host name');
+    expect(rooms.byId(local.id)?.responder, AgentsRoomResponder.auto);
+    expect(rooms.byId(local.id)?.bulletin, 'be brief');
+    expect(rooms.byId('room:host')?.name, 'made on the laptop');
   });
 
   testWidgets('creating a room from the shell adds it to the source', (
@@ -2051,7 +2209,7 @@ void main() {
 
     await tapThreadAction(tester, 'Control Rooms');
     // Empty -> the New room button is offered.
-    await tester.tap(find.widgetWithText(FilledButton, 'New room'));
+    await tester.tap(find.widgetWithText(FilledButton, 'New group'));
     await tester.pumpAndSettle();
 
     // Scope to the sheet: the room list is a panel next to the chat now, so
@@ -2059,7 +2217,7 @@ void main() {
     await tester.enterText(
       find.descendant(
         of: find.byType(RoomCreateSheet),
-        matching: find.byType(TextField),
+        matching: find.byKey(const ValueKey<String>('room-create-name')),
       ),
       'planning',
     );
@@ -2076,8 +2234,10 @@ void main() {
 
     expect(rooms.rooms, hasLength(1));
     expect(rooms.rooms.single.name, 'planning');
-    // The room was pushed to the host so a later message can drive it.
+    // The room was pushed to the host so a later message can drive it, with
+    // its settings (who answers) on the same frame.
     expect(controller.createdRooms, [rooms.rooms.single.id]);
+    expect(controller.createdRoomSettings.single['responder'], 'everyone');
     // Back on the rooms list (and in the roster), the new room shows.
     expect(
       find.descendant(
@@ -2152,7 +2312,8 @@ void main() {
       find.byKey(ValueKey<String>('room-tile-${room.id}')),
       findsOneWidget,
     );
-    expect(find.text('Rooms'), findsOneWidget);
+    // The group's lid and the Groups card of the navigation block.
+    expect(find.text('Groups'), findsNWidgets(2));
   });
 
   testWidgets('deleting an agent syncs its rooms to the host', (tester) async {
@@ -2217,7 +2378,7 @@ void main() {
     expect(controller.deletedRooms, [b.id]);
     expect(controller.removedMembers, [(a.id, amberId)]);
     expect(rooms.byId(b.id), isNull);
-    expect(rooms.byId(a.id)!.members.length, 2);
+    expect(rooms.byId(a.id)?.members.length, 2);
     // amber was the only agent: the pane falls to the empty state instead of
     // still showing the deleted agent's chat.
     expect(find.byType(AgentsStatusPanel), findsOneWidget);
@@ -2268,7 +2429,7 @@ void main() {
     await tester.tap(findIcon(Icons.remove_circle_outline).first);
     await tester.pumpAndSettle();
 
-    expect(rooms.byId(room.id)!.members.length, 2);
+    expect(rooms.byId(room.id)?.members.length, 2);
     expect(controller.removedMembers, [(room.id, 'a')]);
     expect(controller.deletedRooms, isEmpty);
   });
@@ -2316,7 +2477,7 @@ void main() {
       await settle(tester);
       await tester.tap(findIcon(Icons.more_vert));
       await settle(tester);
-      await tester.tap(find.text('Delete room'));
+      await tester.tap(find.text('Delete group'));
       await settle(tester);
 
       expect(rooms.byId(room.id), isNull);

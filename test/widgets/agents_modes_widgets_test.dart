@@ -430,7 +430,7 @@ void main() {
     }
   });
 
-  testWidgets('mode bar: plan toggle, todo, goal and sandbox banner', (
+  testWidgets('mode bar: no plan toggle; todo, goal and sandbox banner', (
     tester,
   ) async {
     final List<Map<String, dynamic>> sent = <Map<String, dynamic>>[];
@@ -440,16 +440,13 @@ void main() {
     await tester.pumpWidget(
       _host(AgentsModeBar(threadKey: 't1', modes: modes)),
     );
-    expect(find.text('Plan mode'), findsOneWidget);
+    // Nothing to say: the bar draws nothing, and there is no plan toggle.
+    expect(find.text('Plan mode'), findsNothing);
     expect(
-      find.byKey(const ValueKey<String>('agents-goal-strip')),
+      find.byKey(const ValueKey<String>('agents-plan-mode-chip')),
       findsNothing,
     );
-    await tester.tap(
-      find.byKey(const ValueKey<String>('agents-plan-mode-chip')),
-    );
-    await tester.pump();
-    expect(modes.planToggleOf('t1'), isTrue);
+    expect(find.byKey(const ValueKey<String>('agents-mode-bar')), findsNothing);
     modes
       ..ingest(<String, dynamic>{
         'type': 'goal',

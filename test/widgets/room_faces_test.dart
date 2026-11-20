@@ -277,16 +277,16 @@ void main() {
       await tester.tap(find.bySemanticsIdentifier('mobile_home_add'));
       await tester.pumpAndSettle();
       expect(find.text('New agent'), findsOneWidget);
-      expect(find.text('New room'), findsOneWidget);
+      expect(find.text('New group'), findsOneWidget);
 
-      await tester.tap(find.text('New room'));
+      await tester.tap(find.text('New group'));
       await tester.pumpAndSettle();
       expect(createdRoom, isTrue);
     });
   });
 
   group('the desktop roster lists rooms', () {
-    testWidgets('a room row opens the room, and Control Rooms stays', (
+    testWidgets('a room row opens the room, and the Groups card stays', (
       tester,
     ) async {
       final LocalAgentRosterSource roster = LocalAgentRosterSource();
@@ -317,7 +317,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('Rooms'), findsOneWidget);
+      // The group's lid and the Groups card of the navigation block.
+      expect(find.text('Groups'), findsNWidgets(2));
       expect(find.text('ops'), findsOneWidget);
       // The bigger room slot buys its width back from the gap: both rows start
       // their name on the same x.
@@ -325,9 +326,8 @@ void main() {
         tester.getTopLeft(find.text('ops')).dx,
         moreOrLessEquals(tester.getTopLeft(find.text('Amber')).dx, epsilon: 0.5),
       );
-      // Control Rooms and New room are cards of the roster's navigation block.
-      expect(find.text('Control Rooms'), findsOneWidget);
-      expect(find.text('New room'), findsOneWidget);
+      // Groups and New group are cards of the roster's navigation block.
+      expect(find.text('New group'), findsOneWidget);
 
       await tester.tap(find.text('ops'));
       await tester.pumpAndSettle();
@@ -358,7 +358,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Rooms'), findsNothing);
+      expect(find.text('Groups'), findsNothing);
       expect(find.text('Amber'), findsOneWidget);
     });
   });

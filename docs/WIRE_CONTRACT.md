@@ -4535,9 +4535,11 @@ background review's `skill_proposal`), `plan` (plan-mode rules).
    round `n/max`, phase; "Resume" when `activation` is `disarmed` or phase is
    `paused` / `blocked` (`goal_control` resume), "Pause", "Clear". Inbox:
    `needs_user` = "Needs you".
-2. Plan mode toggle in the composer (`task.plan`), a "Plan mode" chip while
-   `plan_mode` is on; the `plan_review` card renders `plan` as markdown with
-   Approve / Keep planning (+ a feedback field).
+2. No plan-mode toggle (owner, 2026-11-20). The app never switches plan
+   mode on. When `plan_mode` is on for a thread (an old thread, or a
+   `/plan ` prompt), the next task carries `plan: false`, so the thread
+   goes back to the normal mode. The `plan_review` card still renders
+   `plan` as markdown with Approve / Keep planning (+ a feedback field).
 3. Sticky todo card from the last `todo` frame.
 4. Question card from `question_request`: `(Recommended)` preselected, skip
    per question, `ask_visible` on show / hide, still answerable when

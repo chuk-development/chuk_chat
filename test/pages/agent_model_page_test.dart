@@ -266,6 +266,50 @@ void main() {
     );
   });
 
+  group('lastRunVia', () {
+    test('names the provider the host reports', () {
+      expect(
+        lastRunVia(
+          const AgentModelChoice(id: 'a/b', provider: 'fireworks'),
+          chosenProviderSlug: '',
+          chosenModelId: 'a/b',
+        ),
+        ' via Fireworks',
+      );
+    });
+
+    test('an Auto run without a provider reads Automatic, never '
+        '"not reported"', () {
+      expect(
+        lastRunVia(
+          const AgentModelChoice(id: 'a/b'),
+          chosenProviderSlug: '',
+          chosenModelId: 'a/b',
+        ),
+        ' via Automatic',
+      );
+    });
+
+    test('any other run without a provider leaves "via" out', () {
+      expect(
+        lastRunVia(
+          const AgentModelChoice(id: 'a/b'),
+          chosenProviderSlug: 'fireworks',
+          chosenModelId: 'a/b',
+        ),
+        '',
+      );
+      expect(
+        lastRunVia(
+          const AgentModelChoice(id: 'a/old'),
+          chosenProviderSlug: '',
+          chosenModelId: 'a/b',
+        ),
+        '',
+      );
+    });
+  });
+
   testWidgets('fits a 360 px phone at 1.3 text scale', (tester) async {
     await _pump(tester, size: const Size(360, 740), textScale: 1.3);
     expect(tester.takeException(), isNull);

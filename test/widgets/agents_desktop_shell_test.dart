@@ -249,11 +249,9 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Routines'), findsOneWidget);
-      // Model, files and the thread's actions are in the pane too.
-      expect(
-        find.byKey(const ValueKey<String>('details-model')),
-        findsOneWidget,
-      );
+      // Files and the thread's actions are in the pane too; the model is in
+      // the settings, under "Advanced" (CHAT-152).
+      expect(find.byKey(const ValueKey<String>('details-model')), findsNothing);
       expect(
         find.byKey(const ValueKey<String>('details-files')),
         findsOneWidget,
@@ -282,7 +280,9 @@ void main() {
 
       // The pane's own close button and Esc close it too.
       await shortcut(tester, LogicalKeyboardKey.period);
-      await tester.tap(find.byTooltip('Close (Esc)'));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('settings-surface-close')),
+      );
       await tester.pumpAndSettle();
       expect(rightPane, findsNothing);
       await shortcut(tester, LogicalKeyboardKey.period);
@@ -319,7 +319,9 @@ void main() {
 
     Future<void> closePane(WidgetTester tester) async {
       if (rightPane.evaluate().isEmpty) return;
-      await tester.tap(find.byTooltip('Close (Esc)'));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('settings-surface-close')),
+      );
       await tester.pumpAndSettle();
     }
 
@@ -466,12 +468,16 @@ void main() {
 
     double last = double.negativeInfinity;
     for (final String key in <String>[
+      // The short default view (CHAT-152): who it is, what it may do, the
+      // apps it may use, its routines.
       'settings_Profile & preferences',
-      'settings_Model',
       'settings_Permissions',
-      'settings_Advanced',
-      'settings_Skills',
       'settings_Connected apps',
+      'settings_Schedules & automations',
+      'settings_Advanced',
+      // The rare settings: the model (Auto by default) first.
+      'settings_Model',
+      'settings_Skills',
       'settings_Mail',
       'settings_Host & activity',
       'settings_Hide',
@@ -492,6 +498,22 @@ void main() {
       findsNothing,
     );
     expect(find.text('Technical details'), findsNothing);
+    // The pane sits next to the chat and under the sidebar: no Chat button
+    // and no rows for the app's own pages.
+    for (final String key in <String>[
+      'settings_Chat',
+      'settings_Control rooms',
+      'settings_Account & app settings',
+    ]) {
+      expect(
+        find.descendant(
+          of: rightPane,
+          matching: find.byKey(ValueKey<String>(key)),
+        ),
+        findsNothing,
+        reason: key,
+      );
+    }
 
     final int visible = roster.visibleAgents.length;
     final Finder hide = find.descendant(

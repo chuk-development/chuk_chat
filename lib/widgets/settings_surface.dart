@@ -240,7 +240,7 @@ Future<void> openSettingsSurface(BuildContext context, WidgetBuilder builder) {
   if (inside != null) {
     return inside.push<void>(MaterialPageRoute<void>(builder: builder));
   }
-  if (MobileLayout.isPhoneWidth(MediaQuery.sizeOf(context).width)) {
+  if (MobileLayout.isPhone(context)) {
     return Navigator.of(context)
         .push<void>(MaterialPageRoute<void>(builder: builder));
   }

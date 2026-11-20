@@ -7,6 +7,9 @@
 
 part of '../message_bubble.dart';
 
+/// The widest the sources popover gets on a wide screen.
+const double _kSourcesPopoverMaxWidth = 420;
+
 extension _MessageBubbleChrome on _MessageBubbleState {
   /// Bottom bar for AI messages: action buttons (left) + a sources pill
   /// (bottom-right). The pill gathers every page the whole turn brought in
@@ -158,16 +161,15 @@ extension _MessageBubbleChrome on _MessageBubbleState {
   /// image-generation result carries the image URL, for one), but a source is
   /// a page the model read, so the pill stays on `web_search` and `web_crawl`.
   /// Reuses the per-step extractor so the pill and the timeline chips agree.
+  ///
+  /// One row per page: [dedupeSources] also folds links that differ only in
+  /// `www.`, the scheme, a `#fragment` or a trailing slash.
   List<AgentActivitySource> _allSources(List<ToolCall> toolCalls) {
-    final sources = <AgentActivitySource>[];
-    final seen = <String>{};
-    for (final call in toolCalls) {
-      if (call.name != 'web_search' && call.name != 'web_crawl') continue;
-      for (final source in extractSourcesFor(call)) {
-        if (seen.add(source.url)) sources.add(source);
-      }
-    }
-    return sources;
+    return dedupeSources(<AgentActivitySource>[
+      for (final call in toolCalls)
+        if (call.name == 'web_search' || call.name == 'web_crawl')
+          ...extractSourcesFor(call),
+    ]);
   }
 
   /// The bottom-right pill: a strip of up to [maxIcons] favicons and a
@@ -179,8 +181,22 @@ extension _MessageBubbleChrome on _MessageBubbleState {
     final int iconCount = sources.length < maxIcons ? sources.length : maxIcons;
     final colorScheme = Theme.of(context).colorScheme;
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
+    return Builder(
+      builder: (BuildContext anchorContext) =>
+          _sourcesPill(anchorContext, sources, iconCount, colorScheme, bgColor),
+    );
+  }
+
+  Widget _sourcesPill(
+    BuildContext anchorContext,
+    List<AgentActivitySource> sources,
+    int iconCount,
+    ColorScheme colorScheme,
+    Color bgColor,
+  ) {
     return InkWell(
-      onTap: () => _showSourcesSheet(sources),
+      key: const ValueKey<String>('sources-pill'),
+      onTap: () => _showSourcesSheet(anchorContext, sources),
       borderRadius: BorderRadius.circular(100),
       child: Container(
         height: kPlatformMobile ? _kMobileBottomBarHeight : null,
@@ -233,12 +249,59 @@ extension _MessageBubbleChrome on _MessageBubbleState {
     );
   }
 
-  /// The expandable list behind the pill: a modal sheet of every source,
-  /// each opening its page in the browser on tap.
-  void _showSourcesSheet(List<AgentActivitySource> sources) {
+  /// The list behind the pill: every page once, each opening in the
+  /// browser on tap.
+  ///
+  /// Wide screens: a popover anchored to the pill. It opens above or below
+  /// the pill, where there is more room, and scrolls when the list is longer
+  /// than the room. It is no wider than [_kSourcesPopoverMaxWidth], so it
+  /// covers only the part of the chat beside the pill. Phones: the bottom
+  /// sheet, as for every other menu there.
+  void _showSourcesSheet(
+    BuildContext anchorContext,
+    List<AgentActivitySource> sources,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     final String label =
         '${sources.length} source${sources.length == 1 ? '' : 's'}';
+    List<Widget> rows({required bool popover}) => <Widget>[
+      for (final AgentActivitySource source in sources)
+        Builder(
+          builder: (BuildContext rowContext) {
+            final labels = sourceRowLabels(source);
+            return MenuActionRow(
+              key: ValueKey<String>('source-row-${source.url}'),
+              label: labels.title,
+              maxLines: 1,
+              subtitle: labels.subtitle,
+              leading: _buildFavicon(source.host, colorScheme, 20),
+              trailing: AppIcon(
+                Icons.open_in_new,
+                size: 18,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              onTap: () {
+                if (popover) Navigator.of(rowContext).pop();
+                _openSourceUrl(source);
+              },
+            );
+          },
+        ),
+    ];
+
+    if (MediaQuery.sizeOf(context).width >= kCompactModeBreakpoint) {
+      unawaited(
+        showAnchoredMenu<void>(
+          anchorContext,
+          items: rows(popover: true),
+          color: colorScheme.surfaceContainerHigh,
+          minWidth: 280,
+          maxWidth: _kSourcesPopoverMaxWidth,
+        ),
+      );
+      return;
+    }
+
     unawaited(
       showMenuSheet<void>(
         context,
@@ -260,23 +323,7 @@ extension _MessageBubbleChrome on _MessageBubbleState {
             ),
           ],
         ),
-        groups: <List<Widget>>[
-          <Widget>[
-            for (final AgentActivitySource source in sources)
-              MenuActionRow(
-                label: source.title,
-                maxLines: 2,
-                subtitle: source.host,
-                leading: _buildFavicon(source.host, colorScheme, 24),
-                trailing: AppIcon(
-                  Icons.open_in_new,
-                  size: 20,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-                onTap: () => _openSourceUrl(source),
-              ),
-          ],
-        ],
+        groups: <List<Widget>>[rows(popover: false)],
       ),
     );
   }

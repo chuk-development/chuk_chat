@@ -1,21 +1,71 @@
 /// The rooms the app knows about (§16.1/4c). A group room is several agents
 /// in one conversation; this is where the app holds the ones the user built.
 ///
-/// Like [LocalAgentRosterSource], the durable roster lives on the host — the
-/// host is what actually runs a room — so this in-memory source is deliberately
-/// not persisted. It exists so the create-room flow has somewhere to put a new
-/// room and the UI has something to list, until the host serves rooms of its
-/// own. It never invents a room. There is no member ceiling — a room takes as
+/// The host is the source of truth: it keeps every group and answers a
+/// `room_list_request` with all of them ([RoomSource.applyHostRooms] merges
+/// that in). The app keeps a small local copy too ([RoomStore], a JSON list in
+/// SharedPreferences), so the list shows at start before the host answers and
+/// a group made while the host was away survives a restart. It never invents a
+/// room. There is no member ceiling — a room takes as
 /// many agents as the roster holds — but the floor still holds: a room needs
 /// a name and at least two distinct members, and one that drops below two is
 /// deleted.
 library;
 
+import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/models/agents_room.dart';
+
+/// Where [LocalRoomSource] keeps its local copy of the groups.
+abstract class RoomStore {
+  /// The stored groups; empty when nothing is stored or it cannot be read.
+  Future<List<AgentsRoom>> load();
+
+  Future<void> save(List<AgentsRoom> rooms);
+}
+
+/// [RoomStore] on SharedPreferences: one small JSON list (names, members and
+/// settings only; a conversation is never stored here).
+class SharedPrefsRoomStore implements RoomStore {
+  const SharedPrefsRoomStore({this.key = 'agents.rooms_v1'});
+
+  final String key;
+
+  @override
+  Future<List<AgentsRoom>> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(key);
+      if (raw == null || raw.isEmpty) return const <AgentsRoom>[];
+      final Object? decoded = jsonDecode(raw);
+      if (decoded is! List) return const <AgentsRoom>[];
+      return <AgentsRoom>[
+        for (final Object? entry in decoded) ?AgentsRoom.fromJson(entry),
+      ];
+    } catch (_) {
+      // A broken copy is no copy: the host's list fills the gap.
+      return const <AgentsRoom>[];
+    }
+  }
+
+  @override
+  Future<void> save(List<AgentsRoom> rooms) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        key,
+        jsonEncode(<Object?>[for (final room in rooms) room.toJson()]),
+      );
+    } catch (_) {
+      // The local copy is a convenience; the host keeps the groups.
+    }
+  }
+}
 
 /// Read/write access to the app's rooms, as a [ChangeNotifier] the UI listens to.
 abstract class RoomSource extends ChangeNotifier {
@@ -25,6 +75,24 @@ abstract class RoomSource extends ChangeNotifier {
 
   /// Renames a room. A no-op for an unknown id or an empty/blank name.
   void renameRoom(String id, String name);
+
+  /// Changes a group's settings. A null argument keeps the current value; an
+  /// empty [leadAgentId] / [fallbackAgentId] clears that member. A no-op for
+  /// an unknown id; notifies on a real change. The host is told separately.
+  void updateRoomSettings(
+    String roomId, {
+    AgentsRoomResponder? responder,
+    String? leadAgentId,
+    String? fallbackAgentId,
+    String? bulletin,
+    String? workdir,
+  });
+
+  /// Merges the host's `room_list`: adds the groups this app lacks and takes
+  /// the host's name, members and settings for the ones it has (the host is
+  /// the source of truth). A local group the host does not list is kept: it is
+  /// pushed with the next `room_create` when it is opened.
+  void applyHostRooms(List<AgentsRoom> hostRooms);
 
   /// Sets the room's "agents may reply to each other" policy
   /// (`agent_to_agent`). A no-op for an unknown id; notifies on a real change.
@@ -54,16 +122,103 @@ abstract class RoomSource extends ChangeNotifier {
   void removeRoom(String id);
 }
 
-/// In-memory room source.
+/// The app's room source: in memory, with an optional local copy in [store].
 class LocalRoomSource extends RoomSource {
   LocalRoomSource({
     List<AgentsRoom> seed = const <AgentsRoom>[],
     Random? random,
+    RoomStore? store,
   }) : _rooms = List<AgentsRoom>.of(seed),
-       _random = random ?? Random();
+       _random = random ?? Random(),
+       _store = store {
+    if (store != null) ready = _restore(store);
+  }
 
   final List<AgentsRoom> _rooms;
   final Random _random;
+  final RoomStore? _store;
+  bool _disposed = false;
+
+  /// Completes once the local copy is read (at once without a store).
+  Future<void> ready = Future<void>.value();
+
+  Future<void> _restore(RoomStore store) async {
+    final stored = await store.load();
+    if (_disposed || stored.isEmpty) return;
+    var added = false;
+    for (final room in stored) {
+      // Something made or listed while the copy was read wins over it.
+      if (byId(room.id) != null) continue;
+      _rooms.add(room);
+      added = true;
+    }
+    if (added) notifyListeners();
+  }
+
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    super.notifyListeners();
+    final store = _store;
+    if (store != null) unawaited(store.save(List<AgentsRoom>.of(_rooms)));
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  @override
+  void updateRoomSettings(
+    String roomId, {
+    AgentsRoomResponder? responder,
+    String? leadAgentId,
+    String? fallbackAgentId,
+    String? bulletin,
+    String? workdir,
+  }) {
+    for (var i = 0; i < _rooms.length; i++) {
+      final room = _rooms[i];
+      if (room.id != roomId) continue;
+      final next = room.copyWith(
+        responder: responder,
+        leadAgentId: leadAgentId == null || leadAgentId.isEmpty
+            ? null
+            : leadAgentId,
+        clearLead: leadAgentId != null && leadAgentId.isEmpty,
+        fallbackAgentId: fallbackAgentId == null || fallbackAgentId.isEmpty
+            ? null
+            : fallbackAgentId,
+        clearFallback: fallbackAgentId != null && fallbackAgentId.isEmpty,
+        bulletin: bulletin,
+        workdir: workdir,
+      );
+      if (_sameRoom(next, room)) return;
+      _rooms[i] = next;
+      notifyListeners();
+      return;
+    }
+  }
+
+  @override
+  void applyHostRooms(List<AgentsRoom> hostRooms) {
+    var changed = false;
+    for (final host in hostRooms) {
+      final i = _rooms.indexWhere((r) => r.id == host.id);
+      if (i < 0) {
+        _rooms.add(host);
+        changed = true;
+      } else if (!_sameRoom(_rooms[i], host)) {
+        _rooms[i] = host;
+        changed = true;
+      }
+    }
+    if (changed) notifyListeners();
+  }
+
+  static bool _sameRoom(AgentsRoom a, AgentsRoom b) =>
+      jsonEncode(a.toJson()) == jsonEncode(b.toJson());
 
   @override
   List<AgentsRoom> get rooms => List<AgentsRoom>.unmodifiable(_rooms);
@@ -103,6 +258,13 @@ class LocalRoomSource extends RoomSource {
       name: name,
       members: List<AgentsRoomMember>.unmodifiable(members),
       agentToAgent: draft.agentToAgent,
+      responder: draft.responder,
+      leadAgentId: draft.leadAgentId,
+      fallbackAgentId: draft.fallbackAgentId,
+      bulletin: draft.bulletin.length > kRoomBulletinMaxChars
+          ? draft.bulletin.substring(0, kRoomBulletinMaxChars)
+          : draft.bulletin,
+      workdir: draft.workdir.trim(),
     );
     _rooms.add(room);
     notifyListeners();

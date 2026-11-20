@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/ui/expressive/bubble_shape.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
 import 'package:chuk_chat/widgets/chuk_table_classic.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
@@ -98,8 +99,14 @@ void main() {
         );
         expect(user.border, isNotNull);
         final BorderRadius radius = user.borderRadius! as BorderRadius;
-        expect(radius.topLeft, const Radius.circular(16));
-        expect(radius.bottomRight, const Radius.circular(5));
+        if (messenger) {
+          // An Agents thread joins its runs like a messenger (CHAT-152); a
+          // lone bubble is round on every corner.
+          expect(radius, bubbleRadius(true, BubblePosition.single));
+        } else {
+          expect(radius.topLeft, const Radius.circular(16));
+          expect(radius.bottomRight, const Radius.circular(5));
+        }
         // chuk_chat draws the answer on the page: no filled bubble behind it.
         expect(
           _decorations(tester).where(

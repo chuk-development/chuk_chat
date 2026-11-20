@@ -17,6 +17,7 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart'
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/platform_specific/sidebar_desktop.dart';
 import 'package:chuk_chat/pages/workspace_detail_page.dart';
 import 'package:chuk_chat/pages/workspaces_page.dart';
@@ -614,7 +615,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
 
   @override
   Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
+    // sizeOf, not of(): `of` also subscribes to the keyboard insets, so on a
+    // tablet the whole window rebuilt on every frame of the keyboard.
+    final double screenWidth = MediaQuery.sizeOf(context).width;
     final Color iconFg = Theme.of(context).resolvedIconColor;
     final l = AppLocalizations.of(context)!;
 
@@ -737,7 +740,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
       }
     }
 
-    return Scaffold(
+    final Widget window = Scaffold(
       body: Stack(
         children: [
           // Always keep chatArea in the tree to avoid GlobalKey
@@ -959,6 +962,30 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop>
             ),
         ],
       ),
+    );
+    return _tabletBack(showPanel: showPanel, child: window);
+  }
+
+  /// A tablet (the wide layout on a touch device) has a system back:
+  /// it closes the artifact panel first, then the open sidebar, and only
+  /// then leaves the app. Behind the other half of the Agents build
+  /// (`KeptTabs` turns its tickers off) it does nothing. A desktop OS keeps
+  /// its behaviour: [child] as it is.
+  Widget _tabletBack({required bool showPanel, required Widget child}) {
+    if (!MobileLayout.isTouchPlatform) return child;
+    final bool inFront = TickerMode.valuesOf(context).enabled;
+    final bool open = showPanel || _isSidebarExpanded;
+    return PopScope(
+      canPop: !inFront || !open,
+      onPopInvokedWithResult: (bool didPop, Object? _) {
+        if (didPop || !inFront) return;
+        if (showPanel) {
+          _closeArtifactPanel();
+        } else if (_isSidebarExpanded) {
+          _toggleSidebar();
+        }
+      },
+      child: child,
     );
   }
 }

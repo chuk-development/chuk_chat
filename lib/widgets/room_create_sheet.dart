@@ -1,10 +1,11 @@
-/// Create a group room (§16.1): name it, pick the agents, choose whether
-/// they may answer each other.
+/// Create a group (§16.1): name it, pick the agents, choose who answers
+/// (everyone, only the @named, auto, or a lead), whether they may answer each
+/// other, and optional group instructions.
 ///
-/// There is no member ceiling. A room takes as many agents as the roster
-/// holds, so the picker is built for a long list: the name field, the policy
-/// switch and the actions stay put while only the member list scrolls, and a
-/// search field appears once the roster is longer than the eye can scan.
+/// There is no member ceiling. A group takes as many agents as the roster
+/// holds, so the picker is built for a long list: the title and the actions
+/// stay put while the form scrolls, and a search field appears once the
+/// roster is longer than the eye can scan.
 ///
 /// A room of one is not a room, so Create still needs a name and at least two
 /// members.
@@ -16,6 +17,7 @@ import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/room_settings_controls.dart';
 
 /// Above this many candidates the list stops being scannable, so the sheet
 /// offers a search field. Below it the field would be one more empty box.
@@ -42,14 +44,18 @@ class RoomCreateSheet extends StatefulWidget {
 class _RoomCreateSheetState extends State<RoomCreateSheet> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _bulletinController = TextEditingController();
   final Set<String> _selected = <String>{};
   String? _nameError;
   bool _agentToAgent = true;
+  AgentsRoomResponder _responder = AgentsRoomResponder.everyone;
+  String? _leadId;
 
   @override
   void dispose() {
     _nameController.dispose();
     _searchController.dispose();
+    _bulletinController.dispose();
     super.dispose();
   }
 
@@ -72,6 +78,22 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
     ];
   }
 
+  /// The chosen members, in roster order — built from the full roster, not
+  /// from the filtered view, so a search left up cannot drop a chosen member.
+  List<AgentsRoomMember> get _members => <AgentsRoomMember>[
+    for (final agent in widget.agents)
+      if (_selected.contains(agent.id))
+        AgentsRoomMember(agentId: agent.id, handle: agent.name),
+  ];
+
+  /// The lead for lead mode: the one picked, else the first chosen member.
+  String? get _effectiveLead {
+    final members = _members;
+    if (members.isEmpty) return null;
+    if (members.any((m) => m.agentId == _leadId)) return _leadId;
+    return members.first.agentId;
+  }
+
   void _toggle(String agentId, bool? on) {
     setState(() {
       if (on == true) {
@@ -83,21 +105,23 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
   }
 
   void _submit() {
+    final l = roomL10n(context);
     final name = _nameController.text.trim();
-    setState(() => _nameError = name.isEmpty ? 'Name the room.' : null);
+    setState(() => _nameError = name.isEmpty ? l.agentsGroupNameMissing : null);
     if (name.isEmpty || _selected.length < 2) return;
-    // Built from the full roster in roster order, not from the filtered view,
-    // so a search left up at Create cannot drop a chosen member.
-    final members = <AgentsRoomMember>[
-      for (final agent in widget.agents)
-        if (_selected.contains(agent.id))
-          AgentsRoomMember(agentId: agent.id, handle: agent.name),
-    ];
+    final bulletin = _bulletinController.text.trim();
     widget.onSubmit(
       AgentsRoomDraft(
         name: name,
-        members: members,
+        members: _members,
         agentToAgent: _agentToAgent,
+        responder: _responder,
+        leadAgentId: _responder == AgentsRoomResponder.lead
+            ? _effectiveLead
+            : null,
+        bulletin: bulletin.length > kRoomBulletinMaxChars
+            ? bulletin.substring(0, kRoomBulletinMaxChars)
+            : bulletin,
       ),
     );
   }
@@ -105,7 +129,9 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l = roomL10n(context);
     final visible = _visible;
+    final members = _members;
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -113,13 +139,14 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('New room', style: theme.textTheme.titleMedium),
+            Text(l.agentsGroupNew, style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
             TextField(
+              key: const ValueKey<String>('room-create-name'),
               controller: _nameController,
               decoration: InputDecoration(
-                labelText: 'Room name',
-                hintText: 'launch planning',
+                labelText: l.agentsGroupName,
+                hintText: l.agentsGroupNameHint,
                 border: const OutlineInputBorder(),
                 isDense: true,
                 errorText: _nameError,
@@ -130,10 +157,13 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
             Row(
               children: [
                 Expanded(
-                  child: Text('Members', style: theme.textTheme.labelLarge),
+                  child: Text(
+                    l.agentsGroupMembers,
+                    style: theme.textTheme.labelLarge,
+                  ),
                 ),
                 Text(
-                  '${_selected.length} selected',
+                  l.agentsGroupSelected('${_selected.length}'),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: _selected.isEmpty
                         ? theme.hintColor
@@ -142,71 +172,115 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
                 ),
               ],
             ),
-            if (_searchable) ...[
-              const SizedBox(height: 8),
-              TextField(
-                controller: _searchController,
-                decoration: const InputDecoration(
-                  hintText: 'Search agents',
-                  border: OutlineInputBorder(),
-                  isDense: true,
-                ),
-                onChanged: (_) => setState(() {}),
-              ),
-            ],
-            if (widget.agents.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  'No agents to add yet.',
-                  style: TextStyle(color: theme.hintColor),
-                ),
-              )
-            else if (visible.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                child: Text(
-                  'No agent matches that.',
-                  style: TextStyle(color: theme.hintColor),
-                ),
-              )
-            else
-              // Only the member list scrolls: the name field, the policy switch
-              // and the actions stay where the finger left them however long
-              // the roster is.
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final agent in visible) _memberTile(context, agent),
+            // The rest of the form scrolls; the title, the name, the count
+            // and the actions stay where the finger left them however long
+            // the roster is.
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  if (_searchable) ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: l.agentsGroupSearchAgents,
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onChanged: (_) => setState(() {}),
+                    ),
                   ],
-                ),
+                  if (widget.agents.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        l.agentsGroupNoAgents,
+                        style: TextStyle(color: theme.hintColor),
+                      ),
+                    )
+                  else if (visible.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        l.agentsGroupNoMatch,
+                        style: TextStyle(color: theme.hintColor),
+                      ),
+                    )
+                  else
+                    for (final agent in visible) _memberTile(context, agent),
+                  const SizedBox(height: 16),
+                  Text(
+                    l.agentsGroupWhoAnswers,
+                    style: theme.textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  RoomResponderChoice(
+                    value: _responder,
+                    onChanged: (r) => setState(() => _responder = r),
+                  ),
+                  if (_responder == AgentsRoomResponder.lead &&
+                      members.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    ExpressiveGroup(
+                      children: [
+                        RoomMemberPickerRow(
+                          key: const ValueKey<String>('room-create-lead'),
+                          title: l.agentsGroupLeadMember,
+                          members: members,
+                          agents: widget.agents,
+                          value: _effectiveLead,
+                          allowNone: false,
+                          onChanged: (id) => setState(() => _leadId = id),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  ExpressiveGroup(
+                    children: [
+                      ExpressiveSwitchRow(
+                        key: const ValueKey<String>('room-agent-to-agent'),
+                        title: l.agentsGroupAgentToAgent,
+                        subtitle: l.agentsGroupAgentToAgentHint,
+                        value: _agentToAgent,
+                        onChanged: (on) => setState(() => _agentToAgent = on),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey<String>('room-create-instructions'),
+                    controller: _bulletinController,
+                    minLines: 2,
+                    maxLines: 6,
+                    maxLength: kRoomBulletinMaxChars,
+                    buildCounter: (
+                      BuildContext context, {
+                      required int currentLength,
+                      required bool isFocused,
+                      required int? maxLength,
+                    }) => null,
+                    decoration: InputDecoration(
+                      labelText: l.agentsGroupInstructions,
+                      hintText: l.agentsGroupInstructionsHint,
+                      border: const OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ],
               ),
-            const SizedBox(height: 12),
-            ExpressiveGroup(
-              children: [
-                ExpressiveSwitchRow(
-                  key: const ValueKey<String>('room-agent-to-agent'),
-                  title: 'Agents can reply to each other',
-                  subtitle: 'With this off, they only answer you.',
-                  value: _agentToAgent,
-                  onChanged: (on) => setState(() => _agentToAgent = on),
-                ),
-              ],
             ),
             const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 if (widget.onCancel != null)
-                  TextButton(
-                    onPressed: widget.onCancel,
-                    child: const Text('Cancel'),
-                  ),
+                  TextButton(onPressed: widget.onCancel, child: Text(l.cancel)),
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _canCreate ? _submit : null,
-                  child: const Text('Create'),
+                  child: Text(l.agentsGroupCreate),
                 ),
               ],
             ),
@@ -218,15 +292,16 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
 
   Widget _memberTile(BuildContext context, AgentsAgent agent) {
     final selected = _selected.contains(agent.id);
+    final role = agent.role;
     return CheckboxListTile(
       value: selected,
       onChanged: (on) => _toggle(agent.id, on),
       controlAffinity: ListTileControlAffinity.leading,
       secondary: ExpressiveFace(id: agent.id, label: agent.name, size: 32),
       title: Text(agent.name, overflow: TextOverflow.ellipsis),
-      subtitle: agent.role == null
+      subtitle: role == null
           ? null
-          : Text(agent.role!, overflow: TextOverflow.ellipsis),
+          : Text(role, overflow: TextOverflow.ellipsis),
       dense: true,
     );
   }

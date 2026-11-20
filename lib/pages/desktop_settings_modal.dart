@@ -28,6 +28,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/ui/components/state_surface.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:chuk_chat/widgets/settings_surface.dart';
@@ -661,51 +662,45 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
       child: Semantics(
         button: !searching,
         expanded: open,
-        child: Material(
-          color: Colors.transparent,
+        child: StateSurface(
+          key: const ValueKey<String>('settings_advanced'),
           borderRadius: BorderRadius.circular(kRadiusRow),
-          child: InkWell(
-            key: const ValueKey<String>('settings_advanced'),
-            borderRadius: BorderRadius.circular(kRadiusRow),
-            onTap: searching
-                ? null
-                : () => setState(() => _advancedOpen = !open),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                children: [
-                  AppIcon(
-                    Icons.more_horiz_rounded,
+          onTap: searching
+              ? null
+              : () => setState(() => _advancedOpen = !open),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              AppIcon(
+                Icons.more_horiz_rounded,
+                size: 20,
+                color: m3.onSurfaceVariant,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  l.settingsAdvanced,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (!searching)
+                AnimatedRotation(
+                  turns: open ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  child: AppIcon(
+                    Icons.expand_more_rounded,
                     size: 20,
                     color: m3.onSurfaceVariant,
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      l.settingsAdvanced,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: cs.onSurface,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                  if (!searching)
-                    AnimatedRotation(
-                      turns: open ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOutCubic,
-                      child: AppIcon(
-                        Icons.expand_more_rounded,
-                        size: 20,
-                        color: m3.onSurfaceVariant,
-                      ),
-                    ),
-                ],
-              ),
-            ),
+                ),
+            ],
           ),
         ),
       ),
@@ -723,39 +718,35 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
     final String? tourSlot = _tourSlotFor(dest.id);
     final Widget row = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-      child: Material(
-        color: selected ? cs.secondaryContainer : Colors.transparent,
+      child: StateSurface(
         borderRadius: BorderRadius.circular(kRadiusRow),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(kRadiusRow),
-          onTap: () => _onSelect(dest),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                AppIcon(dest.icon, size: 20, color: iconColor),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Text(
-                    dest.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: fg,
-                      fontSize: 14,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                    ),
-                  ),
+        selected: selected,
+        selectedColor: cs.secondaryContainer,
+        onTap: () => _onSelect(dest),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            AppIcon(dest.icon, size: 20, color: iconColor),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                dest.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: fg,
+                  fontSize: 14,
+                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 ),
-                if (dest.onAction != null)
-                  AppIcon(
-                    Icons.chevron_right,
-                    size: 18,
-                    color: m3.onSurfaceVariant.withValues(alpha: 0.6),
-                  ),
-              ],
+              ),
             ),
-          ),
+            if (dest.onAction != null)
+              AppIcon(
+                Icons.chevron_right,
+                size: 18,
+                color: m3.onSurfaceVariant.withValues(alpha: 0.6),
+              ),
+          ],
         ),
       ),
     );
@@ -793,29 +784,23 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
     // no avatar/email chip cluttering the rail foot.
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 6, 8, 8),
-      child: Material(
-        color: Colors.transparent,
+      child: StateSurface(
         borderRadius: BorderRadius.circular(kRadiusRow),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(kRadiusRow),
-          onTap: _logout,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                AppIcon(Icons.logout, size: 18, color: m3.onSurfaceVariant),
-                const SizedBox(width: 14),
-                Text(
-                  l.logout,
-                  style: TextStyle(
-                    color: cs.onSurface,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
+        onTap: _logout,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            AppIcon(Icons.logout, size: 18, color: m3.onSurfaceVariant),
+            const SizedBox(width: 14),
+            Text(
+              l.logout,
+              style: TextStyle(
+                color: cs.onSurface,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

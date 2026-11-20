@@ -32,7 +32,12 @@ mixin AgentsShellHost on State<MessengerShell> {
       widget.pairingStore ?? AgentsPairingStore();
   late final AgentRosterSource _roster =
       widget.rosterSource ?? LocalAgentRosterSource();
-  late final RoomSource _rooms = widget.roomSource ?? LocalRoomSource();
+  late final RoomSource _rooms =
+      widget.roomSource ?? LocalRoomSource(store: const SharedPrefsRoomStore());
+
+  /// Groups the host listed (`room_list`). Re-syncing one of them on open
+  /// leaves its settings alone: the host's copy is the newer one.
+  final Set<String> _hostKnownRooms = <String>{};
 
   /// The live transport, handed up by the thread view so a room can stream over
   /// the same socket. Null until the thread view has built it; it changes on a
@@ -303,6 +308,10 @@ mixin AgentsShellHost on State<MessengerShell> {
       if (agentId != null) _roster.markKnownToHost(agentId);
       return;
     }
+    if (event is AgentsRelayRoomList) {
+      _applyHostRooms(event);
+      return;
+    }
     if (event is! AgentsRelayAgentList) return;
     // Agents deleted on the host (another device, or the host's own
     // cleanup): drop them here too, with the same cascade as a delete in
@@ -321,6 +330,17 @@ mixin AgentsShellHost on State<MessengerShell> {
     // The host answered, so it is linked and authenticated: a good time to
     // send the faces it has not got yet.
     _scheduleAvatarSync();
+  }
+
+  /// The host's groups (`room_list`): merged into the local list, which keeps
+  /// a group the host does not have yet (it is pushed when opened).
+  void _applyHostRooms(AgentsRelayRoomList event) {
+    final List<AgentsRoom> listed = <AgentsRoom>[
+      for (final AgentsRelayRoomListEntry entry in event.rooms)
+        ?AgentsRoom.fromJson(entry.payload),
+    ];
+    _hostKnownRooms.addAll(listed.map((AgentsRoom r) => r.id));
+    _rooms.applyHostRooms(listed);
   }
 
   /// Ids re-sent to the host this session, so a host that keeps dropping an
@@ -1178,6 +1198,7 @@ mixin AgentsShellHost on State<MessengerShell> {
                 <String, String>{'agent_id': m.agentId, 'handle': m.handle},
             ],
             agentToAgent: room.agentToAgent,
+            settings: room.settingsWire(),
           );
           Navigator.of(sheetContext).pop();
         },
@@ -1195,11 +1216,77 @@ mixin AgentsShellHost on State<MessengerShell> {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => FloatingPageScaffold(
-          appBar: FloatingAppBar(title: Text(room.name)),
+          appBar: FloatingAppBar(
+            title: Text(room.name),
+            actions: <Widget>[
+              FloatingHeaderButton(
+                icon: Icons.info_outline_rounded,
+                tooltip: _l10n.agentsGroupDetails,
+                onPressed: () => unawaited(_openRoomDetailsPage(room.id)),
+              ),
+            ],
+          ),
           body: _buildRoomBody(room),
         ),
       ),
     );
+  }
+
+  /// The phone's group details: the same panel as the desktop's right pane,
+  /// as its own page.
+  Future<void> _openRoomDetailsPage(String roomId) async {
+    if (_rooms.byId(roomId) == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) => FloatingPageScaffold(
+          appBar: FloatingAppBar(title: Text(_l10n.agentsGroupDetails)),
+          body: _buildRoomDetails(roomId),
+        ),
+      ),
+    );
+  }
+
+  /// A group's details ([RoomDetailsPanel]), for the desktop pane and the
+  /// phone page alike. Every change goes local first, then to the host.
+  Widget _buildRoomDetails(String roomId) => RoomDetailsPanel(
+    key: ValueKey<String>('room-details-$roomId'),
+    source: _rooms,
+    roomId: roomId,
+    agents: _roster.visibleAgents,
+    onSettingsChanged: (String id, Map<String, Object?> settings) {
+      if (settings.isEmpty) return;
+      unawaited(_controller.value?.setRoomSettings(id, settings));
+    },
+    onAddMember: _addRoomMember,
+    onRemoveMember: (String id, String agentId) {
+      _removeRoomMember(id, agentId);
+    },
+    onAgentToAgentChanged: _setRoomAgentToAgent,
+  );
+
+  void _addRoomMember(String roomId, AgentsRoomMember member) {
+    _rooms.addMemberToRoom(roomId, member);
+    unawaited(
+      _controller.value?.addRoomMember(roomId, member.agentId, member.handle),
+    );
+  }
+
+  /// Returns true when the group fell below two members and was deleted.
+  bool _removeRoomMember(String roomId, String agentId) {
+    final roomDeleted = _rooms.removeMemberFromRoom(roomId, agentId);
+    // Keep the host consistent: a group that fell below two members was
+    // deleted locally, so the host must delete it, not just drop a member.
+    if (roomDeleted) {
+      _hostDeleteRoom(roomId);
+    } else {
+      unawaited(_controller.value?.removeRoomMember(roomId, agentId));
+    }
+    return roomDeleted;
+  }
+
+  void _setRoomAgentToAgent(String roomId, bool enabled) {
+    _rooms.setAgentToAgent(roomId, enabled);
+    unawaited(_controller.value?.setRoomAgentToAgent(roomId, enabled));
   }
 
   /// A room's conversation, for the phone route and the desktop centre pane.
@@ -1216,6 +1303,7 @@ mixin AgentsShellHost on State<MessengerShell> {
         emptyHint: _l10n.agentsRoomConnectHostHint,
         turns: const <AgentsRoomTurn>[],
         members: room.members,
+        agents: _roster.agents,
       );
     }
     return RoomThreadPage(
@@ -1235,6 +1323,7 @@ mixin AgentsShellHost on State<MessengerShell> {
       // Read the live controller each time, not the one captured at open, so
       // a send after a reconnect goes to the new socket.
       onSend: (message) => _controller.value?.sendRoomTask(room.id, message),
+      onStop: () => unawaited(_controller.value?.stopRoom(room.id)),
       onReady: () {
         final c = _controller.value;
         if (c != null) _onRoomOpened(c, room);
@@ -1247,11 +1336,23 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// while the host was offline, so the host has it before any task or history
   /// request lands. Then ask for its stored history.
   void _onRoomOpened(AgentsRelayController controller, AgentsRoom room) {
-    controller.createRoom(room.id, room.name, <Map<String, String>>[
-      for (final m in room.members)
-        <String, String>{'agent_id': m.agentId, 'handle': m.handle},
-    ], agentToAgent: room.agentToAgent);
-    controller.requestRoomHistory(room.id);
+    // The newest local copy, not the one captured when the page opened.
+    final AgentsRoom current = _rooms.byId(room.id) ?? room;
+    controller.createRoom(
+      current.id,
+      current.name,
+      <Map<String, String>>[
+        for (final m in current.members)
+          <String, String>{'agent_id': m.agentId, 'handle': m.handle},
+      ],
+      agentToAgent: current.agentToAgent,
+      // A group the host listed keeps the host's settings; one it has not
+      // seen yet (made while it was away) brings its own.
+      settings: _hostKnownRooms.contains(current.id)
+          ? const <String, Object?>{}
+          : current.settingsWire(),
+    );
+    controller.requestRoomHistory(current.id);
   }
 
   Future<void> _manageRoomMembers(String roomId) async {
@@ -1310,6 +1411,9 @@ mixin AgentsShellHost on State<MessengerShell> {
 
   void _onController(AgentsRelayController controller) {
     _controller.value = controller;
+    // A transport arrived: ask for the host's groups (the answer is merged
+    // in [_applyHostRooms]).
+    unawaited(controller.requestRoomList());
     // A transport arrived: flush any room deletes made while it was down.
     if (_pendingHostDeletes.isNotEmpty) {
       final pending = List<String>.of(_pendingHostDeletes);

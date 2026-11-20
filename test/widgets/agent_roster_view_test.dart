@@ -106,7 +106,7 @@ void main() {
       findsOneWidget,
     );
     await tester.tap(find.text('New agent'));
-    await tester.tap(find.text('Control Rooms'));
+    await tester.tap(find.text('Groups'));
     await tester.pumpAndSettle();
     expect(find.text("Agent's browser"), findsNothing);
     expect((added, rooms), (1, 1));
@@ -124,7 +124,7 @@ void main() {
     await pumpRoster(tester, LocalAgentRosterSource()..addAgent(name: 'jade'));
 
     expect(find.text('New agent'), findsNothing);
-    expect(find.text('Control Rooms'), findsNothing);
+    expect(find.text('Groups'), findsNothing);
     expect(find.text("Agent's browser"), findsNothing);
     expect(find.byTooltip('Settings'), findsNothing);
     expect(find.text('Account'), findsNothing);
@@ -165,14 +165,14 @@ void main() {
       // No second creation entry beside it, and no pencil for "new agent".
       expect(findIcon(Icons.edit_square), findsNothing);
       expect(find.text('New agent'), findsNothing);
-      expect(find.text('New room'), findsNothing);
-      if (folded) expect(find.byTooltip('New agent or room'), findsOneWidget);
+      expect(find.text('New group'), findsNothing);
+      if (folded) expect(find.byTooltip('New agent or group'), findsOneWidget);
 
-      for (final String pick in <String>['New agent', 'New room']) {
+      for (final String pick in <String>['New agent', 'New group']) {
         await tester.tap(plus);
         await tester.pumpAndSettle();
         expect(find.text('New agent'), findsOneWidget);
-        expect(find.text('New room'), findsOneWidget);
+        expect(find.text('New group'), findsOneWidget);
         expect(find.text('Ctrl+N'), findsOneWidget);
         expect(find.text('Ctrl+Shift+N'), findsOneWidget);
         await tester.tap(find.text(pick));

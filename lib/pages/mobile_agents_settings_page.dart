@@ -233,28 +233,33 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
         // the app, and the destructive actions last.
         final Widget list = SettingsListView(
           key: const ValueKey('agent-settings'),
-          headerInset: widget.framed,
+          // The pane puts this list under its own floating header too.
+          headerInset: true,
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
             _contact(agent, profiles),
-            const SizedBox(height: 16),
-            Center(
-              child: ExpressiveButton(
-                key: const ValueKey('settings_Chat'),
-                icon: Icons.chat_rounded,
-                label: l.agentsCwActionChat,
-                tonal: true,
-                onTap: () {
-                  _close();
-                  widget.onChat?.call();
-                },
+            // A page opened from the roster leads to the chat. The desktop
+            // pane sits next to the open chat, so it has no Chat button.
+            if (widget.framed) ...[
+              const SizedBox(height: 16),
+              Center(
+                child: ExpressiveButton(
+                  key: const ValueKey('settings_Chat'),
+                  icon: Icons.chat_rounded,
+                  label: l.agentsCwActionChat,
+                  tonal: true,
+                  onTap: () {
+                    _close();
+                    widget.onChat?.call();
+                  },
+                ),
               ),
-            ),
-            // The top: what a normal user changes about an agent, in one
-            // group (bead chuk_chat-pjom, docs/SETTINGS_ORDER.md): its
-            // profile (name, face), its model, what it may do and what it
-            // made. The rest sits in one closed "Advanced" fold, in the
-            // order it had before.
+            ],
+            // The top: only what a normal user needs (owner, CHAT-152):
+            // who the agent is, what it may do on the computer, the apps it
+            // may use, its routines, its files and its screen. The model
+            // runs on Auto by default, so it is in "Advanced" with the
+            // other rare settings.
             const SizedBox(height: 16),
             ExpressiveGroup(
               children: [
@@ -265,22 +270,6 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
                   widget.onEdit,
                   subtitle: l.agentsCwProfileSubtitle,
                 ),
-                // One row, one page: the composer of its chat writes the
-                // same choice.
-                if (widget.chatId != null)
-                  AgentModelTile(
-                    key: const ValueKey('settings_Model'),
-                    chatId: widget.chatId!,
-                    agentName: agent.name,
-                  )
-                else
-                  _row(
-                    'Model',
-                    l.agentsCwModel,
-                    Icons.auto_awesome_outlined,
-                    () => _openModel(agent),
-                    subtitle: l.agentsCwModelSubtitle,
-                  ),
                 _row(
                   'Permissions',
                   l.agentsCwPermissions,
@@ -294,22 +283,20 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
                   ),
                   subtitle: l.agentsCwPermissionsSubtitle,
                 ),
-                // The main agent: first in the roster, the one Home opens
-                // (roster_pins.dart). Offered while this one is not it and
-                // there is another to be it.
-                if (widget.source.visibleAgents.length > 1 &&
-                    resolveMainAgent(
-                          widget.source.visibleAgents,
-                          RosterPins.instance.mainAgentId,
-                        )?.id !=
-                        agent.id)
-                  _row(
-                    'Make main agent',
-                    l.agentsMakeMainAgent,
-                    Icons.star_outline_rounded,
-                    () => RosterPins.instance.setMainAgent(agent.id),
-                    subtitle: l.agentsMakeMainAgentSubtitle,
-                  ),
+                _row(
+                  'Connected apps',
+                  l.agentsCwConnectedApps,
+                  Icons.link_rounded,
+                  widget.onConnectors,
+                  subtitle: l.agentsCwConnectedAppsSubtitle,
+                ),
+                _row(
+                  'Schedules & automations',
+                  l.agentsCwSchedules,
+                  Icons.schedule_outlined,
+                  widget.onAutomations,
+                  subtitle: l.agentsCwSchedulesSubtitle,
+                ),
                 if (widget.onDocuments != null)
                   _row(
                     'Documents & pages',
@@ -333,6 +320,27 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
               title: l.settingsAdvanced,
               toggleKey: const ValueKey<String>('settings_Advanced'),
               children: [
+                // The model: Auto unless the user picks one. One row, one
+                // page; the composer of its chat writes the same choice.
+                ExpressiveSectionHeader(l.agentsCwModel),
+                ExpressiveGroup(
+                  children: [
+                    if (widget.chatId != null)
+                      AgentModelTile(
+                        key: const ValueKey('settings_Model'),
+                        chatId: widget.chatId!,
+                        agentName: agent.name,
+                      )
+                    else
+                      _row(
+                        'Model',
+                        l.agentsCwModel,
+                        Icons.auto_awesome_outlined,
+                        () => _openModel(agent),
+                        subtitle: l.agentsCwModelSubtitle,
+                      ),
+                  ],
+                ),
                 ExpressiveSectionHeader(l.agentsCwSectionAbilities),
                 ExpressiveGroup(
                   children: [
@@ -342,12 +350,6 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
                       Icons.extension_outlined,
                       widget.onSkills,
                       subtitle: l.agentsCwSkillsSubtitle,
-                    ),
-                    _row(
-                      'Connected apps',
-                      l.agentsCwConnectedApps,
-                      Icons.link_rounded,
-                      widget.onConnectors,
                     ),
                     _row(
                       'API keys',
@@ -362,13 +364,22 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
                       widget.onLogins ?? _openLogins,
                       subtitle: l.loginVaultRowSubtitle,
                     ),
-                    _row(
-                      'Schedules & automations',
-                      l.agentsCwSchedules,
-                      Icons.schedule_outlined,
-                      widget.onAutomations,
-                      subtitle: l.agentsCwSchedulesSubtitle,
-                    ),
+                    // The main agent: first in the roster, the one Home
+                    // opens (roster_pins.dart). Offered while this one is
+                    // not it and there is another to be it.
+                    if (widget.source.visibleAgents.length > 1 &&
+                        resolveMainAgent(
+                              widget.source.visibleAgents,
+                              RosterPins.instance.mainAgentId,
+                            )?.id !=
+                            agent.id)
+                      _row(
+                        'Make main agent',
+                        l.agentsMakeMainAgent,
+                        Icons.star_outline_rounded,
+                        () => RosterPins.instance.setMainAgent(agent.id),
+                        subtitle: l.agentsMakeMainAgentSubtitle,
+                      ),
                   ],
                 ),
                 // Its channels: mail. There is no messenger channel.
@@ -384,7 +395,7 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
                     ),
                   ],
                 ),
-                // Its computer: the host, what ran there, the screen, files.
+                // Its computer: the host, what ran there, the file pins.
                 ExpressiveSectionHeader(l.agentsCwSectionMachine),
                 ExpressiveGroup(
                   children: [
@@ -444,31 +455,36 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
                       ),
                   ],
                 ),
-                ExpressiveSectionHeader(l.agentsCwApp),
-                ExpressiveGroup(
-                  children: [
-                    _row(
-                      'Control rooms',
-                      l.agentsCwControlRooms,
-                      Icons.group_outlined,
-                      widget.onRooms,
-                    ),
-                    if (widget.onMedia case final VoidCallback onMedia)
+                // The app's own pages. A phone reaches them only here; a
+                // desktop window has them in the sidebar, so the pane
+                // does not repeat them.
+                if (widget.framed) ...[
+                  ExpressiveSectionHeader(l.agentsCwApp),
+                  ExpressiveGroup(
+                    children: [
                       _row(
-                        'Media',
-                        l.media,
-                        Icons.photo_library_outlined,
-                        onMedia,
+                        'Control rooms',
+                        l.agentsCwControlRooms,
+                        Icons.group_outlined,
+                        widget.onRooms,
                       ),
-                    _row(
-                      'Account & app settings',
-                      l.agentsCwAccountSettings,
-                      Icons.settings_outlined,
-                      widget.onSettings,
-                      subtitle: l.agentsCwAccountSettingsSubtitle,
-                    ),
-                  ],
-                ),
+                      if (widget.onMedia case final VoidCallback onMedia)
+                        _row(
+                          'Media',
+                          l.media,
+                          Icons.photo_library_outlined,
+                          onMedia,
+                        ),
+                      _row(
+                        'Account & app settings',
+                        l.agentsCwAccountSettings,
+                        Icons.settings_outlined,
+                        widget.onSettings,
+                        subtitle: l.agentsCwAccountSettingsSubtitle,
+                      ),
+                    ],
+                  ),
+                ],
                 // The destructive actions, last.
                 ExpressiveSectionHeader(
                   l.agentsCwSectionDanger,

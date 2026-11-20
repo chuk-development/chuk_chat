@@ -224,7 +224,48 @@ void main() {
       }
       expect(find.byTooltip('Resend message'), findsNothing);
       expect(find.byTooltip('Retry response'), findsNothing);
-    });
+      // A desktop OS: a tablet has no hover (see the next test).
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+
+    testWidgets('a tablet has no hover: "more" shows at all times, finger '
+        'sized, and opens the menu', (tester) async {
+      debugAgentsChatCoreOverride = true;
+      addTearDown(() => debugAgentsChatCoreOverride = null);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: kTestLocalizationsDelegates,
+          home: Scaffold(
+            body: MessageBubble(
+              message: 'Hello there',
+              isUser: false,
+              chatId: 'agent:chief:main',
+              maxWidth: 360,
+              onReply: () {},
+              onReaction: (_) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      const Key more = ValueKey<String>('bubble-hover-more');
+      expect(
+        find.byKey(const ValueKey<String>('bubble-hover-react')),
+        findsNothing,
+      );
+      expect(
+        find.byKey(const ValueKey<String>('bubble-hover-reply')),
+        findsNothing,
+      );
+      expect(find.byKey(more).hitTestable(), findsOneWidget);
+      expect(
+        tester.getSize(find.byKey(more)).shortestSide,
+        greaterThanOrEqualTo(48),
+      );
+      await tester.tap(find.byKey(more));
+      await tester.pumpAndSettle();
+      // The menu shows the message again as its preview.
+      expect(find.byType(MessageBubble), findsNWidgets(2));
+    }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
     testWidgets('a failed Agents turn is a quiet line, not a bubble', (
       tester,

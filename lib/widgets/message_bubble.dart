@@ -31,6 +31,8 @@ import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
+import 'package:chuk_chat/widgets/agent_activity/source_list.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/agent_activity/agents_live_status.dart';
 import 'package:chuk_chat/widgets/agent_activity/tool_activity_category.dart';
 import 'package:chuk_chat/widgets/terminal_block.dart';
@@ -81,7 +83,11 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:chuk_chat/ui/expressive/bubble_shape.dart'
-    show kBubbleGapBetweenGroups;
+    show
+        bubblePositionFromFlags,
+        bubblePositionInStack,
+        bubbleRadius,
+        kBubbleGapBetweenGroups;
 import 'package:chuk_chat/widgets/ask_user_card.dart';
 import 'package:chuk_chat/widgets/mcp_connect_card.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
@@ -89,6 +95,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/utils/json_helpers.dart';

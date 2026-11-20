@@ -13,7 +13,6 @@ import 'package:chuk_chat/widgets/icons/icon_map.dart';
 /// The localised name of a menu group.
 String triggerGroupLabel(AppLocalizations l, TriggerGroup g) => switch (g) {
   TriggerGroup.skills => l.composerMenuSkills,
-  TriggerGroup.modes => l.composerMenuModes,
   TriggerGroup.commands => l.composerMenuCommands,
   TriggerGroup.files => l.composerMenuFiles,
   TriggerGroup.agents => l.composerMenuAgents,

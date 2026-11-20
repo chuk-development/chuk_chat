@@ -23,7 +23,7 @@ import 'package:flutter/widgets.dart' show IconData;
 import 'package:chuk_chat/widgets/composer/chip_text_controller.dart';
 
 /// The groups of the menu, in display order.
-enum TriggerGroup { skills, modes, commands, files, agents, workspaces, chats }
+enum TriggerGroup { skills, commands, files, agents, workspaces, chats }
 
 /// One row of the menu.
 @immutable

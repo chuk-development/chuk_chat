@@ -212,7 +212,6 @@ void main() {
           'attachments': '[{"fileName":"plan.pdf","markdownContent":"m"}]',
         },
       ],
-      agentsThread: false,
       onNewChat: () {},
       onReferenceChat: refs.add,
       skills: const <Skill>[

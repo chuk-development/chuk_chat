@@ -18,6 +18,8 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/widgets/floating_page_scaffold.dart';
 import 'package:chuk_chat/widgets/settings_search_bar.dart';
 
 /// One row of a picker.
@@ -93,6 +95,40 @@ Future<T?> showSearchablePicker<T>(
         searchable: searchable,
       ),
     ],
+  );
+}
+
+/// Opens the same list as a page on [context]'s navigator and returns the
+/// chosen value, or null when the page goes back.
+///
+/// For a picker inside a settings pane or modal (`SettingsSurfaceNavigator`):
+/// there the choice opens as the next page in the same pane, not as a
+/// popup over it (CHAT-152).
+Future<T?> showSearchablePickerPage<T>(
+  BuildContext context, {
+  required List<PickerOption<T>> options,
+  required String title,
+  String? hintText,
+  int searchThreshold = 7,
+}) {
+  return Navigator.of(context).push<T>(
+    MaterialPageRoute<T>(
+      builder: (BuildContext context) => FloatingPageScaffold(
+        appBar: FloatingAppBar(title: Text(title)),
+        body: Builder(
+          builder: (BuildContext context) => Padding(
+            padding: floatingHeaderInset(context),
+            child: _PickerPanel<T>(
+              options: options,
+              hintText: hintText ?? 'Search',
+              width: null,
+              maxHeight: null,
+              searchable: options.length >= searchThreshold,
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 }
 
@@ -210,8 +246,8 @@ class _PickerPanelState<T> extends State<_PickerPanel<T>> {
           if (widget.searchable)
             Padding(
               padding: widget.width == null
-                ? const EdgeInsets.fromLTRB(16, 0, 16, 4)
-                : const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                  ? const EdgeInsets.fromLTRB(16, 0, 16, 4)
+                  : const EdgeInsets.fromLTRB(8, 8, 8, 4),
               child: SettingsSearchBar(
                 controller: _search,
                 hintText: widget.hintText,

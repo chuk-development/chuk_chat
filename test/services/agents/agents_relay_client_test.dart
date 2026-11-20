@@ -702,31 +702,30 @@ void main() {
     expect(host.received.where((m) => m['type'] == 'replay'), hasLength(1));
   });
 
-  // M3: the plan toggle rides once on the next task. A task whose frame
-  // never left must not use it up.
-  test('a task that fails to send keeps the plan wish for the next', () async {
+  // The app has no plan mode (owner, 2026-11-20). A thread the host still
+  // keeps in plan mode gets `plan: false` on its next task; every other
+  // task leaves the key off.
+  test('a thread in plan mode falls back to normal on its next task', () async {
     final (client, host, _) = await paired();
     AgentsThreadModes.instance.reset();
     addTearDown(() async {
-      AgentsRelayClient.debugBeforeSeal = null;
       AgentsThreadModes.instance.reset();
       await client.dispose();
     });
-    AgentsThreadModes.instance.setPlanWanted('thread-p', true);
-    AgentsRelayClient.debugBeforeSeal = (payload) async {
-      if (payload['type'] == 'task') throw StateError('Not paired');
-    };
-    await expectLater(
-      client.sendTask('first', sessionKey: 'thread-p'),
-      throwsStateError,
-    );
-    expect(AgentsThreadModes.instance.planToggleOf('thread-p'), isTrue);
-    AgentsRelayClient.debugBeforeSeal = null;
+    await client.sendTask('first', sessionKey: 'thread-p');
+    await Future<void>.delayed(Duration.zero);
+    final first = host.received.singleWhere((m) => m['type'] == 'task');
+    expect(first.containsKey('plan'), isFalse);
+    AgentsThreadModes.instance.ingest(<String, dynamic>{
+      'type': 'plan_mode',
+      'session_key': 'thread-p',
+      'active': true,
+    });
     await client.sendTask('second', sessionKey: 'thread-p');
     await Future<void>.delayed(Duration.zero);
-    final task = host.received.singleWhere((m) => m['type'] == 'task');
-    expect(task['prompt'], 'second');
-    expect(task['plan'], isTrue);
+    final second = host.received.lastWhere((m) => m['type'] == 'task');
+    expect(second['prompt'], 'second');
+    expect(second['plan'], isFalse);
   });
 
   test('sendTask seals {type:task,prompt}; the host opens it', () async {
@@ -2255,6 +2254,179 @@ void main() {
     final frame = host.received.singleWhere((m) => m['type'] == 'room_create');
     expect((frame['members'] as List<dynamic>), hasLength(12));
 
+    await client.dispose();
+  });
+
+  // --- real groups: settings, list, stop, working, history kinds ----------
+
+  test('createRoom carries the group settings; room_settings only the keys '
+      'given', () async {
+    final (client, host, _) = await paired();
+
+    await client.createRoom(
+      'room-5',
+      'launch',
+      const <Map<String, String>>[
+        <String, String>{'agent_id': 'a', 'handle': 'amber'},
+        <String, String>{'agent_id': 'b', 'handle': 'cobalt'},
+      ],
+      settings: <String, Object?>{
+        'responder': 'lead',
+        'lead_agent_id': 'a',
+        'fallback_agent_id': null,
+        'bulletin': 'x' * 13000,
+        'workdir': '~/launch',
+        'nonsense': 1,
+      },
+    );
+    await client.setRoomSettings('room-5', const <String, Object?>{
+      'responder': 'auto',
+      'fallback_agent_id': 'b',
+    });
+    await client.setRoomSettings('room-5', const <String, Object?>{
+      'responder': 'shouting',
+    });
+    await settle();
+
+    final create = host.received.singleWhere((m) => m['type'] == 'room_create');
+    expect(create['responder'], 'lead');
+    expect(create['lead_agent_id'], 'a');
+    expect(create.containsKey('fallback_agent_id'), isTrue);
+    expect(create['fallback_agent_id'], isNull);
+    expect((create['bulletin'] as String).length, 12000);
+    expect(create['workdir'], '~/launch');
+    expect(create.containsKey('nonsense'), isFalse);
+
+    final settings = host.received
+        .where((m) => m['type'] == 'room_settings')
+        .toList();
+    expect(settings, hasLength(2));
+    expect(settings.first, <String, dynamic>{
+      'type': 'room_settings',
+      'room_id': 'room-5',
+      'responder': 'auto',
+      'fallback_agent_id': 'b',
+    });
+    // An unknown mode is not sent; the frame changes nothing.
+    expect(settings.last.containsKey('responder'), isFalse);
+
+    await client.dispose();
+  });
+
+  test('requestRoomList and stopRoom send their frames', () async {
+    final (client, host, _) = await paired();
+
+    await client.requestRoomList();
+    await client.stopRoom('room-6');
+    await settle();
+
+    expect(
+      host.received.where((m) => m['type'] == 'room_list_request'),
+      hasLength(1),
+    );
+    final stop = host.received.singleWhere((m) => m['type'] == 'room_stop');
+    expect(stop['room_id'], 'room-6');
+
+    await client.dispose();
+  });
+
+  test('room_list, room_working and the extended room_turn and room_history '
+      'surface', () async {
+    final (client, host, _) = await paired();
+    final events = <AgentsRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    await host.emit(<String, dynamic>{
+      'type': 'room_list',
+      'rooms': <dynamic>[
+        <String, dynamic>{
+          'room_id': 'r1',
+          'name': 'launch',
+          'members': <dynamic>[
+            <String, dynamic>{'agent_id': 'a', 'handle': 'amber'},
+            <String, dynamic>{'agent_id': 'b', 'handle': 'cobalt'},
+          ],
+          'agent_to_agent': false,
+          'responder': 'auto',
+          'lead_agent_id': null,
+          'fallback_agent_id': 'b',
+          'bulletin': 'be brief',
+          'workdir': '',
+        },
+      ],
+    });
+    await host.emit(<String, dynamic>{
+      'type': 'room_working',
+      'room_id': 'r1',
+      'agent_id': 'a',
+      'handle': 'amber',
+    });
+    await host.emit(<String, dynamic>{
+      'type': 'room_turn',
+      'room_id': 'r1',
+      'round': 1,
+      'agent_id': 'a',
+      'handle': 'amber',
+      'text': 'on it',
+      'routed_by': <String, dynamic>{'mode': 'auto', 'confidence': 0.94},
+    });
+    await host.emit(<String, dynamic>{
+      'type': 'room_history',
+      'room_id': 'r1',
+      'turns': <dynamic>[
+        <String, dynamic>{
+          'kind': 'user',
+          'agent_id': '',
+          'handle': '',
+          'text': 'plan the launch',
+        },
+        <String, dynamic>{
+          'kind': 'handoff',
+          'round': 1,
+          'agent_id': 'a',
+          'handle': 'amber',
+          'text': 'write the post',
+          'to_agent_id': 'b',
+          'to_handle': 'cobalt',
+        },
+      ],
+    });
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    final list = events.whereType<AgentsRelayRoomList>().single;
+    expect(list.rooms.single.payload['room_id'], 'r1');
+    expect(list.rooms.single.payload['responder'], 'auto');
+    // The list is no group's history.
+    expect(list.roomId, isEmpty);
+
+    final working = events.whereType<AgentsRelayRoomWorking>().single;
+    expect((working.roomId, working.agentId, working.handle), (
+      'r1',
+      'a',
+      'amber',
+    ));
+
+    final turn = events
+        .whereType<AgentsRelayRoomTurn>()
+        .where((t) => t is! AgentsRelayRoomWorking)
+        .single;
+    expect(turn.kind, 'agent');
+    expect(turn.routedMode, 'auto');
+    expect(turn.routedConfidence, closeTo(0.94, 1e-9));
+    expect(turn.routedFallback, isFalse);
+
+    final hist = events
+        .whereType<AgentsRelayRoomHistory>()
+        .where((h) => h is! AgentsRelayRoomList)
+        .single;
+    expect(hist.turns, hasLength(2));
+    expect(hist.turns.first.kind, 'user');
+    expect(hist.turns.first.text, 'plan the launch');
+    expect(hist.turns.last.kind, 'handoff');
+    expect(hist.turns.last.toHandle, 'cobalt');
+    expect(hist.turns.last.toAgentId, 'b');
+
+    await sub.cancel();
     await client.dispose();
   });
 

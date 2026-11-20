@@ -701,9 +701,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       );
     }
 
-    return Scaffold(
-      // The page runs underneath the floating header.
-      extendBodyBehindAppBar: true,
+    return FloatingPageScaffold(
       appBar: FloatingAppBar(
         title: Text(
           _isSelectionMode

@@ -49,6 +49,9 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
   /// Whether Home is in front of the Agents half ([_agentsHomeShown]).
   bool get _homeInFront;
 
+  /// Whether the Agents half is in front (not chuk's chats).
+  bool get _agentsHalfInFront;
+
   // --- state -------------------------------------------------------------------
 
   bool _deskRosterCollapsed = false;
@@ -189,6 +192,29 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
       _deskRightPane = 'details';
       _deskDetailsShownFor = agent.id;
       _deskDetailsSettingsFor = agent.id;
+    });
+    _deskScheduleSave();
+    return true;
+  }
+
+  /// Opens [page] ("model" or "files") of the selected agent's details
+  /// pane, for the thread [chatKey]. The composer's "More models" lands here,
+  /// so every model choice opens in the same right pane (CHAT-152). Returns
+  /// false when the pane cannot show; the caller then opens the page its
+  /// own way.
+  bool _deskOpenDetailsPage(String chatKey, String page) {
+    final AgentsAgent? agent = _selectedAgent;
+    if (agent == null || chatKey.isEmpty || chatKey != _selectedThreadKey) {
+      return false;
+    }
+    final double width = MediaQuery.sizeOf(context).width;
+    if (width < kDeskRailWidth + 320 + 240) return false;
+    _deskCloseRoom();
+    setState(() {
+      _deskRightPane = 'details';
+      _deskDetailsShownFor = agent.id;
+      _deskDetailsSettingsFor = null;
+      _deskDetailsSubpage = page;
     });
     _deskScheduleSave();
     return true;
@@ -356,12 +382,18 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     // rooms, so it waits while Home is in front.
     final bool home = _homeInFront;
 
-    // The right pane first: it is what the user opened last.
+    final AgentsRoom? room = _deskRoomId == null
+        ? null
+        : _rooms.byId(_deskRoomId!);
+
+    // The right pane first: it is what the user opened last. With a group
+    // open, 'details' shows the group's details.
     final AgentsAgent? detailsAgent = agent;
     final bool wantsRight =
         !home &&
         (_deskRightPane == 'rooms' ||
-            (_deskRightPane == 'details' && detailsAgent != null));
+            (_deskRightPane == 'details' &&
+                (detailsAgent != null || room != null)));
     double rightW = wantsRight
         ? _deskDetailsWidth.clamp(kDeskDetailsMin, kDeskDetailsMax)
         : 0;
@@ -379,10 +411,6 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
       rightW = roomForRight >= 240 ? roomForRight : 0;
     }
     final bool showRight = wantsRight && rightW > 0;
-
-    final AgentsRoom? room = _deskRoomId == null
-        ? null
-        : _rooms.byId(_deskRoomId!);
 
     final Widget roster = AgentRosterView(
       source: _roster,
@@ -512,7 +540,9 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     if (showRight) {
       right = _deskRightPane == 'rooms'
           ? _buildDeskRoomsPane(context)
-          : _buildDeskDetailsPane(context, detailsAgent!);
+          : (room != null
+                ? _buildDeskRoomDetailsPane(context, room)
+                : _buildDeskDetailsPane(context, detailsAgent!));
     }
 
     final Widget body = Stack(
@@ -568,11 +598,31 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
       ],
     );
 
-    return Focus(
+    final Widget focused = Focus(
       focusNode: _deskFocus,
       autofocus: true,
       onKeyEvent: _deskOnKey,
       child: ColoredBox(color: theme.scaffoldBackgroundColor, child: body),
+    );
+    if (!MobileLayout.isTouchPlatform) return focused;
+    // A tablet has a system back. It closes what is open, one step at a
+    // time: the right pane, then a room, then the thread goes back to Home.
+    // On Home it leaves the app. Behind chuk's chats it is not ours.
+    final bool roomShown = room != null && !home;
+    final bool open = showRight || roomShown || !home;
+    return PopScope(
+      canPop: !_agentsHalfInFront || !open,
+      onPopInvokedWithResult: (bool didPop, Object? _) {
+        if (didPop || !_agentsHalfInFront) return;
+        if (showRight) {
+          _deskCloseRightPane();
+        } else if (roomShown) {
+          _deskCloseRoom();
+        } else {
+          _showAgentsHome();
+        }
+      },
+      child: focused,
     );
   }
 
@@ -620,126 +670,88 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
         ),
       );
     }
-    final Widget closeButton = FloatingHeaderButton(
-      icon: Icons.close,
-      tooltip: 'Close (Esc)',
-      onPressed: _deskCloseRightPane,
-    );
     if (!settings) {
-      return Material(
-        type: MaterialType.transparency,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            PaneHeader.text(
-              icon: Icons.tune,
-              text: 'Details',
-              actions: <Widget>[
-                FloatingHeaderButton(
-                  key: const ValueKey<String>('desk-details-settings'),
-                  icon: Icons.settings_outlined,
-                  tooltip: 'Settings',
-                  onPressed: () =>
-                      setState(() => _deskDetailsSettingsFor = agent.id),
-                ),
-                closeButton,
-              ],
-            ),
-            Expanded(
-              child: AgentDetailsOverview(
-                key: ValueKey<String>('desk-overview-${agent.id}'),
-                name: agent.name,
-                sessionKey: sessionKey,
-                onOpenScreen: _openAgentScreenOrNull,
-                onOpenModel: () =>
-                    setState(() => _deskDetailsSubpage = 'model'),
-                onOpenFiles: () =>
-                    setState(() => _deskDetailsSubpage = 'files'),
-                actions: <AgentDetailsAction>[
-                  AgentDetailsAction(
-                    icon: Icons.history,
-                    label:
-                        AppLocalizations.of(context)?.ckTitle ?? 'Checkpoints',
-                    onTap: () {
-                      final State? thread = _threadViewKey.currentState;
-                      if (thread is AgentsThreadViewState) {
-                        unawaited(thread.openCheckpoints());
-                      }
-                    },
-                  ),
-                  AgentDetailsAction(
-                    icon: Icons.copy_all_rounded,
-                    label: 'Copy full chat',
-                    onTap: () => unawaited(_copyFullChat()),
-                  ),
-                  AgentDetailsAction(
-                    icon: Icons.edit_outlined,
-                    label: 'Rename',
-                    onTap: () => unawaited(_openAgentRename(agent)),
-                  ),
-                ],
+      // The first page under the same floating header as every page in
+      // this pane (title pill on the left; the gear and the close chip on
+      // the right). One gear: the title has no glyph of its own.
+      return SettingsSurfaceNavigator(
+        key: ValueKey<String>('desk-details-nav-${agent.id}'),
+        onClose: _deskCloseRightPane,
+        builder: (BuildContext context) => FloatingPageScaffold(
+          appBar: FloatingAppBar(
+            title: const Text('Details'),
+            actions: <Widget>[
+              FloatingHeaderButton(
+                key: const ValueKey<String>('desk-details-settings'),
+                icon: Icons.settings_outlined,
+                tooltip: 'Settings',
+                onPressed: () =>
+                    setState(() => _deskDetailsSettingsFor = agent.id),
               ),
-            ),
-          ],
+            ],
+          ),
+          body: AgentDetailsOverview(
+            key: ValueKey<String>('desk-overview-${agent.id}'),
+            name: agent.name,
+            sessionKey: sessionKey,
+            headerInset: true,
+            onOpenScreen: _openAgentScreenOrNull,
+            // The model runs on Auto by default; it is in Settings,
+            // under "Advanced" (CHAT-152).
+            onOpenFiles: () => setState(() => _deskDetailsSubpage = 'files'),
+            actions: <AgentDetailsAction>[
+              AgentDetailsAction(
+                icon: Icons.history,
+                label: AppLocalizations.of(context)?.ckTitle ?? 'Checkpoints',
+                onTap: () {
+                  final State? thread = _threadViewKey.currentState;
+                  if (thread is AgentsThreadViewState) {
+                    unawaited(thread.openCheckpoints());
+                  }
+                },
+              ),
+              AgentDetailsAction(
+                icon: Icons.copy_all_rounded,
+                label: 'Copy full chat',
+                onTap: () => unawaited(_copyFullChat()),
+              ),
+              AgentDetailsAction(
+                icon: Icons.edit_outlined,
+                label: 'Rename',
+                onTap: () => unawaited(_openAgentRename(agent)),
+              ),
+            ],
+          ),
         ),
       );
     }
     // The settings run in their own navigator: a row inside them (Model,
     // Profile, Host & activity, ...) opens its page inside this pane, on
     // top of the settings, and its back chip returns here
-    // (openSettingsSurface finds this navigator).
+    // (openSettingsSurface finds this navigator). The header is the same
+    // floating header as on the first page.
     return SettingsSurfaceNavigator(
       key: ValueKey<String>('desk-settings-nav-${agent.id}'),
       onClose: _deskCloseRightPane,
-      builder: (BuildContext context) => Material(
-        type: MaterialType.transparency,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            // chuk's panel header in form (height, padding, hairline), with
-            // the back arrow where [PaneHeader] puts its icon.
-            Container(
-              height: 56,
-              padding: const EdgeInsets.only(left: 4, right: 12),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: Theme.of(context).resolvedIconColor
-                        .withValues(alpha: 0.12),
-                  ),
-                ),
-              ),
-              child: Row(
-                children: <Widget>[
-                  FloatingHeaderButton(
-                    key: const ValueKey<String>('desk-details-back'),
-                    icon: Icons.arrow_back_rounded,
-                    tooltip: 'Back',
-                    onPressed: () =>
-                        setState(() => _deskDetailsSettingsFor = null),
-                  ),
-                  const SizedBox(width: 2),
-                  const Expanded(
-                    child: Text(
-                      'Settings',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: PaneHeader.titleStyle,
-                    ),
-                  ),
-                  FloatingHeaderButton(
-                    icon: Icons.refresh,
-                    tooltip: 'Refresh',
-                    onPressed: () => unawaited(_deskRefreshDetails(sessionKey)),
-                  ),
-                  closeButton,
-                ],
-              ),
+      builder: (BuildContext context) => FloatingPageScaffold(
+        appBar: FloatingAppBar(
+          title: const Text('Settings'),
+          leading: FloatingHeaderButton(
+            key: const ValueKey<String>('desk-details-back'),
+            icon: Icons.arrow_back_rounded,
+            tooltip: 'Back',
+            onPressed: () => setState(() => _deskDetailsSettingsFor = null),
+          ),
+          actions: <Widget>[
+            FloatingHeaderButton(
+              icon: Icons.refresh,
+              tooltip: 'Refresh',
+              onPressed: () => unawaited(_deskRefreshDetails(sessionKey)),
             ),
-            // The same settings content as the phone page, in the pane.
-            Expanded(child: _agentSettings(agent, page: false)),
           ],
         ),
+        // The same settings content as the phone page, in the pane.
+        body: _agentSettings(agent, page: false),
       ),
     );
   }
@@ -763,31 +775,38 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     }
   }
 
-  /// Control Rooms in the right pane: the room list under chuk's panel header.
+  /// A group's details in the right pane ([RoomDetailsPanel]), under the same
+  /// floating header as the agent's details.
+  Widget _buildDeskRoomDetailsPane(BuildContext context, AgentsRoom room) {
+    return SettingsSurfaceNavigator(
+      key: ValueKey<String>('desk-room-details-nav-${room.id}'),
+      onClose: _deskCloseRightPane,
+      builder: (BuildContext context) => FloatingPageScaffold(
+        appBar: FloatingAppBar(title: Text(_l10n.agentsGroupDetails)),
+        body: _buildRoomDetails(room.id),
+      ),
+    );
+  }
+
+  /// Groups in the right pane: the group list under the same floating
+  /// header as the details pane.
   Widget _buildDeskRoomsPane(BuildContext context) {
-    return Material(
-      type: MaterialType.transparency,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          PaneHeader.text(
-            icon: Icons.groups_outlined,
-            text: 'Control Rooms',
-            actions: <Widget>[
-              FloatingHeaderButton(
-                icon: Icons.group_add_outlined,
-                tooltip: 'New room (${deskShortcutLabel('Ctrl+Shift+N')})',
-                onPressed: () => unawaited(_openRoomCreate()),
-              ),
-              FloatingHeaderButton(
-                icon: Icons.close,
-                tooltip: 'Close',
-                onPressed: _deskCloseRightPane,
-              ),
-            ],
-          ),
-          Expanded(child: _buildRoomList(showHeader: false)),
-        ],
+    return SettingsSurfaceNavigator(
+      key: const ValueKey<String>('desk-rooms-nav'),
+      onClose: _deskCloseRightPane,
+      builder: (BuildContext context) => FloatingPageScaffold(
+        appBar: FloatingAppBar(
+          title: Text(_l10n.agentsGroups),
+          actions: <Widget>[
+            FloatingHeaderButton(
+              icon: Icons.group_add_outlined,
+              tooltip:
+                  '${_l10n.agentsGroupNew} (${deskShortcutLabel('Ctrl+Shift+N')})',
+              onPressed: () => unawaited(_openRoomCreate()),
+            ),
+          ],
+        ),
+        body: _buildRoomList(showHeader: false),
       ),
     );
   }
@@ -814,10 +833,10 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
           child: AgentsHeaderBand(
             trailing: <Widget>[
               ChromeChip(
-                icon: Icons.group_outlined,
-                tooltip: 'Members',
-                semanticsId: 'desk_room_members',
-                onTap: () => unawaited(_manageRoomMembers(room.id)),
+                icon: Icons.info_outline_rounded,
+                tooltip: _l10n.agentsGroupDetails,
+                semanticsId: 'desk_room_details',
+                onTap: () => _deskToggleRightPane('details'),
               ),
               ChromeChip(
                 icon: Icons.close_rounded,

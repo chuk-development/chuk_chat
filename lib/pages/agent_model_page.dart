@@ -39,6 +39,30 @@ import 'package:chuk_chat/widgets/searchable_picker.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:chuk_chat/widgets/settings_surface.dart';
 
+/// The " via …" part of the last run's line, with its leading space.
+///
+/// The host names the provider only when the run asked for one. An agent on
+/// Auto routing (an empty provider slug, the default since CHAT-146) asks for
+/// none, the API picks one and does not say which, so the run has no
+/// provider. That run then reads "via Automatic", the same word the summary
+/// uses for Auto. Any other run without a provider leaves the part out.
+@visibleForTesting
+String lastRunVia(
+  AgentModelChoice run, {
+  required String chosenProviderSlug,
+  required String chosenModelId,
+  List<AgentCatalogueModel> models = const <AgentCatalogueModel>[],
+}) {
+  final String? served = run.provider;
+  if (served != null && served.isNotEmpty) {
+    return ' via ${providerLabel(served, modelId: run.id, models: models)}';
+  }
+  if (chosenProviderSlug.isEmpty && run.id == chosenModelId) {
+    return ' via ${providerLabel('')}';
+  }
+  return '';
+}
+
 class AgentModelPage extends StatefulWidget {
   const AgentModelPage({
     super.key,
@@ -316,25 +340,32 @@ class _AgentModelPageState extends State<AgentModelPage> {
     final state = _state;
     if (state == null) return;
     final ColorScheme scheme = Theme.of(anchorContext).colorScheme;
-    final String? picked = await showSearchablePicker<String>(
-      anchorContext,
-      title: 'All models',
-      hintText: 'Search models',
-      options: <PickerOption<String>>[
-        for (final model in _models)
-          PickerOption<String>(
-            value: model.id,
-            label: model.shortName,
-            subtitle: model.cheapest?.priceLine,
-            searchText: '${model.name} ${model.id}',
-            leading: ModelLogo(
-              modelId: model.id,
-              color: scheme.onSurfaceVariant,
-            ),
-            selected: model.id == state.modelId,
-          ),
-      ],
-    );
+    final List<PickerOption<String>> options = <PickerOption<String>>[
+      for (final model in _models)
+        PickerOption<String>(
+          value: model.id,
+          label: model.shortName,
+          subtitle: model.cheapest?.priceLine,
+          searchText: '${model.name} ${model.id}',
+          leading: ModelLogo(modelId: model.id, color: scheme.onSurfaceVariant),
+          selected: model.id == state.modelId,
+        ),
+    ];
+    // Inside a settings pane or modal the list is the next page there, not
+    // a popup over it (CHAT-152).
+    final String? picked = SettingsSurfaceScope.maybeOf(anchorContext) != null
+        ? await showSearchablePickerPage<String>(
+            anchorContext,
+            title: 'All models',
+            hintText: 'Search models',
+            options: options,
+          )
+        : await showSearchablePicker<String>(
+            anchorContext,
+            title: 'All models',
+            hintText: 'Search models',
+            options: options,
+          );
     if (picked != null) await _pickModel(picked);
   }
 
@@ -433,13 +464,12 @@ class _AgentModelPageState extends State<AgentModelPage> {
         final String subtitle;
         switch (value) {
           case ControlAvailable<AgentModelChoice>(value: final run):
-            final String provider = run.provider == null
-                ? 'provider not reported'
-                : providerLabel(
-                    run.provider!,
-                    modelId: run.id,
-                    models: _models,
-                  );
+            final String via = lastRunVia(
+              run,
+              chosenProviderSlug: state.providerSlug,
+              chosenModelId: state.modelId,
+              models: _models,
+            );
             final String effort = run.reasoningEffort == null
                 ? ''
                 : ' · ${ChatModeService.reasoningLabel(run.reasoningEffort!).toLowerCase()}';
@@ -447,7 +477,7 @@ class _AgentModelPageState extends State<AgentModelPage> {
                 run.id == state.modelId &&
                 (run.provider == null || run.provider == state.providerSlug);
             subtitle =
-                '${modelLabel(run.id, models: _models)} via $provider$effort'
+                '${modelLabel(run.id, models: _models)}$via$effort'
                 '${same ? '' : '\nYour change applies from the next message.'}';
           case ControlLoading<AgentModelChoice>():
             subtitle = 'Asking the host…';
@@ -530,15 +560,10 @@ class _AgentModelPageState extends State<AgentModelPage> {
     ];
   }
 
-  List<Widget> _providerSection(
-    BuildContext context,
-    AgentModelState state,
-  ) {
+  List<Widget> _providerSection(BuildContext context, AgentModelState state) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final AgentCatalogueModel? model = _model(state.modelId);
-    final List<AgentProvider> providers = <AgentProvider>[
-      ...?model?.providers,
-    ];
+    final List<AgentProvider> providers = <AgentProvider>[...?model?.providers];
     if (providers.isEmpty) {
       return <Widget>[
         const ExpressiveSectionHeader('Provider'),
@@ -604,10 +629,7 @@ class _AgentModelPageState extends State<AgentModelPage> {
     return parts.isEmpty ? null : parts.join(' · ');
   }
 
-  List<Widget> _reasoningSection(
-    BuildContext context,
-    AgentModelState state,
-  ) {
+  List<Widget> _reasoningSection(BuildContext context, AgentModelState state) {
     final List<String> levels = ChatModeService.reasoningLevelsForModel(
       modelId: state.modelId,
       providerSlug: state.providerSlug,
@@ -700,9 +722,8 @@ class _AgentModelPageState extends State<AgentModelPage> {
             )
           : Text(
               l.retry,
-              style: Theme.of(
-                context,
-              ).textTheme.labelLarge?.copyWith(color: scheme.primary),
+              style: Theme.of(context).textTheme.labelLarge
+                  ?.copyWith(color: scheme.primary),
             ),
       onTap: _retrying ? null : () => unawaited(_retryCatalogue()),
     );

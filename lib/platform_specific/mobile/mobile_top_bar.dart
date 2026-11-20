@@ -20,6 +20,7 @@ library;
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/platform_specific/mobile/chat_title_strip.dart';
+import 'package:chuk_chat/ui/components/state_surface.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -434,8 +435,9 @@ class _ShortcutRow extends StatelessWidget {
   }
 }
 
-/// One shortcut: icon over label in `secondaryContainer`. A press rounds
-/// every corner (the M3E shape morph) on the fast spatial spring's timing.
+/// One shortcut: icon over label in `secondaryContainer`. Hover, press and
+/// focus paint inside the tile's own shape ([StateSurface]); the shape does
+/// not change with the state.
 class _ShortcutTile extends StatefulWidget {
   const _ShortcutTile({
     required this.item,
@@ -452,60 +454,38 @@ class _ShortcutTile extends StatefulWidget {
 }
 
 class _ShortcutTileState extends State<_ShortcutTile> {
-  bool _pressed = false;
-
-  void _setPressed(bool value) {
-    if (_pressed != value) setState(() => _pressed = value);
-  }
-
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
-    final Color fill = scheme.secondaryContainer;
     final Color fg = scheme.onSecondaryContainer;
     return Semantics(
       button: true,
       label: widget.item.label,
       excludeSemantics: true,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        curve: Curves.easeOutCubic,
+      child: SizedBox(
         height: _kShortcutHeight,
-        decoration: BoxDecoration(
-          color: fill,
-          borderRadius: _pressed
-              ? BorderRadius.circular(_kShortcutHeight / 2)
-              : widget.radius,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            onTap: widget.onTap,
-            onTapDown: (_) => _setPressed(true),
-            onTapUp: (_) => _setPressed(false),
-            onTapCancel: () => _setPressed(false),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  AppIcon(widget.item.icon, size: 24, color: fg),
-                  const SizedBox(height: 8),
-                  Text(
-                    widget.item.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: fg,
-                    ),
-                  ),
-                ],
+        child: StateSurface(
+          borderRadius: widget.radius,
+          color: scheme.secondaryContainer,
+          onTap: widget.onTap,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              AppIcon(widget.item.icon, size: 24, color: fg),
+              const SizedBox(height: 8),
+              Text(
+                widget.item.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: fg,
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),

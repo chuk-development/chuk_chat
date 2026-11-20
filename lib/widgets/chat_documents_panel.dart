@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/pdf_attachment_service.dart';
 import 'package:chuk_chat/services/storage/agents_chat_store.dart';
 import 'package:chuk_chat/ui/expressive/connected_group.dart';
+import 'package:chuk_chat/ui/expressive/file_kind.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -683,9 +684,8 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: scheme.onErrorContainer),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: scheme.onErrorContainer),
             ),
           ),
         ],
@@ -842,7 +842,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
         action: recent == null
             ? null
             : _PillAction(
-                icon: _documentIcon(recent),
+                icon: _documentKind(recent).glyph,
                 label: 'Open ${recent['title']}',
                 onTap: () => _select(recent),
               ),
@@ -1004,22 +1004,18 @@ class _KindTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final FileKind kind = _documentKind(document);
+    if (!selected) return FileKindTile(kind: kind, size: size);
     final ColorScheme scheme = Theme.of(context).colorScheme;
     return Container(
       width: size,
       height: size,
       alignment: Alignment.center,
       decoration: BoxDecoration(
-        color: selected
-            ? scheme.primary.withValues(alpha: 0.18)
-            : scheme.surfaceContainerHighest,
+        color: scheme.primary.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(size * 0.34),
       ),
-      child: HugeIcon(
-        _documentIcon(document),
-        size: size * 0.46,
-        color: selected ? scheme.primary : scheme.onSurfaceVariant,
-      ),
+      child: HugeIcon(kind.glyph, size: size * 0.46, color: scheme.primary),
     );
   }
 }
@@ -1100,48 +1096,18 @@ String _kindLabel(Map<String, dynamic> document) => switch (document['kind']) {
   _ => 'Document',
 };
 
-/// The glyph for a row, from the app's own set: the kind first, then the file
-/// extension (docs/DESIGN.md §5 — sheet for tables, text for markdown, braces
-/// for JSON, source code for markup, and so on down the list).
-HugeIconData _documentIcon(Map<String, dynamic> document) {
-  if (document['kind'] == 'table') return HugeIcons.sheet;
-  if (document['kind'] == 'bar_chart') return HugeIcons.presentation01;
-  if (document['kind'] == 'html') return HugeIcons.globe02;
-  if (document['kind'] != 'file') return HugeIcons.fileText;
-  final name = '${document['path'] ?? document['title'] ?? ''}'.toLowerCase();
-  final suffix = name.contains('.') ? name.split('.').last : '';
-  return switch (suffix) {
-    'pdf' => HugeIcons.pdf01,
-    'csv' || 'tsv' || 'xlsx' || 'xls' || 'ods' => HugeIcons.sheet,
-    'pptx' || 'ppt' || 'key' => HugeIcons.presentation01,
-    'md' || 'markdown' || 'rst' => HugeIcons.fileText,
-    'json' || 'yaml' || 'yml' || 'toml' => HugeIcons.braces,
-    'html' ||
-    'htm' ||
-    'xml' ||
-    'css' ||
-    'js' ||
-    'ts' ||
-    'dart' ||
-    'py' ||
-    'c' ||
-    'cpp' ||
-    'go' ||
-    'rs' => HugeIcons.sourceCode,
-    'sh' || 'bash' || 'zsh' || 'fish' => HugeIcons.terminal,
-    'png' ||
-    'jpg' ||
-    'jpeg' ||
-    'gif' ||
-    'webp' ||
-    'bmp' ||
-    'svg' => HugeIcons.image01,
-    'mp4' || 'mov' || 'webm' || 'mkv' => HugeIcons.video01,
-    'zip' || 'tar' || 'gz' || 'tgz' || 'rar' || '7z' => HugeIcons.zip01,
-    'db' || 'sqlite' || 'sql' => HugeIcons.database01,
-    'epub' => HugeIcons.bookOpen01,
-    _ => HugeIcons.file01,
-  };
+/// The kind of a row ([FileKind]): the document kind first, then the file
+/// name (docs/DESIGN.md §5). It gives the row its glyph and its colour.
+FileKind _documentKind(Map<String, dynamic> document) {
+  if (document['kind'] == 'table') return FileKind.sheet;
+  if (document['kind'] == 'bar_chart') return FileKind.slides;
+  if (document['kind'] == 'html') return FileKind.web;
+  if (document['kind'] != 'file') return FileKind.text;
+  final Object? mime = document['mime'];
+  return FileKind.of(
+    '${document['path'] ?? document['title'] ?? ''}',
+    mime: mime is String ? mime : '',
+  );
 }
 
 /// The panel's one empty state, in the house shape: a large quiet icon, the

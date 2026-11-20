@@ -4,20 +4,24 @@
 //
 // Material 3 Expressive draws a list as separate filled tiles rather than
 // one card cut by dividers: the outer corners of a group are large, the
-// corners where tiles meet are small, and a press squeezes the tile and
-// rounds its corners. That shape carries the grouping on its own, so the
-// dividers, the hairline outlines and the small radii all go away.
+// corners where tiles meet are small. That shape carries the grouping on its
+// own, so the dividers, the hairline outlines and the small radii all go
+// away. Hover, press and focus paint inside the same shape
+// ([StateSurface]); a press squeezes the tile a little and never changes its
+// corners.
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/ui/components/state_surface.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
-/// Corner radius at the outer edges of a group.
-const double kExpressiveOuterRadius = 26;
+/// Corner radius at the outer edges of a group: the one list shape of the
+/// app ([kListItemRadius]), the same as a sidebar block.
+const double kExpressiveOuterRadius = kListItemRadius;
 
-/// Corner radius where two tiles meet.
-const double kExpressiveInnerRadius = 6;
+/// Corner radius where two tiles meet ([kListItemJointRadius]).
+const double kExpressiveInnerRadius = kListItemJointRadius;
 
 /// Picks the contrast colour of a tone from the scheme.
 extension ExpressiveOnColor on ColorScheme {
@@ -31,7 +35,7 @@ extension ExpressiveOnColor on ColorScheme {
 }
 
 /// Gap between the tiles of a group.
-const double kExpressiveTileGap = 3;
+const double kExpressiveTileGap = kListItemGap;
 
 /// A group of settings tiles. The first and last tile round outwards, the
 /// ones in between stay tight, so the group reads as one block without a
@@ -198,47 +202,17 @@ class ExpressiveTile extends StatefulWidget {
 }
 
 class _ExpressiveTileState extends State<ExpressiveTile> {
-  bool _pressed = false;
-
   @override
   Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    final BorderRadius resting = _ExpressiveTileShape.of(context);
-    final VoidCallback? onTap = widget.onTap;
-    final EdgeInsets padding = widget.padding;
-    final Widget child = widget.child;
-
-    final bool enabled = onTap != null;
-    // The squeeze: pressing rounds every corner and shrinks the tile a
-    // little. It is the whole of the expressive feedback — no ripple is
-    // needed on top of it.
-    return AnimatedScale(
-      scale: _pressed ? 0.985 : 1,
-      duration: const Duration(milliseconds: 130),
-      curve: Curves.easeOutCubic,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 130),
-        curve: Curves.easeOutCubic,
-        decoration: BoxDecoration(
-          color: _pressed ? m3.surfaceContainerHigh : m3.surfaceContainer,
-          borderRadius: _pressed
-              ? BorderRadius.circular(kExpressiveOuterRadius)
-              : resting,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            onTap: onTap,
-            onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
-            onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
-            onTapCancel: enabled
-                ? () => setState(() => _pressed = false)
-                : null,
-            child: Padding(padding: padding, child: child),
-          ),
-        ),
-      ),
+    // One shape in every state: hover, focus and press paint inside the
+    // tile's place in the group. The press squeezes the tile a little.
+    return StateSurface(
+      borderRadius: _ExpressiveTileShape.of(context),
+      color: Theme.of(context).m3.surfaceContainer,
+      squeeze: widget.onTap != null,
+      onTap: widget.onTap,
+      padding: widget.padding,
+      child: widget.child,
     );
   }
 }

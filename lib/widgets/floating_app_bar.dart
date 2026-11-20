@@ -12,6 +12,7 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/ui/components/page_header.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 import 'package:chuk_chat/widgets/icons/huge_icon.dart';
@@ -175,8 +176,13 @@ class FloatingHeaderButton extends StatelessWidget {
   }
 }
 
-/// The header of a settings-style page: a floating back chip, a floating
-/// title pill, and nothing behind either of them.
+/// The one page header of the app: a floating back chip, a floating title
+/// pill, the actions, and inside a settings surface the close chip. It sits
+/// on the frosted [PageHeaderBackdrop].
+///
+/// Settings pages, pane pages and full-screen viewers ([ExpressiveScreen])
+/// all draw this widget, so the back chip, the title and the close chip are
+/// the same everywhere.
 class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
   const FloatingAppBar({
     super.key,
@@ -186,6 +192,8 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
     this.automaticallyImplyLeading = true,
     this.bottom,
     this.scrim = true,
+    this.backgroundColor,
+    this.backSemanticsId,
   });
 
   /// Usually a [Text]. It is put inside the floating pill. Null draws no
@@ -203,9 +211,17 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// A tab bar or search field under the header, as on a normal AppBar.
   final PreferredSizeWidget? bottom;
 
-  /// Whether the page-colour fade sits behind the chips. Off for pages whose
-  /// content runs to the top edge on purpose, such as a full-screen map.
+  /// Whether the frosted material ([PageHeaderBackdrop]) sits behind the
+  /// header. Off for pages whose content runs to the top edge on purpose,
+  /// such as a full-screen map.
   final bool scrim;
+
+  /// The page colour under the header. Null takes the scaffold colour. A
+  /// viewer on a dark backdrop passes its own.
+  final Color? backgroundColor;
+
+  /// Marks the back chip for tests and the driver.
+  final String? backSemanticsId;
 
   @override
   Size get preferredSize => Size.fromHeight(
@@ -221,14 +237,10 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
   /// to the text. Anything that is not a [Text] only inherits the style, so
   /// a caller that really needs its own layout still can.
   Widget _styledTitle(BuildContext context, ThemeData theme, Widget self) {
-    final TextStyle style = TextStyle(
-      color: theme.resolvedIconColor.withValues(alpha: 0.92),
-      fontSize: 15,
-      fontWeight: FontWeight.w800,
-    );
-    if (self is Text && self.data != null) {
+    final TextStyle style = pageHeaderTitleStyle(theme);
+    if (self case Text(data: final String data)) {
       return Text(
-        self.data!,
+        data,
         style: style,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -250,18 +262,16 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
     // Inside a settings modal (settings_surface.dart) the header is the same
     // header, with the modal's close chip at its right end; the first page
     // of a compact modal goes back to the modal's list.
-    final SettingsSurfaceScope? surface = SettingsSurfaceScope.maybeOf(
-      context,
-    );
+    final SettingsSurfaceScope? surface = SettingsSurfaceScope.maybeOf(context);
     final VoidCallback? rootBack = canPop ? null : surface?.onRootBack;
     final Widget? back =
         leading ??
         (automaticallyImplyLeading && (canPop || rootBack != null)
             ? FloatingHeaderButton(
                 icon: Icons.arrow_back_rounded,
+                semanticsId: backSemanticsId,
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
-                onPressed:
-                    rootBack ?? () => Navigator.of(context).maybePop(),
+                onPressed: rootBack ?? () => Navigator.of(context).maybePop(),
               )
             : null);
     final List<Widget>? actions = surface == null
@@ -276,36 +286,11 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
           ];
 
-    final Color pageColor = theme.scaffoldBackgroundColor;
-
     return AppBar(
-      // The bar draws no box, but it does hold the page down behind it: a
-      // scrim that is the page colour at the status bar and nothing at all
-      // by the bottom edge. Without it a list scrolling up runs its own
-      // headings straight across the title pill, which reads as a fault.
-      flexibleSpace: !scrim
-          ? null
-          : IgnorePointer(
-        // SizedBox.expand, because a childless DecoratedBox takes the
-        // smallest size the (loose) constraints allow — that is zero, and
-        // the scrim then paints nothing at all.
-        child: SizedBox.expand(
-          child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                pageColor,
-                pageColor,
-                pageColor.withValues(alpha: 0),
-              ],
-              stops: const [0.0, 0.72, 1.0],
-            ),
-          ),
-          ),
-        ),
-      ),
+      // The bar itself draws no box. Behind the chips sits the frosted
+      // material: what scrolls under the header is blurred and covered with
+      // the page colour, so it never runs legibly into the title.
+      flexibleSpace: scrim ? PageHeaderBackdrop(color: backgroundColor) : null,
       // Nothing of the bar itself is drawn: no fill, no shadow, and no
       // tinted "scrolled under" state. What shows behind the chips is the
       // page.
@@ -325,22 +310,20 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
               padding: const EdgeInsets.only(left: 10 - _kChipSlop),
               child: Center(child: back),
             ),
-      title: title == null
-          ? null
-          : Align(
-              alignment: Alignment.centerLeft,
-              child: FloatingChromeSurface(
-                radius: _kTitleRadius,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 11,
-                ),
-                // The chat's title pill, to the pixel: same radius, padding, size
-                // and weight. A settings page and the chat must not read as two
-                // different apps.
-                child: _styledTitle(context, theme, title!),
-              ),
-            ),
+      title: switch (title) {
+        null => null,
+        final Widget title => Align(
+          alignment: Alignment.centerLeft,
+          child: FloatingChromeSurface(
+            radius: _kTitleRadius,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            // The chat's title pill, to the pixel: same radius, padding,
+            // size and weight. A settings page and the chat must not read
+            // as two different apps.
+            child: _styledTitle(context, theme, title),
+          ),
+        ),
+      },
       actions: actions == null
           ? null
           : <Widget>[

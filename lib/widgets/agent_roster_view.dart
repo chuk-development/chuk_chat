@@ -391,7 +391,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   Future<void> _renameRoom(AgentsRoom room) async {
     final String? name = await showAgentNameDialog(
       context,
-      title: 'Rename room',
+      title: AppLocalizations.of(context)?.agentsGroupRename ?? 'Rename group',
       initialName: room.name,
       submitLabel: 'Rename',
     );
@@ -615,7 +615,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
         ),
       if (widget.onCreateRoom != null)
         _NewEntry(
-          label: 'New room',
+          label: l?.agentsGroupNew ?? 'New group',
           icon: Icons.group_add_outlined,
           shortcut: deskShortcutLabel('Ctrl+Shift+N'),
           onTap: widget.onCreateRoom!,
@@ -628,7 +628,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
         _NavRow(
           icon: Icons.add_rounded,
           label: 'New',
-          railTooltip: 'New agent or room',
+          railTooltip: l?.agentsNewAgentOrGroup ?? 'New agent or group',
           menu: creates,
         )
       else if (creates.length == 1)
@@ -641,8 +641,8 @@ class _AgentRosterViewState extends State<AgentRosterView> {
       if (widget.onOpenRooms != null)
         _NavRow(
           icon: Icons.groups_outlined,
-          label: 'Control Rooms',
-          railTooltip: 'Control Rooms',
+          label: l?.agentsGroups ?? 'Groups',
+          railTooltip: l?.agentsGroups ?? 'Groups',
           onTap: widget.onOpenRooms,
         ),
       _NavRow(
@@ -994,7 +994,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
       if (rooms.isNotEmpty)
         ..._group(
           _kGroupRooms,
-          'Rooms',
+          AppLocalizations.of(context)?.agentsGroups ?? 'Groups',
           <Widget>[for (final AgentsRoom r in rooms) _roomTile(context, r)],
         ),
       if (hidden.isNotEmpty)

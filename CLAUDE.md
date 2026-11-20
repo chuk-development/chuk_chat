@@ -732,7 +732,8 @@ scripts/build_apk.sh          # arm64 release + adb install + launch
   5 GB RSS, so the script starts it under `memguard-allow 8G`. The CPU spike
   during `flutter run` is the Gradle daemon and the Dart frontend, not the VM.
   The daemon keeps about 4 GB after a build; kill it when RAM gets tight.
-- Other commands: `scripts/emulator.sh status|wait|shot [out.png]|stop`.
+- Other commands: `scripts/emulator.sh [--tablet] status|wait|shot [out.png]|stop`;
+  tablet: `docs/TABLET.md`.
 
 ## Arbeitsweise: Subagenten machen die Arbeit, ich pruefe das Bild
 
