@@ -127,6 +127,26 @@ For detailed security information, see [SECURITY.md](SECURITY.md).
 
 See [chuk.chat/en/pricing](https://chuk.chat/en/pricing) for details.
 
+## Install on Linux (apt / dnf)
+
+The signed package repository gives you updates through your package manager.
+
+```bash
+# Debian, Ubuntu, Linux Mint
+sudo curl -fsSLo /usr/share/keyrings/chuk-chat.gpg https://chuk-development.github.io/chuk_chat/chuk-chat.gpg
+sudo curl -fsSLo /etc/apt/sources.list.d/chuk-chat.sources https://chuk-development.github.io/chuk_chat/chuk-chat.sources
+sudo apt update && sudo apt install chuk-chat
+# update later: sudo apt update && sudo apt install --only-upgrade chuk-chat
+
+# Fedora, RHEL
+sudo rpm --import https://chuk-development.github.io/chuk_chat/chuk-chat.asc
+sudo curl -fsSLo /etc/yum.repos.d/chuk-chat.repo https://chuk-development.github.io/chuk_chat/chuk-chat.repo
+sudo dnf install chuk-chat
+# update later: sudo dnf upgrade chuk-chat
+```
+
+The `.deb` and `.rpm` files on the [releases page](https://github.com/chuk-development/chuk_chat/releases) add this repository when you install them.
+
 ## Development
 
 ### Prerequisites

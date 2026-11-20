@@ -1,0 +1,107 @@
+name: Linux package repository
+
+# Builds the signed apt + dnf repository from the GitHub releases and
+# deploys it to GitHub Pages: https://chuk-development.github.io/chuk_chat/
+#
+# Runs after every release (called by build-cross-platform.yml) and by hand
+# (Actions > Linux package repository > Run workflow), e.g. after a key
+# rotation. It does not build the app. The site is rebuilt from the release
+# assets each time, so a run is safe to repeat.
+#
+# The signing key is used only in this workflow. It never reaches the build
+# jobs, which run third-party build code (pub packages, CMake).
+# Docs: docs/LINUX_BUILDS.md, "apt and dnf repository".
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-package-repository
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and sign repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with: { ref: master, persist-credentials: false }
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            apt-utils dpkg-dev rpm createrepo-c gnupg gpgv xz-utils
+
+      - name: Import signing key
+        env:
+          LINUX_REPO_GPG_PRIVATE_KEY: ${{ secrets.LINUX_REPO_GPG_PRIVATE_KEY }}
+          LINUX_REPO_GPG_PASSPHRASE: ${{ secrets.LINUX_REPO_GPG_PASSPHRASE }}
+        run: |
+          if [ -z "$LINUX_REPO_GPG_PRIVATE_KEY" ] || [ -z "$LINUX_REPO_GPG_PASSPHRASE" ]; then
+            echo "::error::Secrets LINUX_REPO_GPG_PRIVATE_KEY / LINUX_REPO_GPG_PASSPHRASE are missing."
+            exit 1
+          fi
+          umask 077
+          GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -p "$GNUPGHOME"
+          printf '%s' "$LINUX_REPO_GPG_PASSPHRASE" > "$RUNNER_TEMP/gpg-pass"
+          printf '%s\n' "$LINUX_REPO_GPG_PRIVATE_KEY" \
+            | gpg --homedir "$GNUPGHOME" --batch --import >/dev/null 2>&1
+          # build_repo.sh checks the fingerprint against the committed key.
+          gpg --homedir "$GNUPGHOME" --batch --list-secret-keys --with-colons \
+            | awk -F: '$1=="fpr"{print "imported key " $10; exit}'
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          echo "GPG_PASSPHRASE_FILE=$RUNNER_TEMP/gpg-pass" >> "$GITHUB_ENV"
+
+      - name: Download packages from the releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/linux_repo/fetch_release_packages.sh "$RUNNER_TEMP/pkgs"
+
+      - name: Build and sign
+        run: |
+          TMPDIR="$RUNNER_TEMP" scripts/linux_repo/build_repo.sh \
+            --in "$RUNNER_TEMP/pkgs" --out "$RUNNER_TEMP/site"
+
+      - name: Remove signing key
+        if: always()
+        run: |
+          gpgconf --homedir "$RUNNER_TEMP/gnupg" --kill all 2>/dev/null || true
+          rm -rf "$RUNNER_TEMP/gnupg" "$RUNNER_TEMP/gpg-pass"
+
+      - uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: ${{ runner.temp }}/site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5.0.1
+
+      - name: Check the live repository
+        run: |
+          BASE="https://chuk-development.github.io/chuk_chat"
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS "$BASE/deb/dists/stable/InRelease" -o InRelease \
+               && curl -fsS "$BASE/chuk-chat.gpg" -o chuk-chat.gpg; then
+              gpgv --keyring ./chuk-chat.gpg InRelease && exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::The live InRelease does not verify."
+          exit 1

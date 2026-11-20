@@ -114,6 +114,7 @@ jobs:
       version_short: ${{ steps.bump.outputs.version_short }}
       tag: ${{ steps.bump.outputs.tag }}
       prerelease: ${{ steps.bump.outputs.prerelease }}
+      pkg_version: ${{ steps.bump.outputs.pkg_version }}
       build_timestamp: ${{ steps.bump.outputs.build_timestamp }}
 
     steps:
@@ -182,7 +183,13 @@ jobs:
             exit 1
           fi
 
+          # .deb/.rpm version: v1.0.115-pre.2 -> 1.0.115~pre.2. The tilde sorts
+          # before the final 1.0.115 in dpkg and rpm, so apt/dnf upgrade a
+          # pre-release to the final release (scripts/linux_repo/common.sh).
+          PKG_VER="$VER"
+          case "$TAG" in *-pre.*) PKG_VER="${VER}~pre.${TAG##*-pre.}" ;; esac
           echo "version=$VER" >> $GITHUB_OUTPUT
+          echo "pkg_version=$PKG_VER" >> $GITHUB_OUTPUT
           echo "version_short=$VER" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT
@@ -444,61 +451,13 @@ jobs:
 
       - name: Create .deb package
         run: |
-          TAG=${{ needs.version-bump.outputs.tag }}
-          VER=${{ needs.version-bump.outputs.version_short }}
-          BUNDLE=build/linux/x64/release/bundle
-
-          mkdir -p debian/DEBIAN
-          mkdir -p debian/opt/chuk-chat
-          mkdir -p debian/usr/bin
-          mkdir -p debian/usr/share/applications
-          mkdir -p debian/usr/share/icons/hicolor/512x512/apps
-
-          cp -r ${BUNDLE}/* debian/opt/chuk-chat/
-          chmod +x debian/opt/chuk-chat/chuk_chat
-          ln -s /opt/chuk-chat/chuk_chat debian/usr/bin/chuk-chat
-
-          if [ -f web/icons/Icon-512.png ]; then
-            cp web/icons/Icon-512.png debian/usr/share/icons/hicolor/512x512/apps/chuk-chat.png
-          fi
-
-          cat > debian/usr/share/applications/chuk-chat.desktop <<EOF
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=Chuk Chat
-          GenericName=Chat Application
-          Comment=Privacy-focused AI chat with end-to-end encryption
-          Exec=/opt/chuk-chat/chuk_chat
-          Icon=chuk-chat
-          Terminal=false
-          Categories=Network;InstantMessaging;Chat;
-          StartupWMClass=chuk_chat
-          Keywords=chat;ai;encrypted;privacy;
-          EOF
-
-          cat > debian/DEBIAN/control <<EOF
-          Package: chuk-chat
-          Version: ${VER}
-          Section: net
-          Priority: optional
-          Architecture: amd64
-          Maintainer: Chuk Development <support@chuk.dev>
-          Homepage: https://chuk.chat
-          Description: Privacy-focused AI chat with end-to-end encryption
-           Chuk Chat is a cross-platform chat application that uses
-           open-weight AI models with AES-256-GCM end-to-end encryption.
-          Depends: libgtk-3-0, libblkid1, liblzma5, libgstreamer1.0-0, libgstreamer-plugins-base1.0-0, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good
-          EOF
-
-          cat > debian/DEBIAN/postinst <<'SCRIPT'
-          #!/bin/bash
-          update-desktop-database /usr/share/applications 2>/dev/null || true
-          gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
-          SCRIPT
-          chmod +x debian/DEBIAN/postinst
-
-          dpkg-deb --build debian chuk_chat-${TAG}-linux-amd64.deb
+          # scripts/linux_repo/make_deb.sh also ships the apt keyring and adds
+          # the apt repository on install (docs/LINUX_BUILDS.md).
+          scripts/linux_repo/make_deb.sh \
+            --bundle build/linux/x64/release/bundle --arch amd64 \
+            --version "${{ needs.version-bump.outputs.pkg_version }}" \
+            --icon web/icons/Icon-512.png \
+            --out "chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-amd64.deb"
 
       - name: Create AppImage
         run: |
@@ -546,81 +505,11 @@ jobs:
 
       - name: Create RPM package
         run: |
-          TAG=${{ needs.version-bump.outputs.tag }}
-          VER=${{ needs.version-bump.outputs.version_short }}
-          BUNDLE=build/linux/x64/release/bundle
-
-          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-          mkdir -p rpm-src/opt/chuk-chat
-          mkdir -p rpm-src/usr/bin
-          mkdir -p rpm-src/usr/share/applications
-          mkdir -p rpm-src/usr/share/icons/hicolor/512x512/apps
-
-          cp -r ${BUNDLE}/* rpm-src/opt/chuk-chat/
-          chmod +x rpm-src/opt/chuk-chat/chuk_chat
-          ln -s /opt/chuk-chat/chuk_chat rpm-src/usr/bin/chuk-chat
-
-          if [ -f web/icons/Icon-512.png ]; then
-            cp web/icons/Icon-512.png rpm-src/usr/share/icons/hicolor/512x512/apps/chuk-chat.png
-          fi
-
-          cat > rpm-src/usr/share/applications/chuk-chat.desktop <<EOF
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=Chuk Chat
-          Comment=Privacy-focused AI chat with end-to-end encryption
-          Exec=/opt/chuk-chat/chuk_chat
-          Icon=chuk-chat
-          Terminal=false
-          Categories=Network;InstantMessaging;Chat;
-          StartupWMClass=chuk_chat
-          EOF
-
-          tar -czf ~/rpmbuild/SOURCES/chuk-chat-${VER}.tar.gz -C rpm-src .
-
-          cat > ~/rpmbuild/SPECS/chuk-chat.spec <<EOF
-          # Prebuilt Flutter bundle: no debuginfo split. The runner image has
-          # no eu-strip (elfutils), so find-debuginfo would fail %install.
-          %global debug_package %{nil}
-          Name:           chuk-chat
-          Version:        ${VER}
-          Release:        1%{?dist}
-          Summary:        Privacy-focused AI chat with end-to-end encryption
-          License:        BSL-1.1
-          URL:            https://chuk.chat
-          Source0:        chuk-chat-%{version}.tar.gz
-          BuildArch:      x86_64
-          Requires:       gtk3, libblkid, xz-libs, gstreamer1, gstreamer1-plugins-base, gstreamer1-plugins-good
-
-          %description
-          Chuk Chat is a cross-platform chat application that uses
-          open-weight AI models with AES-256-GCM end-to-end encryption.
-
-          %prep
-          %setup -q -c
-
-          %install
-          mkdir -p %{buildroot}
-          cp -r * %{buildroot}/
-
-          %files
-          /opt/chuk-chat/
-          /usr/bin/chuk-chat
-          /usr/share/applications/chuk-chat.desktop
-          /usr/share/icons/hicolor/512x512/apps/chuk-chat.png
-
-          %post
-          update-desktop-database /usr/share/applications 2>/dev/null || true
-          gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
-
-          %changelog
-          * $(date '+%a %b %d %Y') Chuk Development <support@chuk.dev> - ${VER}-1
-          - Release ${VER}
-          EOF
-
-          rpmbuild -bb ~/rpmbuild/SPECS/chuk-chat.spec
-          cp ~/rpmbuild/RPMS/x86_64/chuk-chat-*.rpm chuk_chat-${TAG}-linux-x86_64.rpm || true
+          scripts/linux_repo/make_rpm.sh \
+            --bundle build/linux/x64/release/bundle --arch x86_64 \
+            --version "${{ needs.version-bump.outputs.pkg_version }}" \
+            --icon web/icons/Icon-512.png \
+            --out "chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-x86_64.rpm"
 
       - name: Upload to release
         env:
@@ -630,6 +519,7 @@ jobs:
           gh release upload "$TAG" \
             chuk_chat-*-linux-amd64.deb \
             chuk_chat-*-linux-x86_64.AppImage \
+            chuk_chat-*-linux-x86_64.rpm \
             --repo ${{ github.repository }} --clobber
 
   # ──────────────────────────────────────────────
@@ -706,63 +596,18 @@ jobs:
             echo "path=${BUNDLE}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create .deb package (arm64)
+      - name: Create .deb and .rpm packages (arm64)
         run: |
-          TAG=${{ needs.version-bump.outputs.tag }}
-          VER=${{ needs.version-bump.outputs.version_short }}
-          BUNDLE=${{ steps.bundle.outputs.path }}
-
-          mkdir -p debian/DEBIAN
-          mkdir -p debian/opt/chuk-chat
-          mkdir -p debian/usr/bin
-          mkdir -p debian/usr/share/applications
-          mkdir -p debian/usr/share/icons/hicolor/512x512/apps
-
-          cp -r ${BUNDLE}/* debian/opt/chuk-chat/
-          chmod +x debian/opt/chuk-chat/chuk_chat
-          ln -s /opt/chuk-chat/chuk_chat debian/usr/bin/chuk-chat
-
-          if [ -f web/icons/Icon-512.png ]; then
-            cp web/icons/Icon-512.png debian/usr/share/icons/hicolor/512x512/apps/chuk-chat.png
-          fi
-
-          cat > debian/usr/share/applications/chuk-chat.desktop <<EOF
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=Chuk Chat
-          GenericName=Chat Application
-          Comment=Privacy-focused AI chat with end-to-end encryption
-          Exec=/opt/chuk-chat/chuk_chat
-          Icon=chuk-chat
-          Terminal=false
-          Categories=Network;InstantMessaging;Chat;
-          StartupWMClass=chuk_chat
-          Keywords=chat;ai;encrypted;privacy;
-          EOF
-
-          cat > debian/DEBIAN/control <<EOF
-          Package: chuk-chat
-          Version: ${VER}
-          Section: net
-          Priority: optional
-          Architecture: arm64
-          Maintainer: Chuk Development <support@chuk.dev>
-          Homepage: https://chuk.chat
-          Description: Privacy-focused AI chat with end-to-end encryption
-           Chuk Chat is a cross-platform chat application that uses
-           open-weight AI models with AES-256-GCM end-to-end encryption.
-          Depends: libgtk-3-0, libblkid1, liblzma5, libgstreamer1.0-0, libgstreamer-plugins-base1.0-0, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good
-          EOF
-
-          cat > debian/DEBIAN/postinst <<'SCRIPT'
-          #!/bin/bash
-          update-desktop-database /usr/share/applications 2>/dev/null || true
-          gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
-          SCRIPT
-          chmod +x debian/DEBIAN/postinst
-
-          dpkg-deb --build debian chuk_chat-${TAG}-linux-arm64.deb
+          scripts/linux_repo/make_deb.sh \
+            --bundle "${{ steps.bundle.outputs.path }}" --arch arm64 \
+            --version "${{ needs.version-bump.outputs.pkg_version }}" \
+            --icon web/icons/Icon-512.png \
+            --out "chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-arm64.deb"
+          scripts/linux_repo/make_rpm.sh \
+            --bundle "${{ steps.bundle.outputs.path }}" --arch aarch64 \
+            --version "${{ needs.version-bump.outputs.pkg_version }}" \
+            --icon web/icons/Icon-512.png \
+            --out "chuk_chat-${{ needs.version-bump.outputs.tag }}-linux-aarch64.rpm"
 
       - name: Create AppImage (arm64)
         run: |
@@ -821,7 +666,7 @@ jobs:
         run: |
           TAG=${{ needs.version-bump.outputs.tag }}
           FILES=""
-          for f in chuk_chat-*-linux-arm64.deb chuk_chat-*-linux-aarch64.AppImage chuk_chat-*-linux-aarch64.tar.gz; do
+          for f in chuk_chat-*-linux-arm64.deb chuk_chat-*-linux-aarch64.rpm chuk_chat-*-linux-aarch64.AppImage chuk_chat-*-linux-aarch64.tar.gz; do
             [ -f "$f" ] && FILES="$FILES $f"
           done
           [ -n "$FILES" ] && gh release upload "$TAG" $FILES --repo ${{ github.repository }} --clobber
@@ -905,49 +750,10 @@ jobs:
           VER=${{ needs.version-bump.outputs.version_short }}
           BUNDLE=build/linux/x64/release/bundle
 
-          # .deb
-          rm -rf debian
-          mkdir -p debian/DEBIAN debian/opt/chuk-chat debian/usr/bin \
-                   debian/usr/share/applications debian/usr/share/icons/hicolor/512x512/apps
-          cp -r ${BUNDLE}/* debian/opt/chuk-chat/
-          chmod +x debian/opt/chuk-chat/chuk_chat
-          ln -s /opt/chuk-chat/chuk_chat debian/usr/bin/chuk-chat
-          [ -f web/icons/Icon-512.png ] && cp web/icons/Icon-512.png debian/usr/share/icons/hicolor/512x512/apps/chuk-chat.png
-          cat > debian/usr/share/applications/chuk-chat.desktop <<EOF
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=Chuk Chat
-          GenericName=Chat Application
-          Comment=Privacy-focused AI chat with end-to-end encryption (full, Linux WebView)
-          Exec=/opt/chuk-chat/chuk_chat
-          Icon=chuk-chat
-          Terminal=false
-          Categories=Network;InstantMessaging;Chat;
-          StartupWMClass=chuk_chat
-          Keywords=chat;ai;encrypted;privacy;
-          EOF
-          cat > debian/DEBIAN/control <<EOF
-          Package: chuk-chat
-          Version: ${VER}
-          Section: net
-          Priority: optional
-          Architecture: amd64
-          Maintainer: Chuk Development <support@chuk.dev>
-          Homepage: https://chuk.chat
-          Description: Privacy-focused AI chat with end-to-end encryption (full)
-           Bundles a Chromium Embedded Framework (CEF) runtime for real
-           HTML and Excalidraw artifact rendering on Linux. If you prefer
-           a smaller install, use the non-"-full" artifact instead.
-          Depends: libgtk-3-0, libblkid1, liblzma5, libgstreamer1.0-0, libgstreamer-plugins-base1.0-0, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, libnss3, libxkbcommon0, libxdamage1, libxcomposite1, libgbm1, libasound2t64
-          EOF
-          cat > debian/DEBIAN/postinst <<'SCRIPT'
-          #!/bin/bash
-          update-desktop-database /usr/share/applications 2>/dev/null || true
-          gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
-          SCRIPT
-          chmod +x debian/DEBIAN/postinst
-          dpkg-deb --build debian chuk_chat-${TAG}-linux-amd64-full.deb
+          # .deb: package chuk-chat-full, replaces chuk-chat, no apt repo.
+          scripts/linux_repo/make_deb.sh --variant full \
+            --bundle "$BUNDLE" --arch amd64 --version "${{ needs.version-bump.outputs.pkg_version }}" \
+            --icon web/icons/Icon-512.png --out "chuk_chat-${TAG}-linux-amd64-full.deb"
 
           # AppImage
           rm -rf AppDir
@@ -979,69 +785,10 @@ jobs:
           chmod +x AppDir/AppRun
           ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir chuk_chat-${TAG}-linux-x86_64-full.AppImage
 
-          # .rpm
-          rm -rf ~/rpmbuild rpm-src
-          mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-          mkdir -p rpm-src/opt/chuk-chat rpm-src/usr/bin \
-                   rpm-src/usr/share/applications rpm-src/usr/share/icons/hicolor/512x512/apps
-          cp -r ${BUNDLE}/* rpm-src/opt/chuk-chat/
-          chmod +x rpm-src/opt/chuk-chat/chuk_chat
-          ln -s /opt/chuk-chat/chuk_chat rpm-src/usr/bin/chuk-chat
-          [ -f web/icons/Icon-512.png ] && cp web/icons/Icon-512.png rpm-src/usr/share/icons/hicolor/512x512/apps/chuk-chat.png
-          cat > rpm-src/usr/share/applications/chuk-chat.desktop <<EOF
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=Chuk Chat (full)
-          Exec=/opt/chuk-chat/chuk_chat
-          Icon=chuk-chat
-          Terminal=false
-          Categories=Network;InstantMessaging;Chat;
-          StartupWMClass=chuk_chat
-          EOF
-          tar -czf ~/rpmbuild/SOURCES/chuk-chat-${VER}.tar.gz -C rpm-src .
-          cat > ~/rpmbuild/SPECS/chuk-chat.spec <<EOF
-          # Prebuilt Flutter bundle: no debuginfo split. The runner image has
-          # no eu-strip (elfutils), so find-debuginfo would fail %install.
-          %global debug_package %{nil}
-          Name:           chuk-chat
-          Version:        ${VER}
-          Release:        1%{?dist}
-          Summary:        Privacy-focused AI chat with CEF-backed Linux WebView
-          License:        BSL-1.1
-          URL:            https://chuk.chat
-          Source0:        chuk-chat-%{version}.tar.gz
-          BuildArch:      x86_64
-          Requires:       gtk3, libblkid, xz-libs, gstreamer1, gstreamer1-plugins-base, gstreamer1-plugins-good, nss, libxkbcommon, libXdamage, libXcomposite, mesa-libgbm, alsa-lib
-
-          %description
-          Chuk Chat -full bundles a Chromium Embedded Framework runtime
-          for Linux artifact rendering. Use the non-"-full" RPM if you
-          prefer a smaller install.
-
-          %prep
-          %setup -q -c
-
-          %install
-          mkdir -p %{buildroot}
-          cp -r * %{buildroot}/
-
-          %files
-          /opt/chuk-chat/
-          /usr/bin/chuk-chat
-          /usr/share/applications/chuk-chat.desktop
-          /usr/share/icons/hicolor/512x512/apps/chuk-chat.png
-
-          %post
-          update-desktop-database /usr/share/applications 2>/dev/null || true
-          gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
-
-          %changelog
-          * $(date '+%a %b %d %Y') Chuk Development <support@chuk.dev> - ${VER}-1
-          - Release ${VER} (full variant)
-          EOF
-          rpmbuild -bb ~/rpmbuild/SPECS/chuk-chat.spec
-          cp ~/rpmbuild/RPMS/x86_64/chuk-chat-*.rpm chuk_chat-${TAG}-linux-x86_64-full.rpm || true
+          # .rpm: package chuk-chat-full, obsoletes chuk-chat, no dnf repo.
+          scripts/linux_repo/make_rpm.sh --variant full \
+            --bundle "$BUNDLE" --arch x86_64 --version "${{ needs.version-bump.outputs.pkg_version }}" \
+            --icon web/icons/Icon-512.png --out "chuk_chat-${TAG}-linux-x86_64-full.rpm"
 
       - name: Upload to release
         env:
@@ -1150,43 +897,10 @@ jobs:
           VER=${{ needs.version-bump.outputs.version_short }}
           BUNDLE=${{ steps.bundle.outputs.path }}
 
-          # .deb
-          rm -rf debian
-          mkdir -p debian/DEBIAN debian/opt/chuk-chat debian/usr/bin \
-                   debian/usr/share/applications debian/usr/share/icons/hicolor/512x512/apps
-          cp -r ${BUNDLE}/* debian/opt/chuk-chat/
-          chmod +x debian/opt/chuk-chat/chuk_chat
-          ln -s /opt/chuk-chat/chuk_chat debian/usr/bin/chuk-chat
-          [ -f web/icons/Icon-512.png ] && cp web/icons/Icon-512.png debian/usr/share/icons/hicolor/512x512/apps/chuk-chat.png
-          cat > debian/usr/share/applications/chuk-chat.desktop <<EOF
-          [Desktop Entry]
-          Version=1.0
-          Type=Application
-          Name=Chuk Chat (full)
-          Exec=/opt/chuk-chat/chuk_chat
-          Icon=chuk-chat
-          Terminal=false
-          Categories=Network;InstantMessaging;Chat;
-          StartupWMClass=chuk_chat
-          EOF
-          cat > debian/DEBIAN/control <<EOF
-          Package: chuk-chat
-          Version: ${VER}
-          Section: net
-          Priority: optional
-          Architecture: arm64
-          Maintainer: Chuk Development <support@chuk.dev>
-          Homepage: https://chuk.chat
-          Description: Privacy-focused AI chat with CEF-backed Linux WebView (full)
-          Depends: libgtk-3-0, libblkid1, liblzma5, libgstreamer1.0-0, libgstreamer-plugins-base1.0-0, gstreamer1.0-plugins-base, gstreamer1.0-plugins-good, libnss3, libxkbcommon0, libxdamage1, libxcomposite1, libgbm1, libasound2t64
-          EOF
-          cat > debian/DEBIAN/postinst <<'SCRIPT'
-          #!/bin/bash
-          update-desktop-database /usr/share/applications 2>/dev/null || true
-          gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
-          SCRIPT
-          chmod +x debian/DEBIAN/postinst
-          dpkg-deb --build debian chuk_chat-${TAG}-linux-arm64-full.deb
+          # .deb: package chuk-chat-full, replaces chuk-chat, no apt repo.
+          scripts/linux_repo/make_deb.sh --variant full \
+            --bundle "$BUNDLE" --arch arm64 --version "${{ needs.version-bump.outputs.pkg_version }}" \
+            --icon web/icons/Icon-512.png --out "chuk_chat-${TAG}-linux-arm64-full.deb"
 
           # AppImage (aarch64)
           rm -rf AppDir
@@ -1621,3 +1335,23 @@ jobs:
       # failed at this step (HTTP 401), turning every job red even when the
       # main publish to chuk_chat succeeded. Binaries are already attached
       # to the chuk-development/chuk_chat release at this point.
+
+  # ──────────────────────────────────────────────
+  # apt + dnf repository (GitHub Pages)
+  # ──────────────────────────────────────────────
+  # Rebuilds the signed repository from the releases, so that
+  # "apt install --only-upgrade chuk-chat" / "dnf upgrade chuk-chat" find this
+  # release. See .github/workflows/linux-repo.yml and docs/LINUX_BUILDS.md.
+  linux-repo:
+    name: Linux package repository
+    needs: [publish-release, build-linux-x64, build-linux-arm64]
+    if: |
+      always() &&
+      needs.publish-release.result == 'success' &&
+      (needs.build-linux-x64.result == 'success' || needs.build-linux-arm64.result == 'success')
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/linux-repo.yml
+    secrets: inherit

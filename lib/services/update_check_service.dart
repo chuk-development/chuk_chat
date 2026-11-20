@@ -40,6 +40,27 @@ class UpdateCheckService {
   static bool get _isLinuxFull =>
       !kIsWeb && Platform.isLinux && _linuxVariant == 'full';
 
+  /// Page of the signed apt/dnf repository (`scripts/linux_repo/`). It
+  /// shows the commands that install and update the app.
+  static const String linuxRepoPageUrl =
+      'https://chuk-development.github.io/chuk_chat/';
+
+  /// True when the slim .deb/.rpm installed this copy and the package added
+  /// the apt/dnf repository. Such an install updates through the package
+  /// manager (`apt install --only-upgrade chuk-chat`, `dnf upgrade
+  /// chuk-chat`), so the update notice opens the repository page and does
+  /// not download a new package file.
+  static bool get linuxUpdatesViaPackageManager {
+    if (kIsWeb || !Platform.isLinux || _isLinuxFull) return false;
+    try {
+      if (!File('/opt/chuk-chat/chuk_chat').existsSync()) return false;
+      return File('/etc/apt/sources.list.d/chuk-chat.sources').existsSync() ||
+          File('/etc/yum.repos.d/chuk-chat.repo').existsSync();
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Reactive notifier — widgets listen to this for update availability.
   static final ValueNotifier<UpdateInfo?> updateAvailable =
       ValueNotifier<UpdateInfo?>(null);
@@ -96,7 +117,9 @@ class UpdateCheckService {
       if (_isNewerVersion(remoteVersion, localVersion)) {
         // Find the direct download URL for this platform/arch
         final assets = data['assets'] as List<dynamic>? ?? [];
-        final downloadUrl = _findDownloadUrl(assets);
+        final downloadUrl = linuxUpdatesViaPackageManager
+            ? linuxRepoPageUrl
+            : _findDownloadUrl(assets);
         final releasePage =
             'https://github.com/$_owner/$_repo/releases/tag/$tagName';
 
@@ -291,7 +314,8 @@ class UpdateInfo {
   final String currentVersion;
   final String latestVersion;
 
-  /// Direct download URL for the current platform's asset, or null.
+  /// Direct download URL for the current platform's asset, or null. For a
+  /// Linux install that updates through apt/dnf, the repository page.
   final String? downloadUrl;
 
   /// URL to the GitHub releases page (always available).
