@@ -81,3 +81,9 @@ round outcome).
 - Regel: Vor einem UI-Commit `git status --short docs/screenshots` pruefen und
   geaenderte Goldens mit stagen. Einen neuen oder geaenderten Test auch allein
   laufen lassen (`--plain-name`), denn CI teilt die Shards pro Testfall.
+
+## 2026-11-20: stop the Android emulator when the work is done
+
+The tablet AVD stayed up "for the next test" and the owner saw it running.
+Rule: when no step needs the emulator any more, `scripts/emulator.sh stop`.
+To show him the app, use `--window`; otherwise it runs headless.

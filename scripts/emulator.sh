@@ -8,6 +8,7 @@
 # Usage:
 #   scripts/emulator.sh start    # create the AVD if needed, boot it, wait
 #   scripts/emulator.sh start --tablet  # the tablet AVD instead (see below)
+#   scripts/emulator.sh start --tablet --window  # in a window, to show the owner
 #   scripts/emulator.sh wait     # block until sys.boot_completed=1
 #   scripts/emulator.sh status   # AVD, serial, boot state, GPU mode
 #   scripts/emulator.sh shot [out.png]
@@ -17,15 +18,25 @@
 # --tablet (in any position) selects the tablet AVD `cowork_tablet_x64`:
 # Pixel Tablet profile, 2560x1600 at 320 dpi (1280x800 dp), the same
 # system image as the phone AVD (no new download) and a 6 GB data partition.
+# --window shows the emulator in a window on the owner's screen (only when
+# he asks to see it; agents test headless). It starts outside the Claude
+# session via `user-app`, so it survives the session.
+# Stop the emulator when the work is done (`scripts/emulator.sh stop`): it
+# holds about 5 GB RAM.
 # Only one emulator runs at a time: `start` stops an emulator of the other
 # AVD first, so `scripts/build_apk.sh --emulator` installs on the AVD that
 # was started last.
 set -euo pipefail
 
 TABLET=0
+WINDOW=0
 ARGS=()
 for a in "$@"; do
-  if [ "$a" = "--tablet" ]; then TABLET=1; else ARGS+=("$a"); fi
+  case "$a" in
+    --tablet) TABLET=1 ;;
+    --window) WINDOW=1 ;;
+    *) ARGS+=("$a") ;;
+  esac
 done
 set -- "${ARGS[@]+"${ARGS[@]}"}"
 if [ "$TABLET" = "1" ]; then
@@ -116,11 +127,18 @@ start() {
   # WiFi emulation (netsimd) burn CPU for nothing here, and audio has no use.
   local guard=()
   command -v memguard-allow >/dev/null && guard=(memguard-allow 8G)
+  local window=(-no-window)
+  if [ "$WINDOW" = "1" ]; then
+    window=()
+    # systemd-run does not pass the environment on, so the allocator settings
+    # go through env.
+    command -v user-app >/dev/null && guard=(user-app env TCMALLOC_AGGRESSIVE_DECOMMIT=t TCMALLOC_RELEASE_RATE=10)
+  fi
   # tcmalloc in the emulator keeps freed multi-GB blocks. Disk writes in the
   # guest (an APK install) allocate those, so without this the process grew
   # to 18 GB RSS over a session with hw.ramSize at 4 GB. See docs/PERFORMANCE.md.
   TCMALLOC_AGGRESSIVE_DECOMMIT=t TCMALLOC_RELEASE_RATE=10 \
-  setsid "${guard[@]}" "$EMULATOR" -avd "$AVD" -no-window -no-snapshot -gpu "$GPU_MODE" -accel on \
+  setsid "${guard[@]}" "$EMULATOR" -avd "$AVD" "${window[@]+"${window[@]}"}" -no-snapshot -gpu "$GPU_MODE" -accel on \
     -no-boot-anim -no-metrics -no-audio -feature -Bluetooth \
     ${AGENTS_AVD_EXTRA:-} >"$LOG" 2>&1 < /dev/null &
   wait_boot
@@ -190,6 +208,9 @@ stop() {
   local s; s="$(serial)"
   [ -n "$s" ] || { echo "not running"; return 0; }
   "$ADB" -s "$s" emu kill >/dev/null 2>&1 || true
+  # Wait until it is gone, so a `start` right after does not find it.
+  local deadline=$(( $(date +%s) + 60 ))
+  while [ -n "$(serial)" ] && [ "$(date +%s)" -lt "$deadline" ]; do sleep 2; done
   echo "stopped $s"
 }
 
@@ -200,5 +221,5 @@ case "${1:-start}" in
   status) status ;;
   shot) shift; shot "${1:-}" ;;
   stop) stop ;;
-  *) echo "usage: $0 [--tablet] {start|wait|status|shot [out.png]|keyboard [0|1]|stop}" >&2; exit 2 ;;
+  *) echo "usage: $0 [--tablet] [--window] {start|wait|status|shot [out.png]|keyboard [0|1]|stop}" >&2; exit 2 ;;
 esac
