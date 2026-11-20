@@ -74,3 +74,10 @@ round outcome).
 - Regel: Marke immer nur als `assets/logo.svg` (Zeichen) + `assets/wordmark.svg`
   (eingefrorene Pfade, Liberation Mono Bold, Slogan darunter), nur umfaerben,
   nie neu setzen, nie andere Schrift, Slogan nicht als eigener Text.
+
+## 2026-11-20: Goldens nicht mitcommittet, CI rot
+- Fehler: Beim Sammel-Commit nur `lib/`, `test/` und einzelne Docs gestaged.
+  Die neu erzeugten Goldens unter `docs/screenshots/` fehlten, CI war rot.
+- Regel: Vor einem UI-Commit `git status --short docs/screenshots` pruefen und
+  geaenderte Goldens mit stagen. Einen neuen oder geaenderten Test auch allein
+  laufen lassen (`--plain-name`), denn CI teilt die Shards pro Testfall.
