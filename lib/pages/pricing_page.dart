@@ -11,6 +11,9 @@ import 'package:chuk_chat/services/usage_logs_service.dart';
 import 'package:chuk_chat/services/user_status_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/agents_cloud_box_addon.dart';
+import 'package:chuk_chat/widgets/agents_cloud_box_billing_sheets.dart'
+    show showCloudBoxBookSheet;
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -56,10 +59,11 @@ Future<String> _getAccessToken() async {
   return session.accessToken;
 }
 
-/// Opens the Stripe checkout. Without [planId] it is the Plus plan; with one
-/// (`agents_20`, ...) the server maps the id to its configured price id. The
-/// app never holds a Stripe price id.
-Future<void> startCheckout({String? planId}) async {
+/// Opens the Stripe checkout. Without [planId] and [cloudBoxSize] it is the
+/// Plus plan; with a plan id (`agents_20`, ...) the server maps the id to its
+/// configured price id, and [cloudBoxSize] (`s`, `m`, ...) adds the cloud
+/// computer add-on (also alone). The app never holds a Stripe price id.
+Future<void> startCheckout({String? planId, String? cloudBoxSize}) async {
   final token = await _getAccessToken();
 
   final response = await http.post(
@@ -68,7 +72,13 @@ Future<void> startCheckout({String? planId}) async {
       'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
     },
-    body: planId == null ? null : jsonEncode({'plan': planId}),
+    body: switch (agentsCheckoutBody(
+      planId: planId,
+      cloudBoxSize: cloudBoxSize,
+    )) {
+      final Map<String, dynamic> body => jsonEncode(body),
+      null => null,
+    },
   );
 
   if (response.statusCode == 409) {
@@ -144,7 +154,11 @@ Future<Map<String, dynamic>> getUserStatus() async {
 }
 
 class PricingPage extends StatefulWidget {
-  const PricingPage({super.key});
+  const PricingPage({super.key, this.initialCloudBoxSize});
+
+  /// Pre-selects this cloud computer size (the "book later" path for a user
+  /// without a subscription). Null keeps the recommended size.
+  final String? initialCloudBoxSize;
 
   @override
   State<PricingPage> createState() => _PricingPageState();
@@ -159,6 +173,19 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
   /// The Sidekicks plans (CHAT-164), only in the Agents build. The defaults
   /// show at once; the server's list replaces them when it arrives.
   List<AgentsPlan> _agentsPlans = kAgentsPlanDefaults;
+
+  /// The cloud computer add-on: its sizes, whether it goes into the checkout
+  /// (on by default, the user can untick it) and the chosen size.
+  List<AgentsCloudBoxSize> _cloudBoxSizes = kAgentsCloudBoxSizeDefaults;
+  bool _cloudBoxOn = true;
+  late String _cloudBoxSizeId =
+      widget.initialCloudBoxSize ??
+      defaultCloudBoxSize(kAgentsCloudBoxSizeDefaults).id;
+
+  AgentsCloudBoxSize? get _cloudBoxChoice => _cloudBoxOn
+      ? (cloudBoxSizeById(_cloudBoxSizes, _cloudBoxSizeId) ??
+            defaultCloudBoxSize(_cloudBoxSizes))
+      : null;
 
   @override
   void initState() {
@@ -221,12 +248,18 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
   }
 
   Future<void> _loadAgentsPlans() async {
-    final List<AgentsPlan> plans = await fetchAgentsPlans();
+    final AgentsPlanCatalog catalog = await fetchAgentsPlanCatalog();
     if (!mounted) return;
-    setState(() => _agentsPlans = plans);
+    setState(() {
+      _agentsPlans = catalog.plans;
+      _cloudBoxSizes = catalog.cloudBoxSizes;
+      if (cloudBoxSizeById(_cloudBoxSizes, _cloudBoxSizeId) == null) {
+        _cloudBoxSizeId = defaultCloudBoxSize(_cloudBoxSizes).id;
+      }
+    });
   }
 
-  Future<void> _handleSubscribe({String? planId}) async {
+  Future<void> _handleSubscribe({String? planId, String? cloudBoxSize}) async {
     if (_isProcessing) return;
 
     if (!_agreedToTerms) {
@@ -249,7 +282,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
         return;
       }
 
-      await startCheckout(planId: planId);
+      await startCheckout(planId: planId, cloudBoxSize: cloudBoxSize);
 
       // Wait a bit and refresh
       Future.delayed(const Duration(seconds: 3), () {
@@ -321,9 +354,10 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
           title: names[i.clamp(0, names.length - 1)],
           price: l.agentsPlanPrice('${_agentsPlans[i].priceEur}'),
           features: [
-            if (_agentsPlans[i].includesCloudBox) l.agentsPlanCloudBox,
             switch (_agentsPlans[i].creditEur) {
-              final num credit => l.agentsPlanCredit(_formatEuro(credit)),
+              final num credit => l.agentsPlanCredit(
+                formatEuroAmount(credit, l.locale.languageCode),
+              ),
               null => creditFallback[i.clamp(0, creditFallback.length - 1)],
             },
           ],
@@ -331,32 +365,56 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
           child: paymentsDisabled
               ? null
               : Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.tonal(
-                      onPressed: _isProcessing || !_agreedToTerms
-                          ? null
-                          : () =>
-                              _handleSubscribe(planId: _agentsPlans[i].id),
-                      child: Text(l.agentsPlanChoose),
-                    ),
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Plan plus add-on, so the sum is never a surprise.
+                      Text(
+                        agentsTotalLine(
+                          l,
+                          _agentsPlans[i],
+                          _cloudBoxChoice,
+                        ),
+                        key: ValueKey('agents_total_${_agentsPlans[i].id}'),
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.tonal(
+                        onPressed: _isProcessing || !_agreedToTerms
+                            ? null
+                            : () => _handleSubscribe(
+                                planId: _agentsPlans[i].id,
+                                cloudBoxSize: _cloudBoxChoice?.id,
+                              ),
+                        child: Text(l.agentsPlanChoose),
+                      ),
+                    ],
                   ),
                 ),
         ),
         const SizedBox(height: 12),
       ],
+      // The cloud computer: an optional add-on with its own price,
+      // pre-selected, which the user can switch off.
+      AgentsCloudBoxAddonCard(
+        sizes: _cloudBoxSizes,
+        enabled: _cloudBoxOn,
+        selectedId: _cloudBoxSizeId,
+        onEnabledChanged: paymentsDisabled
+            ? null
+            : (bool on) => setState(() => _cloudBoxOn = on),
+        onSizeChanged: (AgentsCloudBoxSize size) =>
+            setState(() => _cloudBoxSizeId = size.id),
+      ),
+      const SizedBox(height: 12),
       if (!paymentsDisabled) ...[
         _consentRow(l, onAccent: false),
         const SizedBox(height: 16),
       ],
     ];
   }
-
-  static String _formatEuro(num amount) =>
-      amount == amount.roundToDouble()
-          ? amount.round().toString()
-          : amount.toStringAsFixed(2);
 
   /// The consent checkbox with the withdrawal and terms links. On the accent
   /// card it draws white; elsewhere it takes the theme's colours.
@@ -563,8 +621,38 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
 
           if (hasSubscription) const SizedBox(height: 16),
 
-          // Sidekicks plans with the cloud computer (Agents build only).
+          // Sidekicks plans and the cloud computer add-on (Agents build).
           if (kFeatureAgents && !hasSubscription) ..._agentsPlanSection(l),
+
+          // A subscriber without the add-on can book it now (pro rata).
+          if (kFeatureAgents &&
+              hasSubscription &&
+              !paymentsDisabled &&
+              agentsPlanIncludesCloudBox(_userStatus) == false) ...[
+            ExpressiveGroup(
+              children: [
+                ExpressiveRow(
+                  key: const ValueKey('pricing_book_cloud_box'),
+                  icon: Icons.cloud_outlined,
+                  title: l.cloudBoxBook,
+                  subtitle: l.cloudBoxBookSubtitle(
+                    formatEuroAmount(
+                      _cloudBoxSizes.first.priceEur,
+                      l.locale.languageCode,
+                    ),
+                  ),
+                  onTap: () async {
+                    final bool booked = await showCloudBoxBookSheet(
+                      context,
+                      sizes: _cloudBoxSizes,
+                    );
+                    if (booked && mounted) _loadUserStatus(force: true);
+                  },
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // Plus plan subscribe card (if not already subscribed)
           if (!hasSubscription)

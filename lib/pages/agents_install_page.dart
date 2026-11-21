@@ -22,15 +22,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/pages/agents_pairing_page.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/agents/agents_install_flow.dart';
 import 'package:chuk_chat/services/agents/agents_install_ticket.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_uri.dart';
+import 'package:chuk_chat/services/agents_plans.dart'
+    show formatEuroAmount, kAgentsCloudBoxSizeDefaults;
 import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 /// Opens the code page and hands back what the user scanned or typed.
 typedef AgentsCodePageOpener = Future<AgentsPairingInvite?> Function(
@@ -46,6 +50,7 @@ class AgentsInstallPage extends StatefulWidget {
     required this.pair,
     this.openCodePage,
     this.now,
+    this.bookCloudBox,
   });
 
   final AgentsInstallTicketStore ticketStore;
@@ -62,6 +67,11 @@ class AgentsInstallPage extends StatefulWidget {
 
   /// Overrides the clock. Tests only.
   final DateTime Function()? now;
+
+  /// The other way: book a cloud computer instead of running Agents here
+  /// (CHAT-164). Completes with true when it was booked; the page then
+  /// closes and the zero-click setup takes over. Null hides the offer.
+  final Future<bool> Function(BuildContext context)? bookCloudBox;
 
   static const ValueKey<String> commandKey = ValueKey<String>(
     'agents-install-command',
@@ -81,6 +91,9 @@ class AgentsInstallPage extends StatefulWidget {
   static const ValueKey<String> messageKey = ValueKey<String>(
     'agents-install-message',
   );
+  static const ValueKey<String> bookCloudBoxKey = ValueKey<String>(
+    'agents-install-book-cloud-box',
+  );
 
   /// Opens the page. Completes with true when a computer was linked.
   static Future<bool> show(
@@ -89,6 +102,7 @@ class AgentsInstallPage extends StatefulWidget {
     required AccountSessionSource sessionSource,
     required AgentsInstallClaimWaiter claimWaiter,
     required AgentsInstallPairer pair,
+    Future<bool> Function(BuildContext context)? bookCloudBox,
   }) async {
     final bool? linked = await Navigator.of(context).push<bool>(
       MaterialPageRoute<bool>(
@@ -97,6 +111,7 @@ class AgentsInstallPage extends StatefulWidget {
           sessionSource: sessionSource,
           claimWaiter: claimWaiter,
           pair: pair,
+          bookCloudBox: bookCloudBox,
         ),
       ),
     );
@@ -164,6 +179,15 @@ class _AgentsInstallPageState extends State<AgentsInstallPage> {
     AppNotifications.show(context, 'Command copied.');
   }
 
+  Future<void> _bookCloudBox() async {
+    final Future<bool> Function(BuildContext)? book = widget.bookCloudBox;
+    if (book == null) return;
+    final bool booked = await book(context);
+    if (!booked || !mounted || _closed) return;
+    _closed = true;
+    Navigator.of(context).pop(false);
+  }
+
   Future<void> _useCode() async {
     final AgentsCodePageOpener open =
         widget.openCodePage ?? AgentsPairingPage.show;
@@ -200,6 +224,8 @@ class _AgentsInstallPageState extends State<AgentsInstallPage> {
     final TextTheme text = theme.textTheme;
     final AgentsInstallPhase phase = _flow.phase;
     final AgentsInstallTicket? ticket = _flow.ticket;
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
     final bool showCommand =
         ticket != null &&
         (phase == AgentsInstallPhase.waiting ||
@@ -253,6 +279,26 @@ class _AgentsInstallPageState extends State<AgentsInstallPage> {
             child: const Text('Pair with a code instead'),
           ),
         ),
+      if (widget.bookCloudBox != null &&
+          phase != AgentsInstallPhase.linking) ...<Widget>[
+        const SizedBox(height: 24),
+        ExpressiveGroup(
+          children: <Widget>[
+            ExpressiveRow(
+              key: AgentsInstallPage.bookCloudBoxKey,
+              icon: Icons.cloud_outlined,
+              title: l.cloudBoxBook,
+              subtitle: l.cloudBoxBookSubtitle(
+                formatEuroAmount(
+                  kAgentsCloudBoxSizeDefaults.first.priceEur,
+                  l.locale.languageCode,
+                ),
+              ),
+              onTap: () => unawaited(_bookCloudBox()),
+            ),
+          ],
+        ),
+      ],
     ];
   }
 

@@ -2063,7 +2063,7 @@ const Map<String, String> stringsDe = {
   'cloudBoxNoBackup': 'Noch keine Sicherung',
   'agentsPlansHeader': 'Sidekicks-Pläne',
   'agentsPlansIntro':
-      'Jeder Plan enthält deinen eigenen Cloud-Computer. Deine Sidekicks laufen dort, ohne dass du etwas installierst. Du kannst sie weiterhin auch auf deinem eigenen Computer betreiben.',
+      'Wähle, wie viel Modell-Guthaben du brauchst. Den Cloud-Computer kannst du unten dazubuchen.',
   'agentsPlanSmall': 'Sidekicks S',
   'agentsPlanMedium': 'Sidekicks M',
   'agentsPlanLarge': 'Sidekicks L',
@@ -2074,6 +2074,78 @@ const Map<String, String> stringsDe = {
   'agentsPlanCreditMedium': 'Mehr Modell-Guthaben',
   'agentsPlanCreditLarge': 'Am meisten Modell-Guthaben',
   'agentsPlanChoose': 'Plan wählen',
+  'cloudBoxRecommended':
+      'Empfohlen',
+  'cloudBoxAddonBody':
+      'Deine Sidekicks laufen auf einem eigenen Computer in der Cloud, immer an, ohne Installation. Ohne ihn betreibst du sie auf deinem eigenen Computer.',
+  'cloudBoxAddonToggle':
+      'Cloud-Computer dazubuchen',
+  'cloudBoxSizeLabel':
+      'Größe {label}',
+  'cloudBoxSizeSpecs':
+      '{vcpu} vCPU · {ram} GB RAM · {disk} GB Speicher',
+  'cloudBoxPricePerMonth':
+      '{price} €/Monat',
+  'cloudBoxAddonPrice':
+      'zusätzlich {price} €/Monat',
+  'cloudBoxMonthlyCancel':
+      'Monatlich, monatlich kündbar',
+  'agentsTotalWithBox':
+      'Gesamt mit Cloud-Computer: {price} €/Monat',
+  'agentsTotalPlanOnly':
+      'Gesamt: {price} €/Monat',
+  'cloudBoxBook':
+      'Cloud-Computer buchen',
+  'cloudBoxBookSubtitle':
+      'Kein eigener Computer? Ab {price} €/Monat.',
+  'cloudBoxBookConfirm':
+      'Für {price} €/Monat buchen',
+  'cloudBoxBookTerms':
+      'Du zahlst {price} € im Monat. Der Rest des laufenden Abrechnungszeitraums wird jetzt anteilig berechnet. Monatlich kündbar.',
+  'cloudBoxBooked':
+      'Cloud-Computer gebucht. Er wird jetzt eingerichtet.',
+  'cloudBoxAlreadyBooked':
+      'Du hast bereits einen Cloud-Computer gebucht.',
+  'cloudBoxNeedsPlan':
+      'Wähle zuerst einen Plan. Der Cloud-Computer ist schon ausgewählt.',
+  'cloudBoxActionFailed':
+      'Das hat nicht geklappt. Versuche es später noch einmal.',
+  'cloudBoxChangeSize':
+      'Größe ändern',
+  'cloudBoxCurrent':
+      'Aktuell',
+  'cloudBoxUpgradeNote':
+      'Sofort, anteilig berechnet. Dein Cloud-Computer startet einmal kurz neu.',
+  'cloudBoxDowngradeNote':
+      'Zum Ende des Abrechnungszeitraums. Deine Daten müssen in die kleinere Größe passen.',
+  'cloudBoxResizeConfirm':
+      'Zu {label} wechseln',
+  'cloudBoxPendingChange':
+      'Wechselt am {date} zu {label}',
+  'cloudBoxPendingChangeSoon':
+      'Wechselt zum Ende des Abrechnungszeitraums zu {label}',
+  'cloudBoxResized':
+      'Größe geändert. Dein Cloud-Computer startet kurz neu.',
+  'cloudBoxResizeScheduled':
+      'Die Änderung gilt ab dem Ende des Abrechnungszeitraums.',
+  'cloudBoxDoesNotFit':
+      'Deine Daten passen nicht in diese Größe. Lösche Dateien oder wähle eine größere Größe.',
+  'cloudBoxNoSubscription':
+      'Du hast kein aktives Abo.',
+  'cloudBoxCancel':
+      'Cloud-Computer kündigen',
+  'cloudBoxCancelSubtitle':
+      'Endet zum Ende des Abrechnungszeitraums',
+  'cloudBoxCancelTitle':
+      'Cloud-Computer kündigen?',
+  'cloudBoxCancelBody':
+      'Er läuft bis zum Ende des Abrechnungszeitraums weiter. Danach werden deine Daten gesichert und 90 Tage aufbewahrt, so kannst du ihn wieder buchen und weitermachen.',
+  'cloudBoxCancelConfirm':
+      'Zum Periodenende kündigen',
+  'cloudBoxKeep':
+      'Behalten',
+  'cloudBoxCancelled':
+      'Gekündigt. Er läuft bis zum Ende des Abrechnungszeitraums.',
   // ── end cloud computer ──
   // ── tray menu ──
   'trayModeChats': 'Chats',

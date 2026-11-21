@@ -2026,7 +2026,7 @@ const Map<String, String> stringsEn = {
   'cloudBoxNoBackup': 'No backup yet',
   'agentsPlansHeader': 'Sidekicks plans',
   'agentsPlansIntro':
-      'Every plan includes your own cloud computer. Your Sidekicks run there, with nothing to install. You can still run them on your own computer.',
+      'Choose how much model credit you need. The cloud computer is an optional add-on below.',
   'agentsPlanSmall': 'Sidekicks S',
   'agentsPlanMedium': 'Sidekicks M',
   'agentsPlanLarge': 'Sidekicks L',
@@ -2037,6 +2037,78 @@ const Map<String, String> stringsEn = {
   'agentsPlanCreditMedium': 'More model credit',
   'agentsPlanCreditLarge': 'Most model credit',
   'agentsPlanChoose': 'Choose plan',
+  'cloudBoxRecommended':
+      'Recommended',
+  'cloudBoxAddonBody':
+      'Your Sidekicks run on their own computer in the cloud, always on, with nothing to install. Without it, you run them on your own computer.',
+  'cloudBoxAddonToggle':
+      'Add the cloud computer',
+  'cloudBoxSizeLabel':
+      'Size {label}',
+  'cloudBoxSizeSpecs':
+      '{vcpu} vCPU · {ram} GB RAM · {disk} GB storage',
+  'cloudBoxPricePerMonth':
+      '€{price}/month',
+  'cloudBoxAddonPrice':
+      'plus €{price}/month',
+  'cloudBoxMonthlyCancel':
+      'Billed monthly, cancel any month',
+  'agentsTotalWithBox':
+      'Total with cloud computer: €{price}/month',
+  'agentsTotalPlanOnly':
+      'Total: €{price}/month',
+  'cloudBoxBook':
+      'Book a cloud computer',
+  'cloudBoxBookSubtitle':
+      'No computer of your own? From €{price}/month.',
+  'cloudBoxBookConfirm':
+      'Book for €{price}/month',
+  'cloudBoxBookTerms':
+      'You pay €{price} per month. The rest of the current billing period is charged pro rata now. You can cancel any month.',
+  'cloudBoxBooked':
+      'Cloud computer booked. It is being set up now.',
+  'cloudBoxAlreadyBooked':
+      'You have already booked a cloud computer.',
+  'cloudBoxNeedsPlan':
+      'Choose a plan first. The cloud computer is already selected.',
+  'cloudBoxActionFailed':
+      'That did not work. Try again later.',
+  'cloudBoxChangeSize':
+      'Change size',
+  'cloudBoxCurrent':
+      'Current',
+  'cloudBoxUpgradeNote':
+      'Takes effect now, charged pro rata. Your cloud computer restarts once, briefly.',
+  'cloudBoxDowngradeNote':
+      'Takes effect at the end of the billing period. Your data must fit into the smaller size.',
+  'cloudBoxResizeConfirm':
+      'Change to {label}',
+  'cloudBoxPendingChange':
+      'Changes to {label} on {date}',
+  'cloudBoxPendingChangeSoon':
+      'Changes to {label} at the end of the billing period',
+  'cloudBoxResized':
+      'Size changed. Your cloud computer restarts briefly.',
+  'cloudBoxResizeScheduled':
+      'The change takes effect at the end of the billing period.',
+  'cloudBoxDoesNotFit':
+      'Your data does not fit into this size. Delete some files or choose a larger size.',
+  'cloudBoxNoSubscription':
+      'You have no active subscription.',
+  'cloudBoxCancel':
+      'Cancel cloud computer',
+  'cloudBoxCancelSubtitle':
+      'Ends at the end of the billing period',
+  'cloudBoxCancelTitle':
+      'Cancel the cloud computer?',
+  'cloudBoxCancelBody':
+      'It keeps running until the end of the billing period. Then your data is backed up and kept for 90 days, so you can book it again and carry on.',
+  'cloudBoxCancelConfirm':
+      'Cancel at period end',
+  'cloudBoxKeep':
+      'Keep it',
+  'cloudBoxCancelled':
+      'Cancelled. It runs until the end of the billing period.',
   // ── end cloud computer ──
   // ── tray menu ──
   'trayModeChats': 'Chats',

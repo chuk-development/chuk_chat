@@ -917,13 +917,25 @@ mixin AgentsShellHost on State<MessengerShell> {
 
   /// Opens the install page. Completes with true when a computer was linked.
   Future<bool> _openInstallPage() async {
+    bool booked = false;
     final bool linked = await AgentsInstallPage.show(
       context,
       ticketStore: AgentsInstallTicketStore(backend: _pairingStore.backend),
       sessionSource: widget.sessionSource,
       claimWaiter: widget.installClaimWaiter ?? _waitForInstallClaim,
       pair: _pairWithInvite,
+      // The other way (CHAT-164): book a cloud computer. A build without
+      // direct payments does not offer it.
+      bookCloudBox: kFeaturePaymentsDirect
+          ? (BuildContext pageContext) async =>
+                booked = await showCloudBoxBookSheet(pageContext)
+          : null,
     );
+    if (booked && mounted) {
+      // The booking refreshed the user status; this picks the zero-click
+      // setup up even when the flow sat in "failed".
+      unawaited(_cloudBox.resumed());
+    }
     if (linked && mounted) {
       // The store signalled the write already; this makes sure the answer is
       // in before the caller moves to the Agents half.

@@ -2047,6 +2047,54 @@ class AppLocalizations {
   String get agentsPlanCreditMedium => _get('agentsPlanCreditMedium');
   String get agentsPlanCreditLarge => _get('agentsPlanCreditLarge');
   String get agentsPlanChoose => _get('agentsPlanChoose');
+  String get cloudBoxRecommended => _get('cloudBoxRecommended');
+  String get cloudBoxAddonBody => _get('cloudBoxAddonBody');
+  String get cloudBoxAddonToggle => _get('cloudBoxAddonToggle');
+  String cloudBoxSizeLabel(String label) =>
+      _get('cloudBoxSizeLabel').replaceAll('{label}', label);
+  String cloudBoxSizeSpecs(String vcpu, String ram, String disk) =>
+      _get('cloudBoxSizeSpecs').replaceAll('{vcpu}', vcpu).replaceAll('{ram}', ram).replaceAll('{disk}', disk);
+  String cloudBoxPricePerMonth(String price) =>
+      _get('cloudBoxPricePerMonth').replaceAll('{price}', price);
+  String cloudBoxAddonPrice(String price) =>
+      _get('cloudBoxAddonPrice').replaceAll('{price}', price);
+  String get cloudBoxMonthlyCancel => _get('cloudBoxMonthlyCancel');
+  String agentsTotalWithBox(String price) =>
+      _get('agentsTotalWithBox').replaceAll('{price}', price);
+  String agentsTotalPlanOnly(String price) =>
+      _get('agentsTotalPlanOnly').replaceAll('{price}', price);
+  String get cloudBoxBook => _get('cloudBoxBook');
+  String cloudBoxBookSubtitle(String price) =>
+      _get('cloudBoxBookSubtitle').replaceAll('{price}', price);
+  String cloudBoxBookConfirm(String price) =>
+      _get('cloudBoxBookConfirm').replaceAll('{price}', price);
+  String cloudBoxBookTerms(String price) =>
+      _get('cloudBoxBookTerms').replaceAll('{price}', price);
+  String get cloudBoxBooked => _get('cloudBoxBooked');
+  String get cloudBoxAlreadyBooked => _get('cloudBoxAlreadyBooked');
+  String get cloudBoxNeedsPlan => _get('cloudBoxNeedsPlan');
+  String get cloudBoxActionFailed => _get('cloudBoxActionFailed');
+  String get cloudBoxChangeSize => _get('cloudBoxChangeSize');
+  String get cloudBoxCurrent => _get('cloudBoxCurrent');
+  String get cloudBoxUpgradeNote => _get('cloudBoxUpgradeNote');
+  String get cloudBoxDowngradeNote => _get('cloudBoxDowngradeNote');
+  String cloudBoxResizeConfirm(String label) =>
+      _get('cloudBoxResizeConfirm').replaceAll('{label}', label);
+  String cloudBoxPendingChange(String label, String date) =>
+      _get('cloudBoxPendingChange').replaceAll('{label}', label).replaceAll('{date}', date);
+  String cloudBoxPendingChangeSoon(String label) =>
+      _get('cloudBoxPendingChangeSoon').replaceAll('{label}', label);
+  String get cloudBoxResized => _get('cloudBoxResized');
+  String get cloudBoxResizeScheduled => _get('cloudBoxResizeScheduled');
+  String get cloudBoxDoesNotFit => _get('cloudBoxDoesNotFit');
+  String get cloudBoxNoSubscription => _get('cloudBoxNoSubscription');
+  String get cloudBoxCancel => _get('cloudBoxCancel');
+  String get cloudBoxCancelSubtitle => _get('cloudBoxCancelSubtitle');
+  String get cloudBoxCancelTitle => _get('cloudBoxCancelTitle');
+  String get cloudBoxCancelBody => _get('cloudBoxCancelBody');
+  String get cloudBoxCancelConfirm => _get('cloudBoxCancelConfirm');
+  String get cloudBoxKeep => _get('cloudBoxKeep');
+  String get cloudBoxCancelled => _get('cloudBoxCancelled');
   // ── end tray menu ──
   // ── feedback ──
   // ── end feedback ──

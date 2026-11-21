@@ -420,7 +420,7 @@ void main() {
         client: MockClient((_) async => http.Response('', 404)),
       );
       expect(plans.map((p) => p.priceEur), <int>[20, 30, 40]);
-      expect(plans.every((p) => p.includesCloudBox), isTrue);
+      expect(plans.any((p) => p.includesCloudBox), isFalse);
     });
 
     test('user status flag', () {

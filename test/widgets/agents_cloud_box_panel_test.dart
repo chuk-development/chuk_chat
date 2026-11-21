@@ -9,7 +9,7 @@ import 'package:chuk_chat/services/agents/agents_cloud_box_flow.dart';
 import 'package:chuk_chat/widgets/agents_cloud_box_panel.dart';
 import 'package:chuk_chat/widgets/agents_cloud_box_settings_section.dart';
 
-class _Api implements AgentsCloudBoxApi {
+class _Api implements AgentsCloudBoxApi, AgentsCloudBoxBillingApi {
   _Api(this.answer);
 
   final Object answer;
@@ -22,6 +22,15 @@ class _Api implements AgentsCloudBoxApi {
 
   @override
   Future<AgentsCloudBoxStatus> request(String pairingToken) => fetch();
+
+  @override
+  Future<AgentsCloudBoxStatus> book(String size) => fetch();
+
+  @override
+  Future<AgentsCloudBoxStatus> cancel() => fetch();
+
+  @override
+  Future<AgentsCloudBoxStatus> resize(String size) => fetch();
 }
 
 Widget _app(Widget child) => MaterialApp(
@@ -155,14 +164,22 @@ void main() {
       expect(find.textContaining('Last backup:'), findsOneWidget);
     });
 
-    testWidgets('none or 404: nothing at all', (WidgetTester tester) async {
+    // With direct payments, "none" offers booking instead
+    // (agents_cloud_box_billing_test.dart).
+    testWidgets('none without payments, or 404: nothing at all', (
+      WidgetTester tester,
+    ) async {
       for (final Object answer in <Object>[
         AgentsCloudBoxStatus.none,
         const AgentsCloudBoxException(404, 'http_404'),
       ]) {
         await tester.pumpWidget(
           _app(
-            AgentsCloudBoxSettingsSection(key: UniqueKey(), api: _Api(answer)),
+            AgentsCloudBoxSettingsSection(
+              key: UniqueKey(),
+              api: _Api(answer),
+              paymentsEnabled: false,
+            ),
           ),
         );
         await tester.pump();

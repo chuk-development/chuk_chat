@@ -11,6 +11,18 @@
 ///    the same shape. It is idempotent. 402 means the user has no plan that
 ///    includes a cloud computer.
 ///
+/// The add-on (booked on its own, with a size):
+///
+///  * `GET /v2/agents/cloud-box` also carries `size`, `pending_size`,
+///    `pending_effective_at` and `sizes_available`.
+///  * `POST /v2/agents/cloud-box/subscription` `{"size": "s"}` books it on the
+///    existing subscription (charged pro rata now). 402: no subscription,
+///    409: already booked.
+///  * `DELETE /v2/agents/cloud-box/subscription` cancels it at period end.
+///  * `POST /v2/agents/cloud-box/resize` `{"size": "m"}`: a bigger size now
+///    (pro rata, one short restart), a smaller one at period end; 409
+///    `does_not_fit` when the data would not fit.
+///
 /// The pairing token is the same one-time token the install command carries
 /// (`agents_install_ticket.dart`). The server hands it to the cloud host, the
 /// host parks on the token's relay channel, and the app pairs exactly as it
@@ -26,6 +38,8 @@ import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/services/agents/agent_mail_service.dart'
     show AgentMailTokenSource, supabaseAgentMailToken;
+import 'package:chuk_chat/services/agents_plans.dart'
+    show AgentsCloudBoxSize, cloudBoxSizeById, kAgentsCloudBoxSizeDefaults;
 import 'package:chuk_chat/services/api_config_service.dart';
 
 /// Where the user's cloud computer stands, as the server reports it.
@@ -55,7 +69,14 @@ enum AgentsCloudBoxState {
 /// One answer of the cloud computer endpoint.
 @immutable
 class AgentsCloudBoxStatus {
-  const AgentsCloudBoxStatus({required this.state, this.lastBackupAt});
+  const AgentsCloudBoxStatus({
+    required this.state,
+    this.lastBackupAt,
+    this.size,
+    this.pendingSize,
+    this.pendingEffectiveAt,
+    this.sizesAvailable = const <AgentsCloudBoxSize>[],
+  });
 
   static const AgentsCloudBoxStatus none = AgentsCloudBoxStatus(
     state: AgentsCloudBoxState.none,
@@ -66,13 +87,46 @@ class AgentsCloudBoxStatus {
   /// When the server last saved a backup of the computer. Null when unknown.
   final DateTime? lastBackupAt;
 
+  /// The booked size id (`s`, `m`, ...), or null when the add-on is not
+  /// booked.
+  final String? size;
+
+  /// A size change that waits for the end of the billing period.
+  final String? pendingSize;
+  final DateTime? pendingEffectiveAt;
+
+  /// The sizes the user can change to. Empty when the server did not say.
+  final List<AgentsCloudBoxSize> sizesAvailable;
+
+  /// True when the add-on is booked (a size is set, or a computer exists).
+  bool get booked => size != null || state != AgentsCloudBoxState.none;
+
   /// Reads a response body. A malformed body reads as [none].
   static AgentsCloudBoxStatus fromJson(Object? json) {
     if (json is! Map) return none;
     final Object? backup = json['last_backup_at'];
+    final Object? size = json['size'];
+    final Object? pending = json['pending_size'];
+    final Object? pendingAt = json['pending_effective_at'];
+    final Object? available = json['sizes_available'];
     return AgentsCloudBoxStatus(
       state: AgentsCloudBoxState.parse(json['state']),
       lastBackupAt: backup is String ? DateTime.tryParse(backup) : null,
+      size: size is String && size.isNotEmpty ? size : null,
+      pendingSize: pending is String && pending.isNotEmpty ? pending : null,
+      pendingEffectiveAt: pendingAt is String
+          ? DateTime.tryParse(pendingAt)
+          : null,
+      sizesAvailable: <AgentsCloudBoxSize>[
+        if (available is List)
+          for (final Object? row in available)
+            // Either full size objects or bare ids of the known sizes.
+            if (row is String
+                    ? cloudBoxSizeById(kAgentsCloudBoxSizeDefaults, row)
+                    : AgentsCloudBoxSize.fromJson(row)
+                case final AgentsCloudBoxSize s)
+              s,
+      ],
     );
   }
 
@@ -80,13 +134,26 @@ class AgentsCloudBoxStatus {
   bool operator ==(Object other) =>
       other is AgentsCloudBoxStatus &&
       other.state == state &&
-      other.lastBackupAt == lastBackupAt;
+      other.lastBackupAt == lastBackupAt &&
+      other.size == size &&
+      other.pendingSize == pendingSize &&
+      other.pendingEffectiveAt == pendingEffectiveAt &&
+      listEquals(other.sizesAvailable, sizesAvailable);
 
   @override
-  int get hashCode => Object.hash(state, lastBackupAt);
+  int get hashCode => Object.hash(
+    state,
+    lastBackupAt,
+    size,
+    pendingSize,
+    pendingEffectiveAt,
+    Object.hashAll(sizesAvailable),
+  );
 
   @override
-  String toString() => 'AgentsCloudBoxStatus($state, backup: $lastBackupAt)';
+  String toString() =>
+      'AgentsCloudBoxStatus($state, size: $size, pending: $pendingSize, '
+      'backup: $lastBackupAt)';
 }
 
 /// Why a cloud computer call failed. The text never holds the token.
@@ -102,8 +169,15 @@ class AgentsCloudBoxException implements Exception {
   /// The server does not offer cloud computers (404).
   bool get unavailable => statusCode == 404;
 
-  /// The user's plan does not include a cloud computer (402).
+  /// The user's plan does not include a cloud computer (402). For a booking
+  /// it means: no subscription yet, go to checkout.
   bool get noPlan => statusCode == 402;
+
+  /// The add-on is already booked (409).
+  bool get alreadyBooked => statusCode == 409 && code != 'does_not_fit';
+
+  /// A smaller size would not hold the data (409 `does_not_fit`).
+  bool get doesNotFit => code == 'does_not_fit';
 
   @override
   String toString() => 'AgentsCloudBoxException($statusCode, $code)';
@@ -120,8 +194,50 @@ abstract interface class AgentsCloudBoxApi {
   Future<AgentsCloudBoxStatus> request(String pairingToken);
 }
 
+/// The add-on's billing calls. Apart from [AgentsCloudBoxApi], so the flow's
+/// fakes need not know them.
+abstract interface class AgentsCloudBoxBillingApi {
+  /// The current state. Throws [AgentsCloudBoxException].
+  Future<AgentsCloudBoxStatus> fetch();
+
+  /// Books the add-on in [size] on the existing subscription.
+  Future<AgentsCloudBoxStatus> book(String size);
+
+  /// Cancels the add-on at the end of the billing period.
+  Future<AgentsCloudBoxStatus> cancel();
+
+  /// Changes the size: bigger now, smaller at period end.
+  Future<AgentsCloudBoxStatus> resize(String size);
+}
+
+/// The machine code in an error body: `{"code": ...}`, `{"error": ...}`,
+/// `{"detail": "..."}` or `{"detail": {"code": ...}}`. Null when none.
+String? cloudBoxErrorCode(String body) {
+  Object? data;
+  try {
+    data = jsonDecode(body);
+  } catch (_) {
+    return null;
+  }
+  String? pick(Object? map) {
+    if (map is! Map) return null;
+    for (final String key in const <String>['code', 'error', 'detail']) {
+      final Object? v = map[key];
+      if (v is String && v.isNotEmpty) return v;
+      if (v is Map) {
+        final String? inner = pick(v);
+        if (inner != null) return inner;
+      }
+    }
+    return null;
+  }
+
+  return pick(data);
+}
+
 /// [AgentsCloudBoxApi] over HTTP to the API server.
-class HttpAgentsCloudBoxApi implements AgentsCloudBoxApi {
+class HttpAgentsCloudBoxApi
+    implements AgentsCloudBoxApi, AgentsCloudBoxBillingApi {
   HttpAgentsCloudBoxApi({
     this.client,
     this.baseUrl,
@@ -142,7 +258,8 @@ class HttpAgentsCloudBoxApi implements AgentsCloudBoxApi {
 
   static const String path = '/v2/agents/cloud-box';
 
-  Uri get _uri => Uri.parse('${baseUrl ?? ApiConfigService.apiBaseUrl}$path');
+  Uri _uri([String suffix = '']) =>
+      Uri.parse('${baseUrl ?? ApiConfigService.apiBaseUrl}$path$suffix');
 
   @override
   Future<AgentsCloudBoxStatus> fetch() => _send('GET');
@@ -151,15 +268,31 @@ class HttpAgentsCloudBoxApi implements AgentsCloudBoxApi {
   Future<AgentsCloudBoxStatus> request(String pairingToken) =>
       _send('POST', body: <String, dynamic>{'pairing_token': pairingToken});
 
+  @override
+  Future<AgentsCloudBoxStatus> book(String size) => _send(
+    'POST',
+    suffix: '/subscription',
+    body: <String, dynamic>{'size': size},
+  );
+
+  @override
+  Future<AgentsCloudBoxStatus> cancel() =>
+      _send('DELETE', suffix: '/subscription');
+
+  @override
+  Future<AgentsCloudBoxStatus> resize(String size) =>
+      _send('POST', suffix: '/resize', body: <String, dynamic>{'size': size});
+
   Future<AgentsCloudBoxStatus> _send(
     String method, {
+    String suffix = '',
     Map<String, dynamic>? body,
   }) async {
     final String? token = await _token();
     if (token == null || token.isEmpty) {
       throw const AgentsCloudBoxException(401, 'not_signed_in');
     }
-    final http.Request request = http.Request(method, _uri)
+    final http.Request request = http.Request(method, _uri(suffix))
       ..headers['Authorization'] = 'Bearer $token'
       ..headers['Accept'] = 'application/json';
     if (body != null) {
@@ -187,8 +320,12 @@ class HttpAgentsCloudBoxApi implements AgentsCloudBoxApi {
       }
       throw AgentsCloudBoxException(
         response.statusCode,
-        'http_${response.statusCode}',
+        cloudBoxErrorCode(response.body) ?? 'http_${response.statusCode}',
       );
+    }
+    // A billing answer may come without a body; that is a success too.
+    if (response.body.trim().isEmpty && suffix.isNotEmpty) {
+      return AgentsCloudBoxStatus.none;
     }
     try {
       return AgentsCloudBoxStatus.fromJson(jsonDecode(response.body));

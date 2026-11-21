@@ -189,7 +189,10 @@ import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/floating_page_scaffold.dart';
 import 'package:chuk_chat/widgets/settings_surface.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/platform_config.dart' show kFeaturePaymentsDirect;
 import 'package:chuk_chat/widgets/agents_cloud_box_panel.dart';
+import 'package:chuk_chat/widgets/agents_cloud_box_billing_sheets.dart'
+    show showCloudBoxBookSheet;
 import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
