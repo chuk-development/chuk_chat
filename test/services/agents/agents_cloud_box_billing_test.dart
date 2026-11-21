@@ -209,6 +209,69 @@ void main() {
       expect(await client.cancel(), AgentsCloudBoxStatus.none);
     });
 
+    test('402 payment codes: action with a Stripe page, or declined', () async {
+      const String url = 'https://invoice.stripe.com/i/acct_1/test_x';
+      final HttpAgentsCloudBoxApi action = api(
+        <http.Request>[],
+        (_) => http.Response(
+          jsonEncode(<String, Object?>{
+            'detail': 'payment_action_required',
+            'hosted_invoice_url': url,
+          }),
+          402,
+        ),
+      );
+      await expectLater(
+        action.book('s'),
+        throwsA(
+          isA<AgentsCloudBoxException>()
+              .having((e) => e.paymentActionRequired, 'action', isTrue)
+              .having((e) => e.hostedInvoiceUrl, 'url', url)
+              .having((e) => e.noPlan, 'noPlan', isFalse)
+              .having((e) => e.paymentFailed, 'failed', isFalse),
+        ),
+      );
+      final HttpAgentsCloudBoxApi declined = api(
+        <http.Request>[],
+        (_) => http.Response('{"detail":"payment_failed"}', 402),
+      );
+      await expectLater(
+        declined.resize('m'),
+        throwsA(
+          isA<AgentsCloudBoxException>()
+              .having((e) => e.paymentFailed, 'failed', isTrue)
+              .having((e) => e.noPlan, 'noPlan', isFalse),
+        ),
+      );
+    });
+
+    test('an invoice URL off Stripe is dropped', () {
+      String body(String url) => jsonEncode(<String, Object?>{
+        'detail': 'payment_action_required',
+        'hosted_invoice_url': url,
+      });
+      expect(
+        cloudBoxHostedInvoiceUrl(body('https://invoice.stripe.com/i/x')),
+        'https://invoice.stripe.com/i/x',
+      );
+      expect(
+        cloudBoxHostedInvoiceUrl(body('http://invoice.stripe.com/i/x')),
+        isNull,
+      );
+      expect(
+        cloudBoxHostedInvoiceUrl(body('https://evil.example/i/x')),
+        isNull,
+      );
+      expect(cloudBoxHostedInvoiceUrl('not json'), isNull);
+      // Without a page the action reads as a declined payment.
+      const AgentsCloudBoxException e = AgentsCloudBoxException(
+        402,
+        'payment_action_required',
+      );
+      expect(e.paymentActionRequired, isFalse);
+      expect(e.paymentFailed, isTrue);
+    });
+
     test('402 and 409 does_not_fit map to the flags', () async {
       final HttpAgentsCloudBoxApi noSub = api(
         <http.Request>[],

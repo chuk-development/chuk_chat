@@ -11,6 +11,11 @@
 ///   data would not fit.
 /// * **Cancel**: a confirm dialog; the add-on ends at period end, the data is
 ///   backed up and kept 90 days.
+/// * **Payment**: book and resize charge at once. 402
+///   `payment_action_required` opens the Stripe invoice page (3-D Secure) and
+///   the sheet says to confirm the payment there; the webhook books the
+///   change once it is paid. 402 `payment_failed` shows a message and a
+///   button to the billing portal.
 library;
 
 import 'dart:async';
@@ -19,7 +24,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
-import 'package:chuk_chat/pages/pricing_page.dart' show PricingPage;
+import 'package:chuk_chat/pages/pricing_page.dart'
+    show PricingPage, openBillingPortal, openCloudBoxPaymentPage;
 import 'package:chuk_chat/services/agents/agents_cloud_box_api.dart';
 import 'package:chuk_chat/services/agents_plans.dart';
 import 'package:chuk_chat/services/user_status_service.dart';
@@ -36,6 +42,12 @@ typedef CloudBoxCheckoutOpener = Future<void> Function(
 
 /// Runs after a booking, a size change or a cancellation.
 typedef CloudBoxChanged = Future<void> Function();
+
+/// Opens a payment page (the Stripe invoice for a 3-D Secure confirmation).
+typedef CloudBoxUrlOpener = Future<void> Function(String url);
+
+/// Opens the billing portal (payment details).
+typedef CloudBoxPortalOpener = Future<void> Function();
 
 /// The default checkout path: the pricing page with the add-on pre-selected.
 Future<void> openCloudBoxCheckout(BuildContext context, String size) async {
@@ -88,6 +100,8 @@ Future<bool> showCloudBoxBookSheet(
   List<AgentsCloudBoxSize>? sizes,
   CloudBoxCheckoutOpener? openCheckout,
   CloudBoxChanged? onBooked,
+  CloudBoxUrlOpener? openPaymentPage,
+  CloudBoxPortalOpener? openPortal,
 }) async {
   final AppLocalizations l = _l(context);
   final _BookOutcome? outcome = await expressiveSheet<_BookOutcome>(
@@ -96,6 +110,8 @@ Future<bool> showCloudBoxBookSheet(
     child: CloudBoxBookSheet(
       api: api ?? HttpAgentsCloudBoxApi.instance,
       sizes: _sizesOr(sizes),
+      openPaymentPage: openPaymentPage,
+      openPortal: openPortal,
     ),
   );
   if (!context.mounted) return false;
@@ -115,10 +131,22 @@ Future<bool> showCloudBoxBookSheet(
 
 /// The body of the book sheet. Public for tests.
 class CloudBoxBookSheet extends StatefulWidget {
-  const CloudBoxBookSheet({super.key, required this.api, required this.sizes});
+  const CloudBoxBookSheet({
+    super.key,
+    required this.api,
+    required this.sizes,
+    this.openPaymentPage,
+    this.openPortal,
+  });
 
   final AgentsCloudBoxBillingApi api;
   final List<AgentsCloudBoxSize> sizes;
+
+  /// Null = the browser ([openCloudBoxPaymentPage]).
+  final CloudBoxUrlOpener? openPaymentPage;
+
+  /// Null = [openBillingPortal].
+  final CloudBoxPortalOpener? openPortal;
 
   static const ValueKey<String> confirmKey = ValueKey<String>(
     'cloud-box-book-confirm',
@@ -131,10 +159,17 @@ class CloudBoxBookSheet extends StatefulWidget {
   State<CloudBoxBookSheet> createState() => _CloudBoxBookSheetState();
 }
 
-class _CloudBoxBookSheetState extends State<CloudBoxBookSheet> {
+class _CloudBoxBookSheetState extends State<CloudBoxBookSheet>
+    with _CloudBoxPaymentState<CloudBoxBookSheet> {
   late AgentsCloudBoxSize _selected = defaultCloudBoxSize(widget.sizes);
   bool _busy = false;
   String? _error;
+
+  @override
+  CloudBoxUrlOpener? get _openPaymentPage => widget.openPaymentPage;
+
+  @override
+  CloudBoxPortalOpener? get _openPortal => widget.openPortal;
 
   Future<void> _book() async {
     if (_busy) return;
@@ -142,6 +177,7 @@ class _CloudBoxBookSheetState extends State<CloudBoxBookSheet> {
     setState(() {
       _busy = true;
       _error = null;
+      _paymentFailed = false;
     });
     try {
       await widget.api.book(_selected.id);
@@ -151,6 +187,10 @@ class _CloudBoxBookSheetState extends State<CloudBoxBookSheet> {
       if (!mounted) return;
       if (error.noPlan) {
         Navigator.of(context).pop(_NeedsCheckout(_selected.id));
+        return;
+      }
+      if (_takePaymentError(error)) {
+        setState(() => _busy = false);
         return;
       }
       setState(() {
@@ -179,18 +219,26 @@ class _CloudBoxBookSheetState extends State<CloudBoxBookSheet> {
       picker: AgentsCloudBoxSizePicker(
         sizes: widget.sizes,
         selectedId: _selected.id,
-        onSelected: _busy ? null : (s) => setState(() => _selected = s),
+        onSelected: _busy || _invoiceUrl != null
+            ? null
+            : (s) => setState(() => _selected = s),
       ),
-      note: l.cloudBoxBookTerms(price),
-      error: _error,
+      note: _invoiceUrl != null
+          ? l.cloudBoxConfirmPaymentNote
+          : l.cloudBoxBookTerms(price),
+      noteKey: _invoiceUrl != null ? cloudBoxPaymentNoteKey : null,
+      error: _paymentFailed ? l.cloudBoxPaymentFailed : _error,
       errorKey: CloudBoxBookSheet.errorKey,
+      help: _portalButton(l),
       busy: _busy,
-      confirm: ExpressiveButton(
-        key: CloudBoxBookSheet.confirmKey,
-        icon: Icons.cloud_outlined,
-        label: l.cloudBoxBookConfirm(price),
-        onTap: () => unawaited(_book()),
-      ),
+      confirm:
+          _confirmPaymentButton(l) ??
+          ExpressiveButton(
+            key: CloudBoxBookSheet.confirmKey,
+            icon: Icons.cloud_outlined,
+            label: l.cloudBoxBookConfirm(price),
+            onTap: () => unawaited(_book()),
+          ),
     );
   }
 }
@@ -209,6 +257,8 @@ Future<bool> showCloudBoxResizeSheet(
   AgentsCloudBoxBillingApi? api,
   List<AgentsCloudBoxSize>? sizes,
   CloudBoxChanged? onChanged,
+  CloudBoxUrlOpener? openPaymentPage,
+  CloudBoxPortalOpener? openPortal,
 }) async {
   final AppLocalizations l = _l(context);
   final List<AgentsCloudBoxSize> offered = _sizesOr(
@@ -221,6 +271,8 @@ Future<bool> showCloudBoxResizeSheet(
       api: api ?? HttpAgentsCloudBoxApi.instance,
       sizes: offered,
       currentId: status.size,
+      openPaymentPage: openPaymentPage,
+      openPortal: openPortal,
     ),
   );
   if (!context.mounted || upgraded == null) return false;
@@ -240,11 +292,19 @@ class CloudBoxResizeSheet extends StatefulWidget {
     required this.api,
     required this.sizes,
     required this.currentId,
+    this.openPaymentPage,
+    this.openPortal,
   });
 
   final AgentsCloudBoxBillingApi api;
   final List<AgentsCloudBoxSize> sizes;
   final String? currentId;
+
+  /// Null = the browser ([openCloudBoxPaymentPage]).
+  final CloudBoxUrlOpener? openPaymentPage;
+
+  /// Null = [openBillingPortal].
+  final CloudBoxPortalOpener? openPortal;
 
   static const ValueKey<String> confirmKey = ValueKey<String>(
     'cloud-box-resize-confirm',
@@ -260,10 +320,17 @@ class CloudBoxResizeSheet extends StatefulWidget {
   State<CloudBoxResizeSheet> createState() => _CloudBoxResizeSheetState();
 }
 
-class _CloudBoxResizeSheetState extends State<CloudBoxResizeSheet> {
+class _CloudBoxResizeSheetState extends State<CloudBoxResizeSheet>
+    with _CloudBoxPaymentState<CloudBoxResizeSheet> {
   late String? _selectedId = widget.currentId;
   bool _busy = false;
   String? _error;
+
+  @override
+  CloudBoxUrlOpener? get _openPaymentPage => widget.openPaymentPage;
+
+  @override
+  CloudBoxPortalOpener? get _openPortal => widget.openPortal;
 
   AgentsCloudBoxSize? get _current =>
       cloudBoxSizeById(widget.sizes, widget.currentId) ??
@@ -279,6 +346,7 @@ class _CloudBoxResizeSheetState extends State<CloudBoxResizeSheet> {
     setState(() {
       _busy = true;
       _error = null;
+      _paymentFailed = false;
     });
     try {
       await widget.api.resize(target.id);
@@ -286,6 +354,10 @@ class _CloudBoxResizeSheetState extends State<CloudBoxResizeSheet> {
       Navigator.of(context).pop(upgrade);
     } on AgentsCloudBoxException catch (error) {
       if (!mounted) return;
+      if (_takePaymentError(error)) {
+        setState(() => _busy = false);
+        return;
+      }
       setState(() {
         _busy = false;
         _error = error.doesNotFit
@@ -313,25 +385,34 @@ class _CloudBoxResizeSheetState extends State<CloudBoxResizeSheet> {
         sizes: widget.sizes,
         selectedId: _selectedId,
         currentId: widget.currentId,
-        onSelected: _busy ? null : (s) => setState(() => _selectedId = s.id),
+        onSelected: _busy || _invoiceUrl != null
+            ? null
+            : (s) => setState(() => _selectedId = s.id),
       ),
-      note: changed
+      note: _invoiceUrl != null
+          ? l.cloudBoxConfirmPaymentNote
+          : changed
           ? (cloudBoxIsUpgrade(_current, target)
                 ? l.cloudBoxUpgradeNote
                 : l.cloudBoxDowngradeNote)
           : null,
-      noteKey: CloudBoxResizeSheet.noteKey,
-      error: _error,
+      noteKey: _invoiceUrl != null
+          ? cloudBoxPaymentNoteKey
+          : CloudBoxResizeSheet.noteKey,
+      error: _paymentFailed ? l.cloudBoxPaymentFailed : _error,
       errorKey: CloudBoxResizeSheet.errorKey,
+      help: _portalButton(l),
       busy: _busy,
-      confirm: changed
-          ? ExpressiveButton(
-              key: CloudBoxResizeSheet.confirmKey,
-              icon: Icons.tune,
-              label: l.cloudBoxResizeConfirm(target.label),
-              onTap: () => unawaited(_resize(target)),
-            )
-          : null,
+      confirm:
+          _confirmPaymentButton(l) ??
+          (changed
+              ? ExpressiveButton(
+                  key: CloudBoxResizeSheet.confirmKey,
+                  icon: Icons.tune,
+                  label: l.cloudBoxResizeConfirm(target.label),
+                  onTap: () => unawaited(_resize(target)),
+                )
+              : null),
     );
   }
 }
@@ -416,6 +497,104 @@ class CloudBoxCancelDialog extends StatelessWidget {
 
 // ─── Shared ────────────────────────────────────────────────────────────────
 
+/// The note shown while a payment waits for the bank's confirmation.
+const ValueKey<String> cloudBoxPaymentNoteKey = ValueKey<String>(
+  'cloud-box-payment-note',
+);
+
+/// The button that opens the payment page again.
+const ValueKey<String> cloudBoxConfirmPaymentKey = ValueKey<String>(
+  'cloud-box-confirm-payment',
+);
+
+/// The button to the billing portal after a declined payment.
+const ValueKey<String> cloudBoxPaymentDetailsKey = ValueKey<String>(
+  'cloud-box-payment-details',
+);
+
+/// The 402 handling the book and resize sheets share.
+mixin _CloudBoxPaymentState<T extends StatefulWidget> on State<T> {
+  /// Set while the bank wants a confirmation: the Stripe invoice page.
+  String? _invoiceUrl;
+
+  /// The last charge was declined.
+  bool _paymentFailed = false;
+
+  CloudBoxUrlOpener? get _openPaymentPage;
+  CloudBoxPortalOpener? get _openPortal;
+
+  /// Takes a 402 payment error. True when it was one.
+  bool _takePaymentError(AgentsCloudBoxException error) {
+    if (error.paymentActionRequired) {
+      _invoiceUrl = error.hostedInvoiceUrl;
+      _paymentFailed = false;
+      unawaited(_openInvoice());
+      return true;
+    }
+    if (error.paymentFailed) {
+      _paymentFailed = true;
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> _openInvoice() async {
+    final String? url = _invoiceUrl;
+    if (url == null) return;
+    try {
+      await (_openPaymentPage ?? openCloudBoxPaymentPage)(url);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('cloud box: payment page failed (${error.runtimeType})');
+      }
+      if (!mounted) return;
+      AppNotifications.show(
+        context,
+        _l(context).cloudBoxActionFailed,
+        kind: AppNotificationKind.error,
+      );
+    }
+  }
+
+  Future<void> _openPaymentDetails() async {
+    try {
+      await (_openPortal ?? openBillingPortal)();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('cloud box: billing portal failed (${error.runtimeType})');
+      }
+      if (!mounted) return;
+      AppNotifications.show(
+        context,
+        _l(context).cloudBoxActionFailed,
+        kind: AppNotificationKind.error,
+      );
+    }
+  }
+
+  /// "Confirm payment", while a confirmation is open. Null otherwise.
+  Widget? _confirmPaymentButton(AppLocalizations l) => _invoiceUrl == null
+      ? null
+      : ExpressiveButton(
+          key: cloudBoxConfirmPaymentKey,
+          icon: Icons.open_in_new,
+          label: l.cloudBoxConfirmPayment,
+          onTap: () => unawaited(_openInvoice()),
+        );
+
+  /// "Payment details", after a declined payment. Null otherwise.
+  Widget? _portalButton(AppLocalizations l) => !_paymentFailed
+      ? null
+      : ExpressiveButton(
+          key: cloudBoxPaymentDetailsKey,
+          icon: Icons.credit_card,
+          label: l.cloudBoxPaymentDetails,
+          tonal: true,
+          dense: true,
+          onTap: () => unawaited(_openPaymentDetails()),
+        );
+}
+
 /// Picker, note, error and the one confirm button, in the sheet's order.
 class _SheetBody extends StatelessWidget {
   const _SheetBody({
@@ -425,6 +604,7 @@ class _SheetBody extends StatelessWidget {
     this.noteKey,
     this.error,
     this.errorKey,
+    this.help,
     this.confirm,
   });
 
@@ -433,6 +613,9 @@ class _SheetBody extends StatelessWidget {
   final Key? noteKey;
   final String? error;
   final Key? errorKey;
+
+  /// A secondary action under the error (e.g. "Payment details").
+  final Widget? help;
   final bool busy;
   final Widget? confirm;
 
@@ -469,6 +652,10 @@ class _SheetBody extends StatelessWidget {
                   color: scheme.error,
                 ),
               ),
+            ],
+            if (help case final Widget help) ...<Widget>[
+              const SizedBox(height: 12),
+              Align(alignment: AlignmentDirectional.centerStart, child: help),
             ],
             if (busy || confirm != null) ...<Widget>[
               const SizedBox(height: 20),

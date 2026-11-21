@@ -2132,6 +2132,14 @@ const Map<String, String> stringsDe = {
       'Deine Daten passen nicht in diese Größe. Lösche Dateien oder wähle eine größere Größe.',
   'cloudBoxNoSubscription':
       'Du hast kein aktives Abo.',
+  'cloudBoxConfirmPayment':
+      'Zahlung bestätigen',
+  'cloudBoxConfirmPaymentNote':
+      'Deine Bank möchte, dass du die Zahlung bestätigst. Wir haben die Zahlungsseite im Browser geöffnet. Sobald du dort bestätigst, gilt die Änderung in wenigen Minuten.',
+  'cloudBoxPaymentFailed':
+      'Die Zahlung ging nicht durch. Prüfe deine Zahlungsdaten und versuche es noch einmal.',
+  'cloudBoxPaymentDetails':
+      'Zahlungsdaten',
   'cloudBoxCancel':
       'Cloud-Computer kündigen',
   'cloudBoxCancelSubtitle':

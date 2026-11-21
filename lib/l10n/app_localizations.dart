@@ -2088,6 +2088,10 @@ class AppLocalizations {
   String get cloudBoxResizeScheduled => _get('cloudBoxResizeScheduled');
   String get cloudBoxDoesNotFit => _get('cloudBoxDoesNotFit');
   String get cloudBoxNoSubscription => _get('cloudBoxNoSubscription');
+  String get cloudBoxConfirmPayment => _get('cloudBoxConfirmPayment');
+  String get cloudBoxConfirmPaymentNote => _get('cloudBoxConfirmPaymentNote');
+  String get cloudBoxPaymentFailed => _get('cloudBoxPaymentFailed');
+  String get cloudBoxPaymentDetails => _get('cloudBoxPaymentDetails');
   String get cloudBoxCancel => _get('cloudBoxCancel');
   String get cloudBoxCancelSubtitle => _get('cloudBoxCancelSubtitle');
   String get cloudBoxCancelTitle => _get('cloudBoxCancelTitle');

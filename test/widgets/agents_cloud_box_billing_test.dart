@@ -204,6 +204,168 @@ void main() {
     );
   });
 
+  testWidgets('book later: 3-D Secure opens the invoice page', (
+    WidgetTester tester,
+  ) async {
+    await _tall(tester);
+    const String url = 'https://invoice.stripe.com/i/acct_1/test_x';
+    final _Billing api = _Billing(
+      error: const AgentsCloudBoxException(
+        402,
+        'payment_action_required',
+        hostedInvoiceUrl: url,
+      ),
+    );
+    final List<String> opened = <String>[];
+    await tester.pumpWidget(
+      _app(
+        _opener(
+          (BuildContext context) => showCloudBoxBookSheet(
+            context,
+            api: api,
+            openCheckout: (_, _) async => fail('no checkout'),
+            onBooked: () async => fail('not booked yet'),
+            openPaymentPage: (String u) async => opened.add(u),
+            openPortal: () async => fail('no portal'),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('open')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(CloudBoxBookSheet.confirmKey));
+    await tester.pumpAndSettle();
+    expect(api.calls, <String>['book s']);
+    expect(opened, <String>[url]);
+    expect(find.byKey(cloudBoxPaymentNoteKey), findsOneWidget);
+    expect(find.textContaining('confirm this payment'), findsOneWidget);
+    expect(find.byKey(CloudBoxBookSheet.confirmKey), findsNothing);
+    await tester.tap(find.byKey(cloudBoxConfirmPaymentKey));
+    await tester.pumpAndSettle();
+    expect(opened, <String>[url, url]);
+    expect(api.calls, <String>['book s']);
+  });
+
+  testWidgets('book later: declined payment offers the payment details', (
+    WidgetTester tester,
+  ) async {
+    await _tall(tester);
+    final _Billing api = _Billing(
+      error: const AgentsCloudBoxException(402, 'payment_failed'),
+    );
+    var portal = 0;
+    await tester.pumpWidget(
+      _app(
+        _opener(
+          (BuildContext context) => showCloudBoxBookSheet(
+            context,
+            api: api,
+            openCheckout: (_, _) async => fail('402 payment is no checkout'),
+            onBooked: () async => fail('not booked'),
+            openPaymentPage: (_) async => fail('no page'),
+            openPortal: () async => portal++,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('open')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(CloudBoxBookSheet.confirmKey));
+    await tester.pumpAndSettle();
+    expect(find.byKey(CloudBoxBookSheet.errorKey), findsOneWidget);
+    expect(find.textContaining('did not go through'), findsOneWidget);
+    await tester.tap(find.byKey(cloudBoxPaymentDetailsKey));
+    await tester.pumpAndSettle();
+    expect(portal, 1);
+    // Retry stays possible.
+    expect(find.byKey(CloudBoxBookSheet.confirmKey), findsOneWidget);
+  });
+
+  testWidgets('resize: 3-D Secure opens the invoice page', (
+    WidgetTester tester,
+  ) async {
+    await _tall(tester);
+    const String url = 'https://invoice.stripe.com/i/acct_1/test_y';
+    final _Billing api = _Billing(
+      error: const AgentsCloudBoxException(
+        402,
+        'payment_action_required',
+        hostedInvoiceUrl: url,
+      ),
+    );
+    final List<String> opened = <String>[];
+    bool? changed;
+    await tester.pumpWidget(
+      _app(
+        _opener(
+          (BuildContext context) async =>
+              changed = await showCloudBoxResizeSheet(
+                context,
+                status: const AgentsCloudBoxStatus(
+                  state: AgentsCloudBoxState.running,
+                  size: 's',
+                ),
+                api: api,
+                onChanged: () async => fail('not changed yet'),
+                openPaymentPage: (String u) async => opened.add(u),
+              ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('open')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(AgentsCloudBoxSizePicker.optionKey('l')));
+    await tester.pump();
+    await tester.tap(find.byKey(CloudBoxResizeSheet.confirmKey));
+    await tester.pumpAndSettle();
+    expect(api.calls, <String>['resize l']);
+    expect(opened, <String>[url]);
+    expect(find.byKey(cloudBoxPaymentNoteKey), findsOneWidget);
+    expect(find.byKey(cloudBoxConfirmPaymentKey), findsOneWidget);
+    expect(changed, isNull);
+  });
+
+  testWidgets('resize: declined payment offers the payment details', (
+    WidgetTester tester,
+  ) async {
+    await _tall(tester);
+    final _Billing api = _Billing(
+      error: const AgentsCloudBoxException(402, 'payment_failed'),
+    );
+    var portal = 0;
+    await tester.pumpWidget(
+      _app(
+        _opener(
+          (BuildContext context) => showCloudBoxResizeSheet(
+            context,
+            status: const AgentsCloudBoxStatus(
+              state: AgentsCloudBoxState.running,
+              size: 's',
+            ),
+            api: api,
+            onChanged: () async => fail('not changed'),
+            openPortal: () async => portal++,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('open')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(AgentsCloudBoxSizePicker.optionKey('m')));
+    await tester.pump();
+    await tester.tap(find.byKey(CloudBoxResizeSheet.confirmKey));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('did not go through'), findsOneWidget);
+    expect(find.textContaining('no active subscription'), findsNothing);
+    await tester.tap(find.byKey(cloudBoxPaymentDetailsKey));
+    await tester.pumpAndSettle();
+    expect(portal, 1);
+  });
+
   testWidgets('resize: upgrade now, downgrade at period end, does_not_fit', (
     WidgetTester tester,
   ) async {

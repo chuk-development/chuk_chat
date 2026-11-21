@@ -22,6 +22,10 @@
 ///  * `POST /v2/agents/cloud-box/resize` `{"size": "m"}`: a bigger size now
 ///    (pro rata, one short restart), a smaller one at period end; 409
 ///    `does_not_fit` when the data would not fit.
+///  * Book and resize charge at once. 402 `payment_failed`: the card was
+///    declined. 402 `payment_action_required` with `hosted_invoice_url`: the
+///    bank wants a confirmation (3-D Secure); the app opens that Stripe page,
+///    and the change takes effect once it is paid.
 ///
 /// The pairing token is the same one-time token the install command carries
 /// (`agents_install_ticket.dart`). The server hands it to the cloud host, the
@@ -158,7 +162,11 @@ class AgentsCloudBoxStatus {
 
 /// Why a cloud computer call failed. The text never holds the token.
 class AgentsCloudBoxException implements Exception {
-  const AgentsCloudBoxException(this.statusCode, this.code);
+  const AgentsCloudBoxException(
+    this.statusCode,
+    this.code, {
+    this.hostedInvoiceUrl,
+  });
 
   /// The HTTP status, or 0 when no answer came.
   final int statusCode;
@@ -166,12 +174,33 @@ class AgentsCloudBoxException implements Exception {
   /// A short machine code (`network`, `not_signed_in`, `http_500`, ...).
   final String code;
 
+  /// The Stripe page where the user confirms the payment. Only with
+  /// [paymentActionRequired].
+  final String? hostedInvoiceUrl;
+
   /// The server does not offer cloud computers (404).
   bool get unavailable => statusCode == 404;
 
+  /// The bank wants the user to confirm the payment (402
+  /// `payment_action_required` with a page to open).
+  bool get paymentActionRequired =>
+      statusCode == 402 &&
+      code == 'payment_action_required' &&
+      hostedInvoiceUrl != null;
+
+  /// The charge was declined (402 `payment_failed`, or an action was asked
+  /// for without a page to open).
+  bool get paymentFailed =>
+      statusCode == 402 &&
+      (code == 'payment_failed' ||
+          (code == 'payment_action_required' && hostedInvoiceUrl == null));
+
   /// The user's plan does not include a cloud computer (402). For a booking
   /// it means: no subscription yet, go to checkout.
-  bool get noPlan => statusCode == 402;
+  bool get noPlan =>
+      statusCode == 402 &&
+      code != 'payment_failed' &&
+      code != 'payment_action_required';
 
   /// The add-on is already booked (409).
   bool get alreadyBooked => statusCode == 409 && code != 'does_not_fit';
@@ -233,6 +262,27 @@ String? cloudBoxErrorCode(String body) {
   }
 
   return pick(data);
+}
+
+/// The `hosted_invoice_url` of a 402 body, when it is an https link to
+/// Stripe's invoice pages. Null otherwise.
+String? cloudBoxHostedInvoiceUrl(String body) {
+  Object? data;
+  try {
+    data = jsonDecode(body);
+  } catch (_) {
+    return null;
+  }
+  if (data is! Map) return null;
+  final Object? raw = data['hosted_invoice_url'];
+  if (raw is! String) return null;
+  final Uri? uri = Uri.tryParse(raw);
+  if (uri == null ||
+      uri.scheme != 'https' ||
+      uri.host != 'invoice.stripe.com') {
+    return null;
+  }
+  return raw;
 }
 
 /// [AgentsCloudBoxApi] over HTTP to the API server.
@@ -321,6 +371,9 @@ class HttpAgentsCloudBoxApi
       throw AgentsCloudBoxException(
         response.statusCode,
         cloudBoxErrorCode(response.body) ?? 'http_${response.statusCode}',
+        hostedInvoiceUrl: response.statusCode == 402
+            ? cloudBoxHostedInvoiceUrl(response.body)
+            : null,
       );
     }
     // A billing answer may come without a body; that is a success too.

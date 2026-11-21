@@ -50,6 +50,10 @@ Future<void> _launchExternalUrl(String url) async {
   }
 }
 
+/// Opens a Stripe payment page (e.g. a cloud computer invoice that needs a
+/// 3-D Secure confirmation) in the browser, like the checkout.
+Future<void> openCloudBoxPaymentPage(String url) => _launchExternalUrl(url);
+
 Future<String> _getAccessToken() async {
   final session = await SupabaseService.refreshSession() ??
       _supabase.auth.currentSession;
