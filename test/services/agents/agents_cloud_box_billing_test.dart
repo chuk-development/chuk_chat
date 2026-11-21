@@ -73,6 +73,47 @@ void main() {
       expect(catalog.cloudBoxSizes.last.ramGb, 12);
     });
 
+    test('setup fee: parsed, built-in S default, first invoice total', () {
+      expect(kAgentsCloudBoxSizeDefaults.map((s) => s.setupFeeEur), <num>[
+        2.38,
+        0,
+        0,
+        0,
+      ]);
+      AgentsCloudBoxSize? parse(Map<String, Object?> extra) =>
+          AgentsCloudBoxSize.fromJson(<String, Object?>{
+            'id': 's',
+            'price_eur': 7.55,
+            ...extra,
+          });
+      expect(
+        parse(<String, Object?>{'setup_fee_eur': 2.99})!.setupFeeEur,
+        2.99,
+      );
+      expect(
+        parse(<String, Object?>{'setup_fee_eur': 0})!.hasSetupFee,
+        isFalse,
+      );
+      // An older server sends no fee: the built-in default of the size id.
+      expect(parse(const <String, Object?>{})!.setupFeeEur, 2.38);
+      expect(
+        AgentsCloudBoxSize.fromJson(<String, Object?>{
+          'id': 'm',
+          'price_eur': 9.93,
+        })!.setupFeeEur,
+        0,
+      );
+      expect(parse(<String, Object?>{'setup_fee_eur': -1})!.setupFeeEur, 2.38);
+      const AgentsPlan plan = AgentsPlan(id: 'agents_20', priceEur: 20);
+      final AgentsCloudBoxSize s = kAgentsCloudBoxSizeDefaults.first;
+      expect(formatEuroAmount(agentsFirstInvoiceTotal(plan, s), 'de'), '29,93');
+      expect(
+        agentsFirstInvoiceTotal(plan, kAgentsCloudBoxSizeDefaults[1]),
+        agentsMonthlyTotal(plan, kAgentsCloudBoxSizeDefaults[1]),
+      );
+      expect(agentsFirstInvoiceTotal(plan, null), 20);
+    });
+
     test('an error gives the built-in plans and sizes', () async {
       final AgentsPlanCatalog catalog = await fetchAgentsPlanCatalog(
         baseUrl: 'https://api.test',

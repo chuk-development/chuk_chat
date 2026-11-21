@@ -24,19 +24,33 @@ String cloudBoxPriceText(AppLocalizations l, AgentsCloudBoxSize size) =>
       formatEuroAmount(size.priceEur, l.locale.languageCode),
     );
 
+/// "one-time €2.38 setup" / "einmalig 2,38 € Einrichtung" for [size], or
+/// null when the size has no setup fee.
+String? cloudBoxSetupFeeText(AppLocalizations l, AgentsCloudBoxSize size) =>
+    size.hasSetupFee
+    ? l.cloudBoxSetupFee(
+        formatEuroAmount(size.setupFeeEur, l.locale.languageCode),
+      )
+    : null;
+
 /// The checkout total under a plan: the plan alone, or plan plus add-on.
+/// With a one-time setup fee it names the first invoice and the monthly
+/// price after it.
 String agentsTotalLine(
   AppLocalizations l,
   AgentsPlan plan,
   AgentsCloudBoxSize? box,
 ) {
-  final String total = formatEuroAmount(
-    agentsMonthlyTotal(plan, box),
-    l.locale.languageCode,
-  );
-  return box == null
-      ? l.agentsTotalPlanOnly(total)
-      : l.agentsTotalWithBox(total);
+  final String lang = l.locale.languageCode;
+  final String total = formatEuroAmount(agentsMonthlyTotal(plan, box), lang);
+  if (box == null) return l.agentsTotalPlanOnly(total);
+  if (box.hasSetupFee) {
+    return l.agentsTotalFirstInvoice(
+      formatEuroAmount(agentsFirstInvoiceTotal(plan, box), lang),
+      total,
+    );
+  }
+  return l.agentsTotalWithBox(total);
 }
 
 /// One row per size: the size and its monthly price, the specs under it, a
@@ -132,6 +146,9 @@ class AgentsCloudBoxAddonCard extends StatelessWidget {
   static const ValueKey<String> priceKey = ValueKey<String>(
     'cloud-box-addon-price',
   );
+  static const ValueKey<String> setupFeeKey = ValueKey<String>(
+    'cloud-box-addon-setup-fee',
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -205,6 +222,14 @@ class AgentsCloudBoxAddonCard extends StatelessWidget {
                 color: scheme.onSurface,
               ),
             ),
+            if (cloudBoxSetupFeeText(l, selected) case final String fee)
+              Text(
+                fee,
+                key: setupFeeKey,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.m3.onSurfaceVariant,
+                ),
+              ),
             if (onEnabledChanged == null)
               Text(
                 l.cloudBoxMonthlyCancel,

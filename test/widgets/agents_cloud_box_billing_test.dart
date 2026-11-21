@@ -76,6 +76,74 @@ void main() {
     );
   });
 
+  test('total line with a setup fee names the first invoice', () {
+    const AgentsPlan plan = AgentsPlan(id: 'agents_20', priceEur: 20);
+    final AgentsCloudBoxSize s = kAgentsCloudBoxSizeDefaults.first;
+    expect(
+      agentsTotalLine(en, plan, s),
+      'First invoice: €29.93, then €27.55/month',
+    );
+    final AppLocalizations de = AppLocalizations(const Locale('de'));
+    expect(
+      agentsTotalLine(de, plan, s),
+      'Erste Rechnung: 29,93 €, danach 27,55 €/Monat',
+    );
+    expect(cloudBoxSetupFeeText(de, s), 'einmalig 2,38 € Einrichtung');
+    expect(cloudBoxSetupFeeText(en, s), 'one-time €2.38 setup');
+    expect(cloudBoxSetupFeeText(en, kAgentsCloudBoxSizeDefaults[1]), isNull);
+  });
+
+  testWidgets('pricing card: setup fee line only for a size with a fee', (
+    WidgetTester tester,
+  ) async {
+    await _tall(tester);
+    String size = 's';
+    await tester.pumpWidget(
+      _app(
+        StatefulBuilder(
+          builder: (BuildContext context, StateSetter setState) =>
+              AgentsCloudBoxAddonCard(
+                sizes: kAgentsCloudBoxSizeDefaults,
+                enabled: true,
+                selectedId: size,
+                onEnabledChanged: (_) {},
+                onSizeChanged: (AgentsCloudBoxSize s) =>
+                    setState(() => size = s.id),
+              ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('one-time €2.38 setup'), findsOneWidget);
+    await tester.tap(find.byKey(AgentsCloudBoxSizePicker.optionKey('l')));
+    await tester.pump();
+    expect(find.byKey(AgentsCloudBoxAddonCard.setupFeeKey), findsNothing);
+  });
+
+  testWidgets('book later: the sheet names the setup fee of S, not of M', (
+    WidgetTester tester,
+  ) async {
+    await _tall(tester);
+    await tester.pumpWidget(
+      _app(
+        _opener(
+          (BuildContext context) async => showCloudBoxBookSheet(
+            context,
+            api: _Billing(),
+            onBooked: () async {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey<String>('open')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('one-time €2.38 setup'), findsOneWidget);
+    await tester.tap(find.byKey(AgentsCloudBoxSizePicker.optionKey('m')));
+    await tester.pump();
+    expect(find.textContaining('one-time'), findsNothing);
+  });
+
   testWidgets('pricing card: pre-on, size changes the price, off hides it', (
     WidgetTester tester,
   ) async {

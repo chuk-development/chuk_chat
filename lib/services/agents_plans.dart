@@ -13,7 +13,9 @@
 ///    `{"plans": [{"id": "agents_20", "price_eur": 20, "credit_eur": 12,
 ///      "cloud_box": false}, ...],
 ///      "cloud_box_sizes": [{"id": "s", "label": "S", "vcpu": 4, "ram_gb": 8,
-///      "disk_gb": 100, "price_eur": 7.55, "recommended": true}, ...]}`.
+///      "disk_gb": 100, "price_eur": 7.55, "setup_fee_eur": 2.38,
+///      "recommended": true}, ...]}`. `setup_fee_eur` is a one-time fee on
+///      the first invoice (0 = none).
 ///    `credit_eur` may be null. Any failure falls back to
 ///    [kAgentsPlanDefaults] and [kAgentsCloudBoxSizeDefaults].
 ///  * `POST /v1/stripe/create-checkout-session` with
@@ -98,6 +100,7 @@ class AgentsCloudBoxSize {
     required this.ramGb,
     required this.diskGb,
     required this.priceEur,
+    this.setupFeeEur = 0,
     this.recommended = false,
   });
 
@@ -111,7 +114,15 @@ class AgentsCloudBoxSize {
   /// Monthly price in euros (may have cents, e.g. 7.55). Monthly only,
   /// cancellable every month.
   final num priceEur;
+
+  /// One-time setup fee in euros (gross), on the first invoice only. Contabo
+  /// charges it on some sizes for the monthly term; we pass it on at cost,
+  /// once per user. 0 = none.
+  final num setupFeeEur;
   final bool recommended;
+
+  /// Whether this size has a one-time setup fee.
+  bool get hasSetupFee => setupFeeEur > 0;
 
   static AgentsCloudBoxSize? fromJson(Object? json) {
     if (json is! Map) return null;
@@ -119,6 +130,7 @@ class AgentsCloudBoxSize {
     final Object? price = json['price_eur'];
     if (id is! String || id.isEmpty || price is! num) return null;
     final Object? label = json['label'];
+    final Object? fee = json['setup_fee_eur'];
     int whole(Object? v) => v is num ? v.round() : 0;
     return AgentsCloudBoxSize(
       id: id,
@@ -127,6 +139,9 @@ class AgentsCloudBoxSize {
       ramGb: whole(json['ram_gb']),
       diskGb: whole(json['disk_gb']),
       priceEur: price,
+      // An older server sends no fee: fall back to the built-in default of
+      // the same size id (S = 2.38), else none.
+      setupFeeEur: fee is num && fee >= 0 ? fee : (_defaultSetupFee[id] ?? 0),
       recommended: json['recommended'] == true,
     );
   }
@@ -140,15 +155,28 @@ class AgentsCloudBoxSize {
       other.ramGb == ramGb &&
       other.diskGb == diskGb &&
       other.priceEur == priceEur &&
+      other.setupFeeEur == setupFeeEur &&
       other.recommended == recommended;
 
   @override
-  int get hashCode =>
-      Object.hash(id, label, vcpu, ramGb, diskGb, priceEur, recommended);
+  int get hashCode => Object.hash(
+    id,
+    label,
+    vcpu,
+    ramGb,
+    diskGb,
+    priceEur,
+    setupFeeEur,
+    recommended,
+  );
 
   @override
   String toString() => 'AgentsCloudBoxSize($id, $priceEur)';
 }
+
+/// Built-in one-time setup fees per size id (Contabo, 1-month term,
+/// 2026-11-21): only S has one.
+const Map<String, num> _defaultSetupFee = <String, num>{'s': 2.38};
 
 /// The sizes the page shows when the server has no list yet.
 const List<AgentsCloudBoxSize> kAgentsCloudBoxSizeDefaults =
@@ -160,6 +188,7 @@ const List<AgentsCloudBoxSize> kAgentsCloudBoxSizeDefaults =
         ramGb: 8,
         diskGb: 100,
         priceEur: 7.55,
+        setupFeeEur: 2.38,
         recommended: true,
       ),
       AgentsCloudBoxSize(
@@ -313,6 +342,11 @@ Map<String, dynamic>? agentsCheckoutBody({
 /// The monthly total of [plan] plus [box] (null = no add-on), in euros.
 num agentsMonthlyTotal(AgentsPlan plan, AgentsCloudBoxSize? box) =>
     plan.priceEur + (box?.priceEur ?? 0);
+
+/// The first invoice of [plan] plus [box]: the monthly total plus the
+/// one-time setup fee of [box] (if any).
+num agentsFirstInvoiceTotal(AgentsPlan plan, AgentsCloudBoxSize? box) =>
+    agentsMonthlyTotal(plan, box) + (box?.setupFeeEur ?? 0);
 
 /// A euro amount for the price strings: `20`, or `9.90` / `9,90` with cents
 /// (comma for the languages that write one).

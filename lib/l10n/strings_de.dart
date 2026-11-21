@@ -2092,6 +2092,10 @@ const Map<String, String> stringsDe = {
       'Monatlich, monatlich kündbar',
   'agentsTotalWithBox':
       'Gesamt mit Cloud-Computer: {price} €/Monat',
+  'cloudBoxSetupFee':
+      'einmalig {price} € Einrichtung',
+  'agentsTotalFirstInvoice':
+      'Erste Rechnung: {first} €, danach {price} €/Monat',
   'agentsTotalPlanOnly':
       'Gesamt: {price} €/Monat',
   'cloudBoxBook':

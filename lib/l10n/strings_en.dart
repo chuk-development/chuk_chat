@@ -2055,6 +2055,10 @@ const Map<String, String> stringsEn = {
       'Billed monthly, cancel any month',
   'agentsTotalWithBox':
       'Total with cloud computer: €{price}/month',
+  'cloudBoxSetupFee':
+      'one-time €{price} setup',
+  'agentsTotalFirstInvoice':
+      'First invoice: €{first}, then €{price}/month',
   'agentsTotalPlanOnly':
       'Total: €{price}/month',
   'cloudBoxBook':

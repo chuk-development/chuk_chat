@@ -2061,6 +2061,12 @@ class AppLocalizations {
   String get cloudBoxMonthlyCancel => _get('cloudBoxMonthlyCancel');
   String agentsTotalWithBox(String price) =>
       _get('agentsTotalWithBox').replaceAll('{price}', price);
+  String cloudBoxSetupFee(String price) =>
+      _get('cloudBoxSetupFee').replaceAll('{price}', price);
+  String agentsTotalFirstInvoice(String first, String price) =>
+      _get('agentsTotalFirstInvoice')
+          .replaceAll('{first}', first)
+          .replaceAll('{price}', price);
   String agentsTotalPlanOnly(String price) =>
       _get('agentsTotalPlanOnly').replaceAll('{price}', price);
   String get cloudBoxBook => _get('cloudBoxBook');

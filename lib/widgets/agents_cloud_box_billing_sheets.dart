@@ -225,7 +225,10 @@ class _CloudBoxBookSheetState extends State<CloudBoxBookSheet>
       ),
       note: _invoiceUrl != null
           ? l.cloudBoxConfirmPaymentNote
-          : l.cloudBoxBookTerms(price),
+          : <String>[
+              l.cloudBoxBookTerms(price),
+              ?cloudBoxSetupFeeText(l, _selected),
+            ].join('\n'),
       noteKey: _invoiceUrl != null ? cloudBoxPaymentNoteKey : null,
       error: _paymentFailed ? l.cloudBoxPaymentFailed : _error,
       errorKey: CloudBoxBookSheet.errorKey,
