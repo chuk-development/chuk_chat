@@ -49,6 +49,9 @@ Research: `SPRITES_REFERENCE.md`, `CLOUD_BOX_PROVIDERS.md`,
 
 ## Principle: the box sleeps, the server holds the clock
 
+**Obsolete for Contabo (2026-11-21):** a monthly VPS costs the same awake
+or asleep, so the box runs 24/7 and host timers stay on the host.
+
 The box runs only while it has work. The server knows when work comes:
 
 | Work | Today | Cloud box |
