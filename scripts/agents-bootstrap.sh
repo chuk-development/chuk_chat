@@ -248,9 +248,19 @@ git_update() {
 git_clone() {
     local src="$1" new="$2"
     say "Downloading the host source (${REF})."
-    git clone --quiet --depth 1 --filter=blob:none --sparse --branch "${REF}" \
-        "${REPO_URL}" "${new}" </dev/null || return 1
-    git -C "${new}" sparse-checkout set "${SOURCE_PATHS[@]}" </dev/null || return 1
+    if [[ "${REF}" =~ ^[0-9a-f]{40}$ ]]; then
+        # A commit SHA: `clone --branch` takes only branches and tags.
+        # Fetch that one commit into an empty repository instead.
+        git init --quiet "${new}" </dev/null || return 1
+        git -C "${new}" remote add origin "${REPO_URL}" </dev/null || return 1
+        git -C "${new}" sparse-checkout set "${SOURCE_PATHS[@]}" </dev/null || return 1
+        git -C "${new}" fetch --quiet --depth 1 --filter=blob:none origin "${REF}" </dev/null || return 1
+        git -C "${new}" checkout --quiet --detach FETCH_HEAD </dev/null || return 1
+    else
+        git clone --quiet --depth 1 --filter=blob:none --sparse --branch "${REF}" \
+            "${REPO_URL}" "${new}" </dev/null || return 1
+        git -C "${new}" sparse-checkout set "${SOURCE_PATHS[@]}" </dev/null || return 1
+    fi
     swap_in "${src}" "${new}"
 }
 
