@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chuk_chat/voice/widgets/voice_call_controls.dart';
 
+import 'package:chuk_chat/voice/voice_audio_output.dart';
 import 'package:chuk_chat/voice/voice_call_controller.dart';
 import 'package:chuk_chat/voice/voice_call_models.dart';
 import 'package:chuk_chat/voice/widgets/voice_call_fullscreen_page.dart';
@@ -45,19 +46,19 @@ void main() {
       ),
       isTrue,
     );
-    await tester.pumpAndSettle();
+    await _settleRoute(tester);
     expect(find.byType(VoiceCallFullscreenPage), findsOneWidget);
     expect(find.byKey(const ValueKey('voice-visualization')), findsOneWidget);
     Navigator.of(chatContext).pop();
-    await tester.pumpAndSettle();
+    await _settleRoute(tester);
     await first;
     expect(find.text('Ordinary chat'), findsOneWidget);
     expect(controller.phase, VoiceCallPhase.live);
 
     VoiceCallFullscreenPage.show(chatContext, controller: controller);
-    await tester.pumpAndSettle();
+    await _settleRoute(tester);
     controller.debugSetState(phase: VoiceCallPhase.ended, chatId: 'chat-a');
-    await tester.pumpAndSettle();
+    await _settleRoute(tester);
     expect(find.byType(VoiceCallFullscreenPage), findsNothing);
     expect(find.text('Ordinary chat'), findsOneWidget);
   });
@@ -132,8 +133,8 @@ void main() {
       return (box.decoration as BoxDecoration?)?.color;
     }
 
-    expect(find.byTooltip('Speaker on'), findsOneWidget);
-    final selectedFill = fill('Speaker on');
+    expect(find.byTooltip('Speaker'), findsOneWidget);
+    final selectedFill = fill('Speaker');
     controller.debugSetState(
       phase: VoiceCallPhase.live,
       canSwitchSpeaker: true,
@@ -141,8 +142,8 @@ void main() {
       outputRoute: 'earpiece',
     );
     await tester.pump();
-    expect(find.byTooltip('Earpiece'), findsOneWidget);
-    expect(fill('Earpiece'), isNot(selectedFill));
+    expect(find.byTooltip('Phone'), findsOneWidget);
+    expect(fill('Phone'), isNot(selectedFill));
     controller.debugSetState(
       phase: VoiceCallPhase.live,
       canSwitchSpeaker: true,
@@ -173,12 +174,42 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(home: VoiceCallFullscreenPage(controller: controller)),
     );
-    await tester.tap(find.byTooltip('Earpiece'));
+    await tester.tap(find.byTooltip('Phone'));
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('Speaker'), findsOneWidget);
     await tester.tap(find.text('Speaker'));
     await tester.pump(const Duration(milliseconds: 600));
     expect(controller.speakerOn, isTrue);
+  });
+
+  testWidgets('the route menu lists a Bluetooth headset by its name', (
+    tester,
+  ) async {
+    final controller = VoiceCallController.forTesting();
+    controller.debugSetState(
+      phase: VoiceCallPhase.live,
+      canSwitchSpeaker: true,
+      speakerOn: false,
+      outputRoute: 'bluetooth',
+      outputDevices: const <VoiceOutputDevice>[
+        VoiceOutputDevice(route: 'earpiece'),
+        VoiceOutputDevice(route: 'speaker'),
+        VoiceOutputDevice(route: 'bluetooth', name: 'Galaxy Buds'),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(home: VoiceCallFullscreenPage(controller: controller)),
+    );
+    await tester.tap(find.byTooltip('Bluetooth'));
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(find.text('Galaxy Buds'), findsOneWidget);
+    expect(find.text('Phone'), findsOneWidget);
+    expect(find.text('Speaker'), findsOneWidget);
+    // Bluetooth first, as the phone's own call screen lists it.
+    expect(
+      tester.getTopLeft(find.text('Galaxy Buds')).dy,
+      lessThan(tester.getTopLeft(find.text('Phone')).dy),
+    );
   });
 
   testWidgets('a place card lifts the bars; hiding it lowers them', (
@@ -300,4 +331,13 @@ void main() {
     );
     semantics.dispose();
   });
+}
+
+/// The visualizer breathes while it listens (as in LiveKit's sample), so the
+/// tree never settles; pump through a route transition instead.
+Future<void> _settleRoute(WidgetTester tester) async {
+  await tester.pump();
+  for (var i = 0; i < 8; i++) {
+    await tester.pump(const Duration(milliseconds: 100));
+  }
 }

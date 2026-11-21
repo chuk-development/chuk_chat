@@ -31,6 +31,27 @@ class VoiceAudioOutput {
     return channel.invokeMethod<String>('setCallSpeaker', {'speaker': speaker});
   }
 
+  /// Every output the call can use now (`speaker`, `earpiece`, `bluetooth`,
+  /// `wired`), Bluetooth with the headset's name. Empty off Android.
+  Future<List<VoiceOutputDevice>> readDevices() async {
+    if (!isAndroid) return const <VoiceOutputDevice>[];
+    final raw = await channel.invokeListMethod<Object?>('getCallAudioDevices');
+    return <VoiceOutputDevice>[
+      for (final entry in raw ?? const <Object?>[])
+        if (entry is Map && entry['route'] is String)
+          VoiceOutputDevice(
+            route: entry['route'] as String,
+            name: (entry['name'] as String?) ?? '',
+          ),
+    ];
+  }
+
+  /// Switches the call to [route] and waits for Android to confirm it.
+  Future<String?> setRoute(String route) async {
+    if (!isAndroid) return null;
+    return channel.invokeMethod<String>('setCallAudioRoute', {'route': route});
+  }
+
   Future<double?> readVolume() async {
     if (!isAndroid) return null;
     final value = await channel.invokeMethod<num>('getCallVolume');
@@ -53,4 +74,23 @@ class VoiceAudioOutput {
       'active': active,
     });
   }
+}
+
+/// One call audio output as Android lists it.
+@immutable
+class VoiceOutputDevice {
+  const VoiceOutputDevice({required this.route, this.name = ''});
+
+  /// `speaker`, `earpiece`, `bluetooth` or `wired`.
+  final String route;
+
+  /// The device's own name, e.g. the Bluetooth headset's. May be empty.
+  final String name;
+
+  @override
+  bool operator ==(Object other) =>
+      other is VoiceOutputDevice && other.route == route && other.name == name;
+
+  @override
+  int get hashCode => Object.hash(route, name);
 }

@@ -25,6 +25,7 @@ import 'package:chuk_chat/voice/voice_audio_output.dart';
 import 'package:chuk_chat/voice/voice_call_service.dart';
 import 'package:chuk_chat/voice/voice_location.dart';
 import 'package:chuk_chat/voice/voice_protocol.dart';
+import 'package:chuk_chat/voice/voice_sounds.dart';
 import 'package:chuk_chat/voice/voice_preferences.dart';
 import 'package:chuk_chat/voice/voice_tasks.dart';
 import 'package:chuk_chat/voice/voice_transcript.dart';
@@ -87,6 +88,7 @@ class VoiceCallController extends ChangeNotifier {
   // synced saves so a rapid selection always leaves the latest value remote.
   int _enginePreferenceRevision = 0;
   Future<void> _engineSyncQueue = Future<void>.value();
+
   /// The engine the user last chose on this device. Authoritative over the
   /// cloud until its synced save succeeds, so a stale or failed sync can
   /// never silently revert the user's choice. Null on a fresh device: the
@@ -106,9 +108,28 @@ class VoiceCallController extends ChangeNotifier {
   bool _agentPresent = false;
   bool? _speakerOn;
   String? _outputRoute;
+  List<VoiceOutputDevice> _outputDevices = const <VoiceOutputDevice>[];
   bool _changingSpeaker = false;
   bool? _debugCanSwitchSpeaker;
   String? get outputRoute => _outputRoute;
+
+  /// The outputs the call can switch to now (Android), Bluetooth with its
+  /// name. Empty elsewhere.
+  List<VoiceOutputDevice> get outputDevices => _outputDevices;
+
+  /// The agent's speech track (not its `agent_backchannel` clip track), for
+  /// the visualizer.
+  lk.AudioTrack? get agentAudioTrack {
+    final lk.RemoteParticipant? agent = _room?.agentParticipant;
+    if (agent == null) return null;
+    for (final publication in agent.audioTrackPublications) {
+      if (publication.name == 'agent_backchannel') continue;
+      final track = publication.track;
+      if (track != null) return track;
+    }
+    return null;
+  }
+
   bool get changingSpeaker => _changingSpeaker;
   String? _chatId;
   String? _callId;
@@ -402,7 +423,20 @@ class VoiceCallController extends ChangeNotifier {
       if (_micMuted) {
         await room.localParticipant?.setMicrophoneEnabled(false);
       }
-      if (canSwitchSpeaker) {
+      await _refreshOutputDevices();
+      if (gen != _generation) return;
+      final String? headset = _headsetRoute();
+      if (headset != null && _speakerOn != true) {
+        // A connected Bluetooth or wired headset wins, like any phone call.
+        _speakerOn = false;
+        await _quietly(
+          () => lk.AudioManager.instance.setSpeakerOutputPreferred(false),
+        );
+        await _quietly(() async {
+          final route = await _audioOutput.setRoute(headset);
+          if (route != null && route != 'unknown') _outputRoute = route;
+        });
+      } else if (canSwitchSpeaker) {
         // Apply explicitly after connection: an earlier call/CallKit may have
         // left the phone on its earpiece even when the UI says speaker.
         _speakerOn ??= true;
@@ -418,6 +452,7 @@ class VoiceCallController extends ChangeNotifier {
       _outputRouteTimer = Timer.periodic(const Duration(seconds: 2), (_) {
         if (gen == _generation && !_changingSpeaker) {
           unawaited(_refreshOutputRoute());
+          unawaited(_refreshOutputDevices());
         }
       });
       _audioLevelTimer?.cancel();
@@ -1169,6 +1204,75 @@ class VoiceCallController extends ChangeNotifier {
     unawaited(VoicePreferences.saveSynced(owner, voice));
   }
 
+  /// Bluetooth first, then a wired headset; null when neither is there.
+  String? _headsetRoute() {
+    for (final String route in const <String>['bluetooth', 'wired']) {
+      if (_outputDevices.any((d) => d.route == route)) return route;
+    }
+    return null;
+  }
+
+  Future<void> _refreshOutputDevices() async {
+    if (!_audioOutput.isAndroid) return;
+    try {
+      final devices = await _audioOutput.readDevices();
+      if (!listEquals(devices, _outputDevices)) {
+        _outputDevices = devices;
+        notifyListeners();
+      }
+    } catch (_) {
+      // An older native shell has no device list; the old menu stays.
+    }
+  }
+
+  /// Switches the call to one of [outputDevices] (`speaker`, `earpiece`,
+  /// `bluetooth`, `wired`).
+  Future<void> setOutputRoute(String route) async {
+    if (!_audioOutput.isAndroid) {
+      if (route == 'speaker' || route == 'earpiece') {
+        await setSpeakerOn(route == 'speaker');
+      }
+      return;
+    }
+    if (_changingSpeaker || route == _outputRoute) return;
+    if (_phase != VoiceCallPhase.live) {
+      _speakerOn = route == 'speaker';
+      notifyListeners();
+      return;
+    }
+    final gen = _generation;
+    _changingSpeaker = true;
+    _outputRoute = route;
+    _speakerOn = route == 'speaker';
+    notifyListeners();
+    try {
+      await lk.AudioManager.instance.setSpeakerOutputPreferred(
+        route == 'speaker',
+      );
+      if (gen != _generation) return;
+      final actual = await _audioOutput.setRoute(route);
+      if (gen != _generation) return;
+      if (actual != null && actual != 'unknown') {
+        _outputRoute = actual;
+        _speakerOn = actual == 'speaker';
+      }
+      await _refreshOutputVolume();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[VoiceCall] route switch failed: ${e.runtimeType}');
+      }
+      await _quietly(() async {
+        final route = await _audioOutput.readRoute();
+        if (gen == _generation) _outputRoute = route;
+      });
+    } finally {
+      if (gen == _generation) {
+        _changingSpeaker = false;
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> _refreshOutputRoute() async {
     if (!_audioOutput.isAndroid || _readingOutputRoute) return;
     final gen = _generation;
@@ -1425,6 +1529,10 @@ class VoiceCallController extends ChangeNotifier {
   Future<VoiceCallRecord?> _finish(VoiceCallPhase target, {String? error}) {
     final Future<VoiceCallRecord?>? running = _finishing;
     if (running != null) return running;
+    if (target == VoiceCallPhase.ended && _phase == VoiceCallPhase.live) {
+      // Like a phone call: a short falling chime when the line closes.
+      VoiceSounds.hangUp();
+    }
     // Claimed before the teardown runs: its first notify may reach a
     // listener that calls end() again, which must join this one.
     final Completer<VoiceCallRecord?> done = Completer<VoiceCallRecord?>();
@@ -1453,6 +1561,7 @@ class VoiceCallController extends ChangeNotifier {
     _audioLevelTimer = null;
     _outputRouteTimer?.cancel();
     _outputRouteTimer = null;
+    _outputDevices = const <VoiceOutputDevice>[];
     _audioLevel.value = 0;
     _setPhase(VoiceCallPhase.ending);
     await _quietly(() => _audioOutput.setCallActive(false));
@@ -1566,6 +1675,7 @@ class VoiceCallController extends ChangeNotifier {
     lk.LocalVideoTrack? cameraTrack,
     bool? speakerOn,
     String? outputRoute,
+    List<VoiceOutputDevice> outputDevices = const <VoiceOutputDevice>[],
     bool changingSpeaker = false,
     bool? canSwitchSpeaker,
     bool agentSpeaking = false,
@@ -1589,6 +1699,7 @@ class VoiceCallController extends ChangeNotifier {
     _debugCameraTrack = cameraTrack;
     _speakerOn = speakerOn;
     _outputRoute = outputRoute;
+    _outputDevices = outputDevices;
     _changingSpeaker = changingSpeaker;
     _debugCanSwitchSpeaker = canSwitchSpeaker;
     _agentSpeaking = agentSpeaking;

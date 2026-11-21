@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/voice/voice_audio_output.dart';
 import 'package:chuk_chat/voice/voice_call_controller.dart';
 import 'package:chuk_chat/voice/voice_call_models.dart';
 import 'package:chuk_chat/voice/voice_protocol.dart';
@@ -10,6 +11,7 @@ import 'package:chuk_chat/voice/widgets/voice_bars.dart';
 import 'package:chuk_chat/voice/widgets/voice_call_buttons.dart';
 import 'package:chuk_chat/voice/widgets/voice_call_controls.dart';
 import 'package:chuk_chat/voice/widgets/voice_call_stage.dart';
+import 'package:chuk_chat/voice/widgets/voice_visualizer.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
@@ -125,21 +127,62 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
   };
 
   static String _routeLabel(_Route route) => switch (route) {
-    _Route.earpiece => 'Earpiece',
-    _Route.speaker => 'Speaker on',
+    _Route.earpiece => 'Phone',
+    _Route.speaker => 'Speaker',
     _Route.wired => 'Headphones',
     _Route.bluetooth => 'Bluetooth',
   };
+
+  static _Route? _routeOf(String route) => switch (route) {
+    'earpiece' => _Route.earpiece,
+    'speaker' => _Route.speaker,
+    'wired' => _Route.wired,
+    'bluetooth' => _Route.bluetooth,
+    _ => null,
+  };
+
+  /// The menu label: a Bluetooth headset by its own name.
+  String _deviceLabel(_Route route) {
+    if (route == _Route.bluetooth) {
+      for (final VoiceOutputDevice d in c.outputDevices) {
+        if (d.route == 'bluetooth' && d.name.trim().isNotEmpty) {
+          return d.name.trim();
+        }
+      }
+    }
+    return _routeLabel(route);
+  }
+
+  /// Every output the phone offers now; without a device list (older native
+  /// shell, desktop) the old earpiece/speaker pair.
+  List<_Route> _routes(_Route current) {
+    final List<_Route> listed = <_Route>[
+      for (final VoiceOutputDevice d in c.outputDevices)
+        if (_routeOf(d.route) case final _Route r) r,
+    ];
+    if (listed.isNotEmpty) {
+      return <_Route>[
+        for (final _Route r in const <_Route>[
+          _Route.bluetooth,
+          _Route.wired,
+          _Route.earpiece,
+          _Route.speaker,
+        ])
+          if (listed.contains(r)) r,
+      ];
+    }
+    return <_Route>[
+      if (current == _Route.wired || current == _Route.bluetooth) current,
+      if (c.canSwitchSpeaker) ...<_Route>[_Route.earpiece, _Route.speaker],
+    ];
+  }
 
   /// The route menu: one framed list over the button. A plugged-in headset
   /// always wins, so it is listed but cannot be left from here.
   Future<void> _pickRoute(BuildContext buttonContext, _Route current) async {
     final ThemeData theme = Theme.of(context);
     final Color ink = theme.colorScheme.onSurface;
-    final List<_Route> routes = <_Route>[
-      if (current == _Route.wired || current == _Route.bluetooth) current,
-      if (c.canSwitchSpeaker) ...<_Route>[_Route.earpiece, _Route.speaker],
-    ];
+    final List<_Route> routes = _routes(current);
     final _Route? picked = await showAnchoredMenu<_Route>(
       buttonContext,
       color: theme.colorScheme.surfaceContainerLow,
@@ -162,9 +205,7 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        route == _Route.speaker
-                            ? 'Speaker'
-                            : _routeLabel(route),
+                        _deviceLabel(route),
                         softWrap: false,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
@@ -187,7 +228,16 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
       ],
     );
     if (picked == null || picked == current || !mounted) return;
-    if (picked == _Route.speaker || picked == _Route.earpiece) {
+    if (c.outputDevices.isNotEmpty) {
+      await _action(
+        () => c.setOutputRoute(switch (picked) {
+          _Route.earpiece => 'earpiece',
+          _Route.speaker => 'speaker',
+          _Route.wired => 'wired',
+          _Route.bluetooth => 'bluetooth',
+        }),
+      );
+    } else if (picked == _Route.speaker || picked == _Route.earpiece) {
       await _action(() => c.setSpeakerOn(picked == _Route.speaker));
     }
   }
@@ -263,12 +313,16 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
               final double compactBars = short ? 48 : 108;
               final Widget bars = Semantics(
                 label: _semanticStatus,
-                child: VoiceBars(
-                  key: const ValueKey('voice-visualization'),
-                  state: _barsState,
-                  muted: c.micMuted,
-                  level: c.audioLevel,
-                  compact: raised,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: raised ? 0 : 50),
+                  child: VoiceVisualizer(
+                    key: const ValueKey('voice-visualization'),
+                    state: _barsState,
+                    track: c.agentAudioTrack,
+                    muted: c.micMuted,
+                    maxBarWidth: raised ? 16 : 56,
+                    spacing: raised ? 5 : 8,
+                  ),
                 ),
               );
               final Widget searchLine = VoiceSearchLine(
@@ -295,9 +349,9 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
 
               final Widget field;
               if (!raised) {
-                final double barsHeight = (constraints.maxHeight * 0.32).clamp(
+                final double barsHeight = (constraints.maxHeight * 0.4).clamp(
                   56.0,
-                  200.0,
+                  320.0,
                 );
                 field = Center(
                   child: Column(
@@ -408,12 +462,6 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
             ),
           ),
           const Spacer(),
-          FloatingHeaderButton(
-            tooltip: 'Chat',
-            onPressed: () => Navigator.of(context).maybePop(),
-            hugeIcon: HugeIcons.message01,
-          ),
-          const SizedBox(width: 8),
           if (started != null)
             Text(
               formatVoiceDuration(DateTime.now().difference(started)),
@@ -431,7 +479,8 @@ class _VoiceCallFullscreenPageState extends State<VoiceCallFullscreenPage> {
   Widget _controls(BuildContext context, ColorScheme scheme, bool failed) {
     final _Route? route = _route;
     final bool headset = route == _Route.wired || route == _Route.bluetooth;
-    final bool showRoute = c.canSwitchSpeaker || headset;
+    final bool showRoute =
+        c.canSwitchSpeaker || headset || c.outputDevices.length > 1;
     final (Color mutedFill, _) = VoiceButtonGroup.colorsFor(
       scheme,
       VoiceButtonTone.muted,

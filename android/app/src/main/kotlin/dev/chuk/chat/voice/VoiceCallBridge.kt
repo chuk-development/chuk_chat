@@ -232,8 +232,12 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
           result.success(audio.getStreamVolume(AudioManager.STREAM_VOICE_CALL).toDouble() / max)
         }
         "getCallAudioRoute" -> result.success(callAudioRoute())
+        "getCallAudioDevices" -> result.success(callAudioDevices())
         "setCallSpeaker" -> {
-          setCallSpeaker(call.argument<Boolean>("speaker") == true, result)
+          setCallRoute(if (call.argument<Boolean>("speaker") == true) "speaker" else "earpiece", result)
+        }
+        "setCallAudioRoute" -> {
+          setCallRoute(call.argument<String>("route") ?: "speaker", result)
         }
         "setCallVolumeControls" -> {
           val active = call.argument<Boolean>("active") == true
@@ -255,21 +259,52 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
 
   // ── Call audio routing ───────────────────────────────────────────────
 
+  private fun routeOf(type: Int?): String = when (type) {
+    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "speaker"
+    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "earpiece"
+    AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
+    AudioDeviceInfo.TYPE_BLE_HEADSET -> "bluetooth"
+    AudioDeviceInfo.TYPE_WIRED_HEADSET,
+    AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+    AudioDeviceInfo.TYPE_USB_HEADSET -> "wired"
+    else -> "unknown"
+  }
+
+  /**
+   * Every output the call can use right now, as {route, name}. Bluetooth
+   * carries the headset's own name ("Galaxy Buds"). One entry per route.
+   */
+  @Suppress("DEPRECATION")
+  private fun callAudioDevices(): List<Map<String, String>> {
+    val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    val out = LinkedHashMap<String, Map<String, String>>()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      for (device in audio.availableCommunicationDevices) {
+        val route = routeOf(device.type)
+        if (route == "unknown" || out.containsKey(route)) continue
+        val name = device.productName?.toString()?.trim().orEmpty()
+        out[route] = mapOf("route" to route, "name" to name)
+      }
+    } else {
+      if (audio.isWiredHeadsetOn) out["wired"] = mapOf("route" to "wired", "name" to "")
+      else out["earpiece"] = mapOf("route" to "earpiece", "name" to "")
+      if (audio.isBluetoothScoAvailableOffCall &&
+          audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any {
+            it.type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
+          }) {
+        out["bluetooth"] = mapOf("route" to "bluetooth", "name" to "")
+      }
+      out["speaker"] = mapOf("route" to "speaker", "name" to "")
+    }
+    return out.values.toList()
+  }
+
   /** The real communication output, rather than the UI's requested preference. */
   @Suppress("DEPRECATION")
   private fun callAudioRoute(): String {
     val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      return when (audio.communicationDevice?.type) {
-        AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "speaker"
-        AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "earpiece"
-        AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
-        AudioDeviceInfo.TYPE_BLE_HEADSET -> "bluetooth"
-        AudioDeviceInfo.TYPE_WIRED_HEADSET,
-        AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
-        AudioDeviceInfo.TYPE_USB_HEADSET -> "wired"
-        else -> "unknown"
-      }
+      return routeOf(audio.communicationDevice?.type)
     }
     return when {
       audio.isBluetoothScoOn -> "bluetooth"
@@ -285,13 +320,10 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
    * A successful preference write alone does not mean that routing changed.
    */
   @Suppress("DEPRECATION")
-  private fun setCallSpeaker(speaker: Boolean, result: MethodChannel.Result) {
+  private fun setCallRoute(wanted: String, result: MethodChannel.Result) {
     val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    val wanted = if (speaker) "speaker" else "earpiece"
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      val deviceType = if (speaker) AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
-        else AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
-      val device = audio.availableCommunicationDevices.firstOrNull { it.type == deviceType }
+      val device = audio.availableCommunicationDevices.firstOrNull { routeOf(it.type) == wanted }
       if (device == null) {
         result.error("voice_audio_route", "Requested audio output is unavailable", null)
         return
@@ -302,7 +334,20 @@ class VoiceCallBridge(private val activity: Activity, messenger: BinaryMessenger
       }
       requestedAudioRoute = true
     } else {
-      audio.isSpeakerphoneOn = speaker
+      when (wanted) {
+        "bluetooth" -> {
+          audio.isSpeakerphoneOn = false
+          audio.startBluetoothSco()
+          audio.isBluetoothScoOn = true
+        }
+        else -> {
+          if (audio.isBluetoothScoOn) {
+            audio.isBluetoothScoOn = false
+            audio.stopBluetoothSco()
+          }
+          audio.isSpeakerphoneOn = wanted == "speaker"
+        }
+      }
     }
     // The platform changes communication devices asynchronously. Poll only for
     // this bounded request; no persistent handler or microphone session is added.
