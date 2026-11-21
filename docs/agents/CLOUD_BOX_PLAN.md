@@ -1,11 +1,29 @@
 # Cloud box: plan (2026-11-03, reversed 2026-11-21)
 
 **Decision (owner, 2026-11-21): built, on Contabo.** The 2026-11-03 "not
-built" decision is reversed. Every paying Agents user gets one Contabo
-Cloud VPS 4 (4 vCPU, 8 GB, 100 GB; EUR 4.40 net on a 24-month term, about
-EUR 6.55 gross monthly). Plans EUR 20 / 30 / 40 include the box; higher plans
-add model credit. Self-hosting with the install command stays. Plane epic:
-CHAT-161 (children CHAT-162 to CHAT-167).
+built" decision is reversed. The cloud box is an optional add-on (CHAT-172):
+pre-selected and "recommended" (size S) at checkout, can be unticked, booked
+later, resized, cancelled monthly. Without it the user self-hosts with the
+install command. Plans EUR 20 / 30 / 40 carry only model credit.
+
+**Price = our Contabo monthly cost + 1 EUR, nothing more** (owner). Contabo
+contracts are always monthly: a 24-month term would leave paid, useless boxes
+when customers leave. Monthly-term prices, gross incl. 19 % VAT, no setup fee
+(product pages, 2026-11-21):
+
+| Size | Contabo | Our cost | Customer |
+|---|---|---|---|
+| S (recommended) | V153 Cloud VPS 4: 4 vCPU, 8 GB, 100 GB | 6.55 | 7.55 |
+| M | V154 Cloud VPS 6: 6 vCPU, 12 GB, 200 GB | 8.93 | 9.93 |
+| L | V155 Cloud VPS 8: 8 vCPU, 24 GB, 300 GB | 16.66 | 17.66 |
+| XL | V156 Cloud VPS 12: 12 vCPU, 48 GB, 400 GB | 29.75 | 30.75 |
+
+Margin after Stripe fees is about EUR 0.5-0.8 a month, so the box must be an
+item on the plan's subscription, never a second subscription. Spare pool
+boxes cost the full monthly price while idle: keep the pool small. Upgrade:
+in place via Contabo `upgrade` (offerId), prorated. Downgrade: at period end,
+move to a smaller box restored from the backup. A 24-month prepaid option
+may come later. Plane epic: CHAT-161.
 
 ## Shape (2026-11-21)
 
@@ -16,7 +34,8 @@ CHAT-161 (children CHAT-162 to CHAT-167).
   `POST /v2/agents/cloud-box`; the server takes a pool box atomically and
   hands the token to it once. The host pairs through the normal relay.
   Release (cancel, account deletion) = final backup, reinstall with a new
-  secret, back to the pool. Pool target: 2 spare boxes.
+  secret, back to the pool. Pool target: 1-2 spare boxes (each costs
+  EUR 6.55 a month idle).
 - **Access.** No SSH for the customer; only the agent runs there (user
   `agent`, no root). Packages through the root helper `pkg-install` (official
   Ubuntu package names only; `sudo apt` would be root). Admin user `ops`, SSH
