@@ -10,6 +10,7 @@ import 'package:chuk_chat/pages/agent_mailbox_page.dart';
 import 'package:chuk_chat/pages/agent_model_page.dart';
 import 'package:chuk_chat/pages/agents_login_vault_page.dart';
 import 'package:chuk_chat/pages/mobile_agent_permissions_page.dart'; // polish
+import 'package:chuk_chat/pages/pricing_page.dart' show openBillingPortal;
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agents_permissions_service.dart'; // polish
@@ -22,6 +23,8 @@ import 'package:chuk_chat/ui/expressive/feedback.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agent_model_tile.dart';
+import 'package:chuk_chat/widgets/agents_cloud_box_settings_section.dart';
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
@@ -427,6 +430,11 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
                       ),
                   ],
                 ),
+                // The cloud computer (CHAT-164): only drawn when the user
+                // has one.
+                AgentsCloudBoxSettingsSection(
+                  onOpenBilling: () => unawaited(_openBilling()),
+                ),
                 ExpressiveSectionHeader(l.agentsCwConversation),
                 ExpressiveGroup(
                   children: [
@@ -586,6 +594,21 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
   void _openLogins() => unawaited(
     openSettingsSurface(context, (_) => const AgentsLoginVaultPage()),
   );
+
+  /// The Stripe billing portal, for a cloud computer paused by a payment
+  /// problem. A failure is said, never swallowed.
+  Future<void> _openBilling() async {
+    try {
+      await openBillingPortal();
+    } catch (error) {
+      if (!mounted) return;
+      AppNotifications.show(
+        context,
+        error.toString().replaceAll('Exception: ', ''),
+        kind: AppNotificationKind.error,
+      );
+    }
+  }
 
   Widget _row(
     String id,

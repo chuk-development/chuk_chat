@@ -2011,6 +2011,42 @@ class AppLocalizations {
   String get trayShowWindow => _get('trayShowWindow');
   String get trayHideWindow => _get('trayHideWindow');
   String get trayQuit => _get('trayQuit');
+
+  // ── cloud computer (CHAT-164) ──
+  String get cloudBoxTitle => _get('cloudBoxTitle');
+  String get cloudBoxSettingUpTitle => _get('cloudBoxSettingUpTitle');
+  String get cloudBoxSettingUpBody => _get('cloudBoxSettingUpBody');
+  String get cloudBoxSlowTitle => _get('cloudBoxSlowTitle');
+  String get cloudBoxSlowBody => _get('cloudBoxSlowBody');
+  String get cloudBoxLinkingTitle => _get('cloudBoxLinkingTitle');
+  String get cloudBoxSuspendedTitle => _get('cloudBoxSuspendedTitle');
+  String get cloudBoxSuspendedBody => _get('cloudBoxSuspendedBody');
+  String get cloudBoxOpenBilling => _get('cloudBoxOpenBilling');
+  String get cloudBoxFailedTitle => _get('cloudBoxFailedTitle');
+  String get cloudBoxFailedBody => _get('cloudBoxFailedBody');
+  String get cloudBoxRetry => _get('cloudBoxRetry');
+  String get cloudBoxUseOwnComputer => _get('cloudBoxUseOwnComputer');
+  String get cloudBoxStateNone => _get('cloudBoxStateNone');
+  String get cloudBoxStateSettingUp => _get('cloudBoxStateSettingUp');
+  String get cloudBoxStateRunning => _get('cloudBoxStateRunning');
+  String get cloudBoxStateSuspended => _get('cloudBoxStateSuspended');
+  String cloudBoxLastBackup(String when) =>
+      _get('cloudBoxLastBackup').replaceAll('{when}', when);
+  String get cloudBoxNoBackup => _get('cloudBoxNoBackup');
+  String get agentsPlansHeader => _get('agentsPlansHeader');
+  String get agentsPlansIntro => _get('agentsPlansIntro');
+  String get agentsPlanSmall => _get('agentsPlanSmall');
+  String get agentsPlanMedium => _get('agentsPlanMedium');
+  String get agentsPlanLarge => _get('agentsPlanLarge');
+  String agentsPlanPrice(String price) =>
+      _get('agentsPlanPrice').replaceAll('{price}', price);
+  String get agentsPlanCloudBox => _get('agentsPlanCloudBox');
+  String agentsPlanCredit(String amount) =>
+      _get('agentsPlanCredit').replaceAll('{amount}', amount);
+  String get agentsPlanCreditSmall => _get('agentsPlanCreditSmall');
+  String get agentsPlanCreditMedium => _get('agentsPlanCreditMedium');
+  String get agentsPlanCreditLarge => _get('agentsPlanCreditLarge');
+  String get agentsPlanChoose => _get('agentsPlanChoose');
   // ── end tray menu ──
   // ── feedback ──
   // ── end feedback ──

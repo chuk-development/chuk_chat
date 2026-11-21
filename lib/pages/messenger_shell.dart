@@ -157,7 +157,13 @@ import 'package:chuk_chat/services/agents/browser_presence.dart';
 import 'package:chuk_chat/services/agents/chat_debug_export.dart';
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart';
 import 'package:chuk_chat/services/agents/agents_install_flow.dart';
+import 'package:chuk_chat/services/agents/agents_cloud_box_api.dart';
+import 'package:chuk_chat/services/agents/agents_cloud_box_flow.dart';
 import 'package:chuk_chat/services/agents/agents_install_ticket.dart';
+import 'package:chuk_chat/services/agents_plans.dart'
+    show agentsPlanIncludesCloudBox;
+import 'package:chuk_chat/services/user_status_service.dart';
+import 'package:chuk_chat/pages/pricing_page.dart' show openBillingPortal;
 import 'package:chuk_chat/services/agents/agents_invite_pairing.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_uri.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_restore.dart';
@@ -183,6 +189,7 @@ import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/floating_page_scaffold.dart';
 import 'package:chuk_chat/widgets/settings_surface.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/agents_cloud_box_panel.dart';
 import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
@@ -226,6 +233,7 @@ class MessengerShell extends StatefulWidget {
     this.chatModeBuilder,
     this.homeBuilder,
     this.installClaimWaiter,
+    this.cloudBoxApi,
   });
 
   /// Builds the relay transport controller. Injectable so widget tests supply
@@ -324,6 +332,10 @@ class MessengerShell extends StatefulWidget {
   /// widget test injects one, so the page opens with no socket.
   @visibleForTesting
   final AgentsInstallClaimWaiter? installClaimWaiter;
+
+  /// Replaces the cloud computer endpoint (CHAT-164). Null = the API server.
+  @visibleForTesting
+  final AgentsCloudBoxApi? cloudBoxApi;
 
   @override
   State<MessengerShell> createState() => _MessengerShellState();

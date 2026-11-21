@@ -2039,6 +2039,42 @@ const Map<String, String> stringsDe = {
   // ── end webhooks ──
   // ── feedback ──
   // ── end feedback ──
+  // ── cloud computer (CHAT-164) ──
+  'cloudBoxTitle': 'Cloud-Computer',
+  'cloudBoxSettingUpTitle': 'Dein Cloud-Computer wird eingerichtet',
+  'cloudBoxSettingUpBody': 'Das dauert meist nur einen Moment.',
+  'cloudBoxSlowTitle': 'Dein Cloud-Computer wird noch vorbereitet',
+  'cloudBoxSlowBody':
+      'Das dauert länger als sonst. Du kannst diese Ansicht verlassen. Die App verbindet sich von selbst, sobald er bereit ist.',
+  'cloudBoxLinkingTitle': 'Verbinde mit deinem Cloud-Computer…',
+  'cloudBoxSuspendedTitle': 'Dein Cloud-Computer ist pausiert',
+  'cloudBoxSuspendedBody':
+      'Es gibt ein Problem mit deiner Zahlung. Prüfe deine Zahlungsdaten, dann startet er wieder.',
+  'cloudBoxOpenBilling': 'Zahlung prüfen',
+  'cloudBoxFailedTitle': 'Dein Cloud-Computer konnte nicht eingerichtet werden',
+  'cloudBoxFailedBody': 'Prüfe deine Verbindung und versuche es noch einmal.',
+  'cloudBoxRetry': 'Erneut versuchen',
+  'cloudBoxUseOwnComputer': 'Stattdessen eigenen Computer verwenden',
+  'cloudBoxStateNone': 'Nicht eingerichtet',
+  'cloudBoxStateSettingUp': 'Wird eingerichtet',
+  'cloudBoxStateRunning': 'Läuft',
+  'cloudBoxStateSuspended': 'Pausiert: Problem mit der Zahlung',
+  'cloudBoxLastBackup': 'Letzte Sicherung: {when}',
+  'cloudBoxNoBackup': 'Noch keine Sicherung',
+  'agentsPlansHeader': 'Sidekicks-Pläne',
+  'agentsPlansIntro':
+      'Jeder Plan enthält deinen eigenen Cloud-Computer. Deine Sidekicks laufen dort, ohne dass du etwas installierst. Du kannst sie weiterhin auch auf deinem eigenen Computer betreiben.',
+  'agentsPlanSmall': 'Sidekicks S',
+  'agentsPlanMedium': 'Sidekicks M',
+  'agentsPlanLarge': 'Sidekicks L',
+  'agentsPlanPrice': '{price} €/Monat',
+  'agentsPlanCloudBox': 'Eigener Cloud-Computer, immer an',
+  'agentsPlanCredit': '{amount} € Modell-Guthaben pro Monat',
+  'agentsPlanCreditSmall': 'Modell-Guthaben inklusive',
+  'agentsPlanCreditMedium': 'Mehr Modell-Guthaben',
+  'agentsPlanCreditLarge': 'Am meisten Modell-Guthaben',
+  'agentsPlanChoose': 'Plan wählen',
+  // ── end cloud computer ──
   // ── tray menu ──
   'trayModeChats': 'Chats',
   'trayModeAgents': 'Sidekicks',

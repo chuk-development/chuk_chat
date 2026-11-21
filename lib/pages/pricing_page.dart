@@ -4,6 +4,7 @@
 import 'dart:convert';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/pages/usage_details_page.dart';
+import 'package:chuk_chat/services/agents_plans.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/usage_logs_service.dart';
@@ -55,7 +56,10 @@ Future<String> _getAccessToken() async {
   return session.accessToken;
 }
 
-Future<void> startCheckout() async {
+/// Opens the Stripe checkout. Without [planId] it is the Plus plan; with one
+/// (`agents_20`, ...) the server maps the id to its configured price id. The
+/// app never holds a Stripe price id.
+Future<void> startCheckout({String? planId}) async {
   final token = await _getAccessToken();
 
   final response = await http.post(
@@ -64,6 +68,7 @@ Future<void> startCheckout() async {
       'Authorization': 'Bearer $token',
       'Content-Type': 'application/json',
     },
+    body: planId == null ? null : jsonEncode({'plan': planId}),
   );
 
   if (response.statusCode == 409) {
@@ -151,11 +156,16 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
   bool _isProcessing = false;
   bool _agreedToTerms = false;
 
+  /// The Sidekicks plans (CHAT-164), only in the Agents build. The defaults
+  /// show at once; the server's list replaces them when it arrives.
+  List<AgentsPlan> _agentsPlans = kAgentsPlanDefaults;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadUserStatus();
+    if (kFeatureAgents) _loadAgentsPlans();
     // Warm the "Open usage details" page: with a cache this is one small
     // request; it starts after the first frame so it never slows this page.
     WidgetsBinding.instance.addPostFrameCallback(
@@ -210,7 +220,13 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _handleSubscribe() async {
+  Future<void> _loadAgentsPlans() async {
+    final List<AgentsPlan> plans = await fetchAgentsPlans();
+    if (!mounted) return;
+    setState(() => _agentsPlans = plans);
+  }
+
+  Future<void> _handleSubscribe({String? planId}) async {
     if (_isProcessing) return;
 
     if (!_agreedToTerms) {
@@ -233,7 +249,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
         return;
       }
 
-      await startCheckout();
+      await startCheckout(planId: planId);
 
       // Wait a bit and refresh
       Future.delayed(const Duration(seconds: 3), () {
@@ -279,6 +295,148 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const UsageDetailsPage()),
+    );
+  }
+
+  /// The three Sidekicks plans, one consent row and one choose button each.
+  List<Widget> _agentsPlanSection(AppLocalizations l) {
+    final bool paymentsDisabled = !kFeaturePaymentsDirect;
+    final List<String> names = [
+      l.agentsPlanSmall,
+      l.agentsPlanMedium,
+      l.agentsPlanLarge,
+    ];
+    final List<String> creditFallback = [
+      l.agentsPlanCreditSmall,
+      l.agentsPlanCreditMedium,
+      l.agentsPlanCreditLarge,
+    ];
+    return [
+      ExpressiveSectionHeader(l.agentsPlansHeader),
+      ExpressiveInfoCard(text: l.agentsPlansIntro),
+      const SizedBox(height: 12),
+      for (var i = 0; i < _agentsPlans.length; i++) ...[
+        _PlanCard(
+          key: ValueKey('agents_plan_${_agentsPlans[i].id}'),
+          title: names[i.clamp(0, names.length - 1)],
+          price: l.agentsPlanPrice('${_agentsPlans[i].priceEur}'),
+          features: [
+            if (_agentsPlans[i].includesCloudBox) l.agentsPlanCloudBox,
+            switch (_agentsPlans[i].creditEur) {
+              final num credit => l.agentsPlanCredit(_formatEuro(credit)),
+              null => creditFallback[i.clamp(0, creditFallback.length - 1)],
+            },
+          ],
+          highlighted: false,
+          child: paymentsDisabled
+              ? null
+              : Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.tonal(
+                      onPressed: _isProcessing || !_agreedToTerms
+                          ? null
+                          : () =>
+                              _handleSubscribe(planId: _agentsPlans[i].id),
+                      child: Text(l.agentsPlanChoose),
+                    ),
+                  ),
+                ),
+        ),
+        const SizedBox(height: 12),
+      ],
+      if (!paymentsDisabled) ...[
+        _consentRow(l, onAccent: false),
+        const SizedBox(height: 16),
+      ],
+    ];
+  }
+
+  static String _formatEuro(num amount) =>
+      amount == amount.roundToDouble()
+          ? amount.round().toString()
+          : amount.toStringAsFixed(2);
+
+  /// The consent checkbox with the withdrawal and terms links. On the accent
+  /// card it draws white; elsewhere it takes the theme's colours.
+  Widget _consentRow(AppLocalizations l, {required bool onAccent}) {
+    final ColorScheme colorScheme = Theme.of(context).colorScheme;
+    final Color text = onAccent
+        ? Colors.white.withValues(alpha: 0.9)
+        : colorScheme.onSurfaceVariant;
+    final Color link = onAccent ? Colors.white : colorScheme.primary;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 24,
+          height: 24,
+          child: Checkbox(
+            value: _agreedToTerms,
+            onChanged: (value) {
+              setState(() => _agreedToTerms = value ?? false);
+            },
+            side: onAccent
+                ? BorderSide(
+                    color: Colors.white.withValues(alpha: 0.8),
+                    width: 1.5,
+                  )
+                : null,
+            checkColor: onAccent ? colorScheme.onPrimary : null,
+            fillColor: onAccent
+                ? WidgetStateProperty.resolveWith((states) {
+                    if (states.contains(WidgetState.selected)) {
+                      return Colors.white;
+                    }
+                    return Colors.transparent;
+                  })
+                : null,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: GestureDetector(
+            onTap: () {
+              setState(() => _agreedToTerms = !_agreedToTerms);
+            },
+            child: Text.rich(
+              TextSpan(
+                style: TextStyle(color: text, fontSize: 12, height: 1.4),
+                children: [
+                  TextSpan(text: l.immediateAccessAck),
+                  TextSpan(
+                    text: l.rightOfWithdrawal,
+                    style: TextStyle(
+                      color: link,
+                      decoration: TextDecoration.underline,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () => _launchExternalUrl(
+                            legalPageUrl(l.locale.languageCode, 'cancellation'),
+                          ),
+                  ),
+                  TextSpan(text: l.onceServiceBegins),
+                  TextSpan(
+                    text: l.termsOfService,
+                    style: TextStyle(
+                      color: link,
+                      decoration: TextDecoration.underline,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    recognizer: TapGestureRecognizer()
+                      ..onTap = () => _launchExternalUrl(
+                            legalPageUrl(l.locale.languageCode, 'terms'),
+                          ),
+                  ),
+                  TextSpan(text: l.consentTermsSuffix),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -404,6 +562,9 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
             ),
 
           if (hasSubscription) const SizedBox(height: 16),
+
+          // Sidekicks plans with the cloud computer (Agents build only).
+          if (kFeatureAgents && !hasSubscription) ..._agentsPlanSection(l),
 
           // Plus plan subscribe card (if not already subscribed)
           if (!hasSubscription)
@@ -592,6 +753,7 @@ class _PlanCard extends StatelessWidget {
   final Widget? child;
 
   const _PlanCard({
+    super.key,
     required this.title,
     required this.price,
     required this.features,

@@ -67,6 +67,42 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// computer with no agent at all.
   final ValueNotifier<bool?> _hasComputer = ValueNotifier<bool?>(null);
 
+  /// The zero-click cloud computer setup (CHAT-164). It starts when this
+  /// device has no computer and the plan includes a cloud computer, and the
+  /// status panel draws its screen while it runs. Its pending token is kept
+  /// apart from the install page's one, in the same secure store.
+  late final AgentsCloudBoxFlow _cloudBox = AgentsCloudBoxFlow(
+    api: widget.cloudBoxApi ?? HttpAgentsCloudBoxApi.instance,
+    store: AgentsInstallTicketStore(
+      backend: _pairingStore.backend,
+      storageKey: AgentsInstallTicketStore.cloudBoxStorageKey,
+    ),
+    sessionSource: widget.sessionSource,
+    claimWaiter: widget.installClaimWaiter ?? _waitForInstallClaim,
+    pair: _pairWithInvite,
+    planIncludesBox: () =>
+        agentsPlanIncludesCloudBox(UserStatusService.status.value),
+  );
+
+  /// Starts the cloud computer setup when there is no computer, and stops it
+  /// when one arrived some other way (a restore, the install page).
+  void _onHasComputerForCloudBox() {
+    switch (_hasComputer.value) {
+      case false:
+        unawaited(_cloudBox.maybeStart());
+      case true:
+        if (_cloudBox.phase != AgentsCloudBoxPhase.linked) _cloudBox.stop();
+      case null:
+        return;
+    }
+  }
+
+  /// A new user status (after a payment the pricing page refreshes it) may
+  /// now include a cloud computer.
+  void _onUserStatusForCloudBox() {
+    if (_hasComputer.value == false) unawaited(_cloudBox.planChanged());
+  }
+
   /// The last local read of the pairing store, and whether one has finished.
   bool _localPairing = false;
   bool _localPairingKnown = false;
@@ -218,6 +254,9 @@ mixin AgentsShellHost on State<MessengerShell> {
       onHide: _flushPendingWrites,
       onResume: () {
         _pairingRestore?.nudge();
+        // A cloud computer setup that failed or was left half done is picked
+        // up again (CHAT-164). The flow keeps 10 s between two requests.
+        if (_hasComputer.value == false) unawaited(_cloudBox.resumed());
         final controller = _controller.value;
         if (controller != null && controller.state.value.isPaired) {
           unawaited(controller.requestAgentList().catchError((Object _) {}));
@@ -253,6 +292,8 @@ mixin AgentsShellHost on State<MessengerShell> {
     // store signals every write and delete, the restore every new reason.
     _pairingStore.changes.addListener(_onPairingStoreChanged);
     _restoreReason.addListener(_resolveHasComputer);
+    _hasComputer.addListener(_onHasComputerForCloudBox);
+    UserStatusService.status.addListener(_onUserStatusForCloudBox);
     _restoreGraceTimer = Timer(_kRestoreGrace, () {
       _restoreGraceOver = true;
       _resolveHasComputer();
@@ -586,6 +627,9 @@ mixin AgentsShellHost on State<MessengerShell> {
     AgentMailKeyHandover.instance.stop();
     _pairingStore.changes.removeListener(_onPairingStoreChanged);
     _restoreReason.removeListener(_resolveHasComputer);
+    _hasComputer.removeListener(_onHasComputerForCloudBox);
+    UserStatusService.status.removeListener(_onUserStatusForCloudBox);
+    _cloudBox.dispose();
     _restoreGraceTimer?.cancel();
     _pairingRestore?.reason.removeListener(_onRestoreReason);
     unawaited(_pairingRestore?.dispose() ?? Future<void>.value());
@@ -888,6 +932,21 @@ mixin AgentsShellHost on State<MessengerShell> {
     return linked && mounted;
   }
 
+  /// The billing portal for a cloud computer paused by a payment problem.
+  /// After it the flow asks the server again.
+  Future<void> _openCloudBoxBilling() async {
+    try {
+      await openBillingPortal();
+    } catch (error) {
+      if (!mounted) return;
+      AppNotifications.show(
+        context,
+        error.toString().replaceAll('Exception: ', ''),
+        kind: AppNotificationKind.error,
+      );
+    }
+  }
+
   /// The live thread view's state, for the status panel's actions.
   AgentsThreadViewState? get _threadViewState {
     final state = _threadViewKey.currentState;
@@ -904,8 +963,25 @@ mixin AgentsShellHost on State<MessengerShell> {
         _restoreReason,
         AgentsCloudRelaySocket.healInProgress,
         _roster,
+        _cloudBox,
+        _hasComputer,
       ]),
       builder: (BuildContext context, Widget? _) {
+        // The cloud computer is being set up (or needs the user): its calm
+        // screen takes the place of "Add your computer" (CHAT-164).
+        if (_hasComputer.value != true && _cloudBox.phase.visible) {
+          return AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: AgentsCloudBoxPanel(
+              key: const ValueKey<String>('agents-cloud-box-panel'),
+              phase: _cloudBox.phase,
+              topInset: topInset,
+              onRetry: () => unawaited(_cloudBox.retry()),
+              onOpenBilling: () => unawaited(_openCloudBoxBilling()),
+              onUseOwnComputer: () => unawaited(_openInstallPage()),
+            ),
+          );
+        }
         final AgentsLinkReport link = _linkReport.value;
         final AgentsShellStatus status = resolveAgentsShellStatus(
           link: link,

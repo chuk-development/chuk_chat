@@ -184,10 +184,21 @@ String agentsInstallCommand(String token) =>
 
 /// Keeps the one pending ticket in secure storage.
 class AgentsInstallTicketStore {
-  AgentsInstallTicketStore({AgentsSecureKeyValueStore? backend})
-    : _store = backend ?? const FlutterSecureKeyValueStore();
+  /// [storageKey] keeps a second pending ticket apart from the install
+  /// page's one: the cloud computer setup uses [cloudBoxStorageKey].
+  AgentsInstallTicketStore({
+    AgentsSecureKeyValueStore? backend,
+    String storageKey = installStorageKey,
+  }) : _store = backend ?? const FlutterSecureKeyValueStore(),
+       _kTicket = storageKey;
 
-  static const String _kTicket = 'cowork_install_ticket';
+  /// The install page's pending ticket (the pasted command).
+  static const String installStorageKey = 'cowork_install_ticket';
+
+  /// The cloud computer's pending ticket (sent to the server, never shown).
+  static const String cloudBoxStorageKey = 'cowork_cloud_box_ticket';
+
+  final String _kTicket;
 
   final AgentsSecureKeyValueStore _store;
 

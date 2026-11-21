@@ -2002,6 +2002,42 @@ const Map<String, String> stringsEn = {
   // ── end webhooks ──
   // ── feedback ──
   // ── end feedback ──
+  // ── cloud computer (CHAT-164) ──
+  'cloudBoxTitle': 'Cloud computer',
+  'cloudBoxSettingUpTitle': 'Setting up your cloud computer',
+  'cloudBoxSettingUpBody': 'This usually takes only a moment.',
+  'cloudBoxSlowTitle': 'Your cloud computer is still being prepared',
+  'cloudBoxSlowBody':
+      'This takes longer than usual. You can leave this screen. The app connects on its own when the computer is ready.',
+  'cloudBoxLinkingTitle': 'Connecting to your cloud computer…',
+  'cloudBoxSuspendedTitle': 'Your cloud computer is paused',
+  'cloudBoxSuspendedBody':
+      'There is a problem with your payment. Check your billing, then the computer starts again.',
+  'cloudBoxOpenBilling': 'Check billing',
+  'cloudBoxFailedTitle': 'Your cloud computer could not be set up',
+  'cloudBoxFailedBody': 'Check your connection and try again.',
+  'cloudBoxRetry': 'Try again',
+  'cloudBoxUseOwnComputer': 'Use my own computer instead',
+  'cloudBoxStateNone': 'Not set up',
+  'cloudBoxStateSettingUp': 'Being set up',
+  'cloudBoxStateRunning': 'Running',
+  'cloudBoxStateSuspended': 'Paused: payment problem',
+  'cloudBoxLastBackup': 'Last backup: {when}',
+  'cloudBoxNoBackup': 'No backup yet',
+  'agentsPlansHeader': 'Sidekicks plans',
+  'agentsPlansIntro':
+      'Every plan includes your own cloud computer. Your Sidekicks run there, with nothing to install. You can still run them on your own computer.',
+  'agentsPlanSmall': 'Sidekicks S',
+  'agentsPlanMedium': 'Sidekicks M',
+  'agentsPlanLarge': 'Sidekicks L',
+  'agentsPlanPrice': '€{price}/month',
+  'agentsPlanCloudBox': 'Your own cloud computer, always on',
+  'agentsPlanCredit': '€{amount} model credit per month',
+  'agentsPlanCreditSmall': 'Model credit included',
+  'agentsPlanCreditMedium': 'More model credit',
+  'agentsPlanCreditLarge': 'Most model credit',
+  'agentsPlanChoose': 'Choose plan',
+  // ── end cloud computer ──
   // ── tray menu ──
   'trayModeChats': 'Chats',
   'trayModeAgents': 'Sidekicks',
