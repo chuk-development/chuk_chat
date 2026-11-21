@@ -51,10 +51,24 @@ may come later. Plane epic: CHAT-161.
   compressed repo on the Hetzner Storage Box. Boxes hold no backup
   credentials, so no customer can read another one's data. Final backup of a
   deleted account: 90 days (GDPR Art. 17), not forever.
-- **Billing.** Box only with an active, paid Stripe subscription whose price
-  id is in `CLOUD_BOX_PRICE_IDS`. Payment failed: 7 days grace, then stop;
-  30 days: release. Contabo price page checked weekly; a change mails users
-  30 days ahead (terms must allow passing on provider prices).
+- **Billing (owner, 2026-11-21: optional add-on).** The box is NOT in a
+  plan. It is an add-on with its own price per size, pre-selected and
+  "recommended" (`s`) in the checkout, can be unticked and booked later.
+  Self-hosting with the install command needs no add-on. Sizes
+  (`CLOUD_BOX_SIZES` in api_server): s = Cloud VPS 4 (4 vCPU/8 GB/100 GB),
+  m = VPS 6 (6/12/200), l = VPS 8 (8/24/300), xl = VPS 12 (12/48/400).
+  Price = Contabo MONTHLY-term cost + 1 EUR (contracts always 1 month):
+  s 7.55, m 9.93, l 17.66, xl 30.75 EUR. The margin is about 0.5-0.8 EUR a
+  month after Stripe fees, so the box is always a second ITEM on the plan's
+  subscription, never its own subscription (one fixed Stripe fee). Upgrade:
+  charged pro rata now, Contabo upgrades in place (reboot). Downgrade: from
+  the next period; at the period end the data moves to a new smaller box
+  (`api_server/ops/cloud_box/migrate.py`), no new pairing. Cancel: the box
+  runs to the end of the paid period. Payment failed: 7 days grace, then
+  stop; 30 days: release. Contabo monthly prices are checked weekly per
+  size; a change mails the owner with the suggested new price, nothing
+  changes by itself. Endpoints and Stripe choices: api_server `CLAUDE.md`,
+  section "Cloud box add-on".
 - **Contabo API.** Sub-user `api@chuk.dev` (role Techniker, no 2FA), values
   in `api_server/.env`, check with `api_server/scripts/contabo_check.py`.
   Trap: Cloudflare in front of the API answers plain Python HTTP with 403;
