@@ -129,14 +129,13 @@ no other branches on GitHub and none are created: no feature branches, no
 work at once and one of them really needs a worktree, its branch exists only
 for that one task: when the task is done, it is merged into `master` at once
 and on its own initiative (no asking), and the branch and worktree are
-deleted. A branch that is still there the next day is a bug. The history was
+deleted. The history was
 rewritten on 2026-11-11 to remove `.pseudomap` (new tip `e65c12fb`). Never
 merge a commit from the old history back in. The full backup of all old refs
 is `~/git/chuk_chat-backup-2026-11-11.bundle`.
 
 **Default: work directly in `/home/user/git/chuk_chat` on `master`, commit and
-push straight to `master`.** No feature branch, no worktree. That is the normal
-case, because normally exactly one agent works this repo.
+push straight to `master`.** No feature branch, no worktree.
 
 **Owner rule (2026-11-12): all agents work in this one checkout, no worktrees.**
 A build from a private worktree once missed unpushed commits of the main
@@ -149,9 +148,6 @@ is a real conflict risk that cannot be solved otherwise:
 - another agent is already working in the main checkout at the same time, and
 - talking to that agent (`SendMessage` / `ListAgents`) does not resolve who owns
   which files.
-
-Prefer coordination over isolation: ask the other agent what it touches, split
-the files, work sequentially. A worktree is the last resort.
 
 **If a worktree really is needed:**
 
