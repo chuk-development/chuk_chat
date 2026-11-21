@@ -1,13 +1,47 @@
-# Cloud box: plan (2026-11-03)
+# Cloud box: plan (2026-11-03, reversed 2026-11-21)
 
-**Decision (owner, 2026-11-03): not built.** We do not host boxes for users
-(cost and liability for what users run). Users self-host, also on a VPS, with
-the one-line installer. This file stays as research only.
+**Decision (owner, 2026-11-21): built, on Contabo.** The 2026-11-03 "not
+built" decision is reversed. Every paying Agents user gets one Contabo
+Cloud VPS 4 (4 vCPU, 8 GB, 100 GB; EUR 4.40 net on a 24-month term, about
+EUR 6.55 gross monthly). Plans EUR 20 / 30 / 40 include the box; higher plans
+add model credit. Self-hosting with the install command stays. Plane epic:
+CHAT-161 (children CHAT-162 to CHAT-167).
 
-Goal (owner): a paid add-on, about EUR 5/month from the user's credits. The
-user gets a cloud computer that runs the Agents host. The app makes one call;
-api_server creates the box. The box sleeps when idle. Encrypted backups go to
-S3, so a provider failure loses no user data.
+## Shape (2026-11-21)
+
+- **Instant, zero clicks.** A pool of pre-installed, hardened, unpaired
+  boxes long-polls `POST /v2/agents/cloud-box/claim` (header
+  `Box <box_id>:<secret>`; the secret is written by cloud-init, the DB keeps
+  only its hash). After payment the app sends a fresh pairing token to
+  `POST /v2/agents/cloud-box`; the server takes a pool box atomically and
+  hands the token to it once. The host pairs through the normal relay.
+  Release (cancel, account deletion) = final backup, reinstall with a new
+  secret, back to the pool. Pool target: 2 spare boxes.
+- **Access.** No SSH for the customer; only the agent runs there (user
+  `agent`, no root). Packages through the root helper `pkg-install` (official
+  Ubuntu package names only; `sudo apt` would be root). Admin user `ops`, SSH
+  key only, port 22 only from dps (Contabo firewall + nftables).
+- **Abuse = money risk.** One abusive customer can get the whole Contabo
+  account suspended. nftables blocks SMTP, torrent, SMB for `agent` and
+  rate-limits new outbound connections. A Contabo abuse report stops the box
+  of that IP at once.
+- **Updates.** `unattended-upgrades` daily, reboot 04:00 local. Emergency:
+  `ops/cloud_box/fleet_patch.py` in waves (5 % canary, then batches; stop on
+  failure).
+- **Backups.** dps pulls every box with restic into one shared, deduplicated,
+  compressed repo on the Hetzner Storage Box. Boxes hold no backup
+  credentials, so no customer can read another one's data. Final backup of a
+  deleted account: 90 days (GDPR Art. 17), not forever.
+- **Billing.** Box only with an active, paid Stripe subscription whose price
+  id is in `CLOUD_BOX_PRICE_IDS`. Payment failed: 7 days grace, then stop;
+  30 days: release. Contabo price page checked weekly; a change mails users
+  30 days ahead (terms must allow passing on provider prices).
+- **Contabo API.** Sub-user `api@chuk.dev` (role Techniker, no 2FA), values
+  in `api_server/.env`, check with `api_server/scripts/contabo_check.py`.
+  Trap: Cloudflare in front of the API answers plain Python HTTP with 403;
+  use `curl_cffi` with `impersonate="chrome"`.
+
+## Research (2026-11-03)
 
 Research: `SPRITES_REFERENCE.md`, `CLOUD_BOX_PROVIDERS.md`,
 `HOSTING_AGENT37.md`, `CLOUD_HOST.md`. Code facts below come from a read of
