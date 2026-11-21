@@ -2,14 +2,15 @@
 name: terminal
 description: Run commands in your own sandbox the right way. Short command -> run_command. Long command (build, download, install, training) -> run_command with background=true, you are woken when it ends. Program that asks questions, shows a menu or a TUI (apt, pip prompts, wizards, ssh, vim, a REPL) -> shell_start / shell_read / shell_send. Use whenever a command may take long, may ask "y/n", or must keep running while you work.
 metadata:
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Terminal: foreground, background, interactive
 
-The sandbox is yours. You are user `agents` with passwordless `sudo`, so you
-can install anything: `sudo apt-get install -y ...`, `pip install ...`,
-`npm install -g ...`. If you break it, you fix it. Keep the workspace clean:
+The sandbox is yours. If you break it, you fix it. Need a program that is
+not there? Load the `installing-software` skill first: on a cloud computer
+there is no `sudo` and no root, and many tools are already installed. Keep
+the workspace clean:
 your files go in the workspace, scratch goes in `/tmp` or a folder you delete
 when done.
 
@@ -57,13 +58,13 @@ tmux session in your sandbox that lives between your tool calls.
 The loop is: start -> read -> send -> read.
 
 ```
-shell_start(name="apt", command="sudo apt-get install ffmpeg")
-  -> screen ends with "Do you want to continue? [Y/n]", running: true, foreground: "apt-get"
-shell_send(name="apt", keys=["y", "Enter"])
-  -> screen shows the install running
-shell_read(name="apt")
+shell_start(name="init", command="npm init")
+  -> screen ends with "package name: (app)", running: true, foreground: "npm"
+shell_send(name="init", keys=["my-app", "Enter"])
+  -> screen shows the next question; answer each one the same way
+shell_read(name="init")
   -> running: false, foreground: "bash": the program is done, the prompt is back
-shell_kill(name="apt")
+shell_kill(name="init")
 ```
 
 What a read gives you:
@@ -72,7 +73,7 @@ What a read gives you:
   `lines`, up to 2000; the cap is 30 000 characters).
 - `running` — `true` while a program other than the shell is in the
   foreground. `false` means the shell waits for a command.
-- `foreground` — the name of that program (`apt-get`, `python3`, `vim`).
+- `foreground` — the name of that program (`npm`, `python3`, `vim`).
 - `cursor_line` — the line the cursor is on: the prompt, or the question.
 
 How to send:
@@ -115,5 +116,5 @@ Rules:
 | must keep running (a dev server) while you work | `run_command(background=true)`; stop it with `job_cancel` |
 | may ask AND takes long (an installer) | `shell_start` with the command, answer the questions, then `shell_read` until `running` is false |
 
-`apt-get` and `pip` accept `-y` / `--yes`; prefer that in `run_command` over
+Most installers accept `-y` / `--yes`; prefer that in `run_command` over
 an interactive shell when you know the answer is yes.

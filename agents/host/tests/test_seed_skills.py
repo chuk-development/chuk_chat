@@ -47,6 +47,7 @@ def test_the_shipped_seed_tree_classifies_every_skill_by_its_directory():
         "automations",
         "chart-authoring",
         "document-authoring",
+        "installing-software",
         "research",
         "secrets",
         "terminal",

@@ -2,7 +2,7 @@
 name: youtube-transcript
 description: Pull the full transcript of a YouTube video with yt-dlp and summarize it. Use whenever the user gives a YouTube URL or video id and asks to summarize, transcribe, get the transcript, extract key points, quote, or answer questions about the video.
 metadata:
-  version: "1.1"
+  version: "1.2"
 ---
 
 # YouTube transcript and summary
@@ -56,21 +56,20 @@ def canonical_url(value):
 url = canonical_url(URL)
 
 # 1. make sure yt-dlp is on PATH; install it without root if not.
+#    preinstalled on a cloud computer; else a user-space uv tool, no sudo.
 def ensure_ytdlp():
-    if shutil.which("yt-dlp"):
-        return ["yt-dlp"]
-    for install in (
-        ["uv", "tool", "install", "yt-dlp"],
-        [sys.executable, "-m", "pip", "install", "--quiet", "--user", "yt-dlp"],
-        ["sudo", "apt-get", "install", "-y", "yt-dlp"],
-    ):
-        if shutil.which(install[0]):
-            sh(install)
-            if shutil.which("yt-dlp"):
-                return ["yt-dlp"]
+    local = os.path.expanduser("~/.local/bin/yt-dlp")
+    for found in (shutil.which("yt-dlp"), local if os.access(local, os.X_OK) else None):
+        if found:
+            return [found]
+    if shutil.which("uv"):
+        sh(["uv", "tool", "install", "yt-dlp"])
+        if os.access(local, os.X_OK):
+            return [local]
     if sh([sys.executable, "-m", "yt_dlp", "--version"]).returncode == 0:
         return [sys.executable, "-m", "yt_dlp"]
-    raise SystemExit("could not install yt-dlp; try: sudo apt-get install -y yt-dlp")
+    raise SystemExit("could not find yt-dlp; install it as the installing-software "
+                     "skill says (uv tool install yt-dlp)")
 
 ytdlp = ensure_ytdlp()
 
@@ -214,6 +213,8 @@ is the selector, not a bigger machine.
 - Recent `yt-dlp` needs a JavaScript runtime for YouTube. Without one it warns
   ("extraction without a JS runtime has been deprecated ... some formats may be
   missing") and can silently return `NO_SUBTITLES` on videos that DO have
-  captions. If that happens, install `deno` (preferred: `sudo apt-get install -y
-  deno`, or `curl -fsSL https://deno.land/install.sh | sh`) or `nodejs`, then
-  retry — the script needs no change.
+  captions. If that happens, first update yt-dlp (`uv tool upgrade yt-dlp`),
+  then make sure a JS runtime is there: `node` is preinstalled on a cloud
+  computer; else install `deno` (`curl -fsSL https://deno.land/install.sh | sh`
+  installs into your home, no root) or Node as the `installing-software` skill
+  says. Retry — the script needs no change.

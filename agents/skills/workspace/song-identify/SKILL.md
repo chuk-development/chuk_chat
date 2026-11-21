@@ -2,7 +2,7 @@
 name: song-identify
 description: Identify the song playing in a video or an audio file, the way Shazam does, and report title, artist, album and year. Use whenever the user asks "which song is this", "what song is playing", "identify the song/track/music", "name the track", "what is this music", "Shazam this", or gives a YouTube link or an audio/video file and wants the music named.
 metadata:
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Identify the song in a video or audio file
@@ -61,8 +61,8 @@ url = None if local_path else canonical_url(SOURCE)
 
 # 2. ffmpeg cuts the sample and ffprobe reads the duration. Both ship together.
 if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
-    raise SystemExit("NO_FFMPEG install it: sudo apt-get install -y ffmpeg "
-                     "(macOS: brew install ffmpeg)")
+    raise SystemExit("NO_FFMPEG ffmpeg is preinstalled on a cloud computer; "
+                     "elsewhere follow the installing-software skill")
 
 # 3. shazamio is the recogniser. It carries a compiled core, so it lives in its
 #    own venv under ~/.cache; a system python is usually PEP-668 locked anyway.
@@ -72,7 +72,7 @@ vpy = os.path.join(venv, "bin", "python")
 if not os.path.exists(vpy):
     os.makedirs(os.path.dirname(venv), exist_ok=True)
     if sh([sys.executable, "-m", "venv", venv]).returncode != 0:
-        raise SystemExit("NO_VENV python venv module missing: sudo apt-get install -y python3-venv")
+        raise SystemExit("NO_VENV python venv module missing; follow the installing-software skill")
 if sh([vpy, "-c", "import shazamio"]).returncode != 0:
     r = sh([vpy, "-m", "pip", "install", "--quiet", "shazamio"])
     if sh([vpy, "-c", "import shazamio"]).returncode != 0:
@@ -86,18 +86,19 @@ try:
         media = local_path
     else:
         def ensure_ytdlp():
-            if shutil.which("yt-dlp"):
-                return ["yt-dlp"]
-            for install in (["uv", "tool", "install", "yt-dlp"],
-                            [sys.executable, "-m", "pip", "install", "--quiet", "--user", "yt-dlp"],
-                            ["sudo", "apt-get", "install", "-y", "yt-dlp"]):
-                if shutil.which(install[0]):
-                    sh(install)
-                    if shutil.which("yt-dlp"):
-                        return ["yt-dlp"]
+            # preinstalled on a cloud computer; else a user-space uv tool, no root
+            local = os.path.expanduser("~/.local/bin/yt-dlp")
+            for found in (shutil.which("yt-dlp"), local if os.access(local, os.X_OK) else None):
+                if found:
+                    return [found]
+            if shutil.which("uv"):
+                sh(["uv", "tool", "install", "yt-dlp"])
+                if os.access(local, os.X_OK):
+                    return [local]
             if sh([sys.executable, "-m", "yt_dlp", "--version"]).returncode == 0:
                 return [sys.executable, "-m", "yt_dlp"]
-            raise SystemExit("NO_YTDLP try: sudo apt-get install -y yt-dlp")
+            raise SystemExit("NO_YTDLP install it as the installing-software skill says "
+                             "(uv tool install yt-dlp)")
         r = sh(ensure_ytdlp() + [
             "--no-playlist", "--no-embed-thumbnail", "--no-embed-metadata",
             "--no-write-thumbnail",
@@ -261,9 +262,10 @@ Measured on a four-minute music video: format 139, a 48 kbps m4a of 1.45 MiB.
   the `~/.cache/song-identify/venv`, which makes every later run fast.
 - Recent `yt-dlp` warns "No supported JavaScript runtime could be found ... some
   formats may be missing". Recognition still works — the audio-only formats it
-  can reach are enough. If a download fails outright, install `deno`
-  (`sudo apt-get install -y deno`) or `nodejs` and retry; the script needs no
-  change.
+  can reach are enough. If a download fails outright, first update yt-dlp
+  (`uv tool upgrade yt-dlp`), then make sure a JS runtime is there: `node` is
+  preinstalled on a cloud computer; else install `deno` or Node as the
+  `installing-software` skill says. Retry; the script needs no change.
 - A local file needs no `yt-dlp` at all, only `ffmpeg`. Any container ffmpeg can
   read works: mp4, mkv, webm, mp3, m4a, wav, ogg, opus, flac.
 - Shazam recognises recordings, not compositions. A cover, a live take or a
