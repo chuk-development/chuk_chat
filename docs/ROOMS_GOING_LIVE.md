@@ -189,6 +189,9 @@ App to host:
 - `room_settings` `{room_id, <any setting key>}`: only the given keys change.
 - `room_list_request` `{}`: the host answers `room_list`.
 - `room_stop` `{room_id}`: stops the run after the current turn.
+- `room_create.members[]` and `room_add_member` + `host_id`: the member
+  lives on another host of the account (CHAT-177). See
+  `docs/WIRE_CONTRACT.md`, "Hosts that work together".
 
 Host to app:
 

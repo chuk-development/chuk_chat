@@ -130,6 +130,16 @@ TYPE_AGENT_MAIL = "agent_mail"
 #: ``agent_mail``, not sealed: the server saw the call anyway. Every host of
 #: the user (or the one named by ``device_id``) gets it; the row's host acts.
 TYPE_WEBHOOK_EVENT = "webhook_event"
+#: A frame from another host of the same account (CHAT-177,
+#: api_server docs/COWORK_RELAY.md, "Host to host frames"): ``{"type":
+#: "peer", "from_device_id", "body"}``. The body is sealed with the pair key
+#: of the two hosts (:mod:`chuk_agents_host.peer_channel`); the relay sets
+#: ``from_device_id`` from the sender's socket.
+TYPE_PEER = "peer"
+#: The relay's refusals of a ``peer`` frame, answered to the sender.
+PEER_ERROR_CODES = frozenset(
+    {"peer_unreachable", "invalid_target", "invalid_body", "rate_limited", "payload_too_large"}
+)
 #: Ledger words of a webhook frame. ``webhook`` = handed to the automations
 #: (``outcome`` says queued / filtered); a drop names why.
 DECISION_WEBHOOK = "webhook"
@@ -308,6 +318,8 @@ class CloudRelayTransport:
         fixed_pairing_channel: bool = False,
         on_agent_mail: Callable[[str], None] | None = None,
         on_webhook: Callable[[dict[str, Any]], str] | None = None,
+        on_peer: Callable[[dict[str, Any]], None] | None = None,
+        on_peer_error: Callable[[dict[str, Any]], bool] | None = None,
         logger: Callable[[str], None] | None = None,
         open_timeout: float = 15.0,
         tcp_user_timeout: float = TCP_USER_TIMEOUT_SECONDS,
@@ -332,10 +344,25 @@ class CloudRelayTransport:
         # ``on_webhook(frame) -> outcome`` (docs/WIRE_CONTRACT.md, "Inbound
         # webhooks"): the automations' webhook door.
         self._on_webhook = on_webhook
+        # Host to host frames (CHAT-177): a ``peer`` frame in, and the relay's
+        # refusal of one of ours.
+        self._on_peer = on_peer
+        self._on_peer_error = on_peer_error
         self._log = logger or (lambda _msg: None)
         self._open_timeout = open_timeout
         self._tcp_user_timeout = tcp_user_timeout
         self._connect = connect
+        # The link of the last connect, for frames the host sends on its own
+        # (``peer``). Replaced on every redial.
+        self._link: CloudRelayLink | None = None
+
+    def send_peer_frame(self, frame: dict[str, Any]) -> bool:
+        """Send one ``peer`` relay frame on the current link. ``False`` when
+        there is no claimed link (not connected, or parked for pairing)."""
+        link = self._link
+        if link is None or not link.claimed:
+            return False
+        return link.send_control_checked(frame)
 
     @property
     def url(self) -> str:
@@ -440,7 +467,10 @@ class CloudRelayTransport:
             fixed_pairing_channel=self._fixed_pairing_channel,
             on_agent_mail=self._on_agent_mail,
             on_webhook=self._on_webhook,
+            on_peer=self._on_peer,
+            on_peer_error=self._on_peer_error,
         )
+        self._link = link
         # The same hello the loopback relay gets, as the first payload: it tells a
         # controller already on the channel that the executor is here.
         link.send_join()
@@ -474,6 +504,8 @@ class CloudRelayLink:
         fixed_pairing_channel: bool = False,
         on_agent_mail: Callable[[str], None] | None = None,
         on_webhook: Callable[[dict[str, Any]], str] | None = None,
+        on_peer: Callable[[dict[str, Any]], None] | None = None,
+        on_peer_error: Callable[[dict[str, Any]], bool] | None = None,
     ) -> None:
         # ``join_message`` here is the built hello dict, not the protocol helper
         # of the same name — the transport builds it and hands it over.
@@ -498,6 +530,9 @@ class CloudRelayLink:
         self._fixed_pairing_channel = fixed_pairing_channel
         self._on_agent_mail = on_agent_mail
         self._on_webhook = on_webhook
+        self._on_peer = on_peer
+        self._on_peer_error = on_peer_error
+        self._closed = False
         self._warning: threading.Timer | None = None
         # Every frame off this socket reports what became of it. The pipe is the
         # first place a lost message can disappear, and until this existed a
@@ -619,6 +654,7 @@ class CloudRelayLink:
             self.send(self._join_message)
 
     def close(self) -> None:
+        self._closed = True
         self._cancel_warning()
         try:
             self._ws.close()
@@ -685,6 +721,9 @@ class CloudRelayLink:
             return []
         if kind == TYPE_WEBHOOK_EVENT:
             self._on_webhook_frame(frame)
+            return []
+        if kind == TYPE_PEER:
+            self._on_peer_frame(frame)
             return []
         if kind in (TYPE_AGENTS_ERROR, TYPE_ERROR):
             self._on_error(frame)
@@ -759,6 +798,32 @@ class CloudRelayLink:
         }.get(str(outcome), str(outcome or REASON_REJECTED)[:32])
         self._frames.dropped(TYPE_WEBHOOK_EVENT, reason, **fields)
 
+    def _on_peer_frame(self, frame: dict[str, Any]) -> None:
+        """A frame from another host (CHAT-177). The ledger gets the sender id
+        only; the body is sealed and is never logged."""
+        sender = frame.get("from_device_id")
+        fields = {"from": sender[:8] if isinstance(sender, str) else None}
+        if self._on_peer is None:
+            self._frames.dropped(TYPE_PEER, REASON_NOT_ENABLED, **fields)
+            return
+        try:
+            self._on_peer(frame)
+        except Exception as exc:  # noqa: BLE001 - a listener must not kill the pipe
+            self._log(f"cloud relay: peer listener failed: {type(exc).__name__}")
+            self._frames.dropped(TYPE_PEER, REASON_REJECTED, **fields)
+            return
+        self._frames.acted(TYPE_PEER, DECISION_DELIVERED, **fields)
+
+    def send_control_checked(self, frame: dict[str, Any]) -> bool:
+        """:meth:`send_control` that says whether the socket took the frame."""
+        if self._closed:
+            return False
+        try:
+            self._ws.send(json.dumps(frame, separators=(",", ":")))
+            return True
+        except (ConnectionClosed, RuntimeError, OSError):
+            return False
+
     def send_control(self, frame: dict[str, Any]) -> None:
         """Send a relay control frame verbatim (not wrapped in a payload)."""
         try:
@@ -823,6 +888,17 @@ class CloudRelayLink:
                 "— nothing but a ping may leave an unclaimed socket"
             )
             return
+        if (code in PEER_ERROR_CODES or "target_device_id" in frame) and self._on_peer_error is not None:
+            # A refusal of one of our ``peer`` frames (CHAT-177): the waiting
+            # call hears it at once instead of running into its timeout.
+            try:
+                if self._on_peer_error(frame):
+                    self._frames.dropped(
+                        TYPE_PEER, REASON_REJECTED, code=code, req_id=frame.get("req_id")
+                    )
+                    return
+            except Exception as exc:  # noqa: BLE001 - a listener must not kill the pipe
+                self._log(f"cloud relay: peer error listener failed: {type(exc).__name__}")
         # Never silently dropped: the sender must be able to act on a refusal.
         self._log(f"cloud relay refused a frame: {code}")
         self._frames.dropped(

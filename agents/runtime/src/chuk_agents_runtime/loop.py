@@ -521,6 +521,7 @@ MUTATING_TOOLS = frozenset(
         "edit_file",
         "apply_patch",
         "send_file_to_user",
+        "send_file_to_agent",
         "mail_send",
         "mail_reply",
         "herenow_publish",

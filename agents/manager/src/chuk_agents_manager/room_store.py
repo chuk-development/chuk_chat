@@ -84,6 +84,9 @@ CREATE TABLE IF NOT EXISTS room_members (
     agent_id  TEXT NOT NULL,
     handle    TEXT NOT NULL,
     position  INTEGER NOT NULL,
+    -- The computer the member lives on (relay device id, CHAT-177). NULL is
+    -- this host.
+    host_id   TEXT,
     PRIMARY KEY (room_id, agent_id),
     UNIQUE (room_id, handle)
 );
@@ -144,6 +147,14 @@ class RoomStore:
         for name, ddl in _SETTINGS_COLUMNS.items():
             if name not in present:
                 self._conn.execute(f"ALTER TABLE rooms ADD COLUMN {name} {ddl}")
+        # Members on another host (CHAT-177): a nullable host id. NULL is
+        # this host, so every member of an older file stays local.
+        member_columns = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(room_members)").fetchall()
+        }
+        if "host_id" not in member_columns:
+            self._conn.execute("ALTER TABLE room_members ADD COLUMN host_id TEXT")
 
     def _relax_cap_columns(self) -> None:
         self._conn.commit()  # a PRAGMA cannot change inside a transaction
@@ -228,8 +239,13 @@ class RoomStore:
         )
 
     @_locked
-    def add_member(self, room_id: str, agent_id: str, handle: str) -> GroupRoom:
+    def add_member(
+        self, room_id: str, agent_id: str, handle: str, host_id: str | None = None
+    ) -> GroupRoom:
         """Add one agent to the room, or raise :class:`RoomError`.
+
+        ``host_id`` is the peer host the agent lives on; ``None`` (or empty)
+        is this host.
 
         The cap — when the room has one; ``NULL``/``None`` means unlimited — is
         checked here against the room's own ``max_members`` before the insert;
@@ -243,15 +259,30 @@ class RoomStore:
         position = 1 + (max((m["position"] for m in members), default=0))
         try:
             self._conn.execute(
-                "INSERT INTO room_members (room_id, agent_id, handle, position) "
-                "VALUES (?, ?, ?, ?)",
-                (room_id, agent_id, handle, position),
+                "INSERT INTO room_members (room_id, agent_id, handle, position, host_id) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (room_id, agent_id, handle, position, host_id or None),
             )
         except sqlite3.IntegrityError as exc:
             raise RoomError(
                 f"agent {agent_id!r} or handle {handle!r} already in the room"
             ) from exc
         self._conn.commit()
+        return self.get(room_id)  # type: ignore[return-value]
+
+    @_locked
+    def set_member_host(
+        self, room_id: str, agent_id: str, host_id: str | None
+    ) -> GroupRoom:
+        """Move a member to another host (or back to this one with ``None``).
+        A non-member is a :class:`RoomError`."""
+        cur = self._conn.execute(
+            "UPDATE room_members SET host_id = ? WHERE room_id = ? AND agent_id = ?",
+            (host_id or None, room_id, agent_id),
+        )
+        self._conn.commit()
+        if cur.rowcount == 0:
+            raise RoomError(f"not a member of {room_id}: {agent_id}")
         return self.get(room_id)  # type: ignore[return-value]
 
     @_locked
@@ -273,7 +304,9 @@ class RoomStore:
         if row is None:
             return None
         members = tuple(
-            RoomMember(agent_id=m["agent_id"], handle=m["handle"])
+            RoomMember(
+                agent_id=m["agent_id"], handle=m["handle"], host_id=m["host_id"] or None
+            )
             for m in self._members_of(room_id)
         )
         # GroupRoom re-checks the cap and uniqueness on construction, so a
@@ -383,7 +416,7 @@ class RoomStore:
 
     def _members_of(self, room_id: str) -> list[sqlite3.Row]:
         return self._conn.execute(
-            "SELECT agent_id, handle, position FROM room_members "
+            "SELECT agent_id, handle, position, host_id FROM room_members "
             "WHERE room_id = ? ORDER BY position",
             (room_id,),
         ).fetchall()

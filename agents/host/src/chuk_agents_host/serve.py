@@ -97,6 +97,8 @@ class TaskServer:
         budget=None,
         dashboard=None,
         agent_name_for: Callable[[str], str] | None = None,
+        peer_tools_for: Callable[[str], Any] | None = None,
+        on_host_peer_frame: Callable[[dict], dict | None] | None = None,
     ) -> None:
         self._roster = roster
         self._agent_id = agent_id
@@ -181,6 +183,10 @@ class TaskServer:
                 # and the agent names stamped as ``by``.
                 dashboard=dashboard,
                 agent_name_for=agent_name_for,
+                # Hosts that work together (CHAT-177): the peer tools per
+                # session, and the app's ``host_peer_*`` frames.
+                peer_tools_for=peer_tools_for,
+                on_host_peer_frame=on_host_peer_frame,
             )
 
         self._supervisor = ExecutorSupervisor(roster, factory)

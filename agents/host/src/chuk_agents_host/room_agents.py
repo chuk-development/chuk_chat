@@ -38,7 +38,7 @@ from __future__ import annotations
 import hashlib
 import threading
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from chuk_agents_crypto import (
@@ -149,6 +149,9 @@ class _Agent:
     executor: Executor
     controller: ControllerSession
     room_id: str
+    #: One turn at a time: the controller reads one stream, so two callers
+    #: (a group and an ``ask_agent`` from a peer) must not collect at once.
+    turn_lock: threading.Lock = field(default_factory=threading.Lock)
 
 
 class RoomAgentPool:
@@ -176,8 +179,12 @@ class RoomAgentPool:
         dashboard=None,
         agent_name_for: Callable[[str], str] | None = None,
         model_for: Callable[[str], "dict | None"] | None = None,
+        peer_tools_for: Callable[[str, str], object] | None = None,
     ) -> None:
         self._binding = binding
+        # Agents on the user's other computers (CHAT-177): the peer tools of
+        # ``(agent_id, session_key)``, or ``None``.
+        self._peer_tools_for = peer_tools_for
         # The member's own model (docs/agents/AGENT_MODEL.md), read per turn.
         self._model_for = model_for
         # The lead's hand-off backend while it leads a running exchange
@@ -258,18 +265,49 @@ class RoomAgentPool:
                 existing.room_id = room_id
             self._binding.register(
                 agent_id,
-                make_room_task_sender(
-                    existing.controller,
-                    session_key=f"room:{room_id}",
-                    timeout=self._turn_timeout,
-                    model_for=(
-                        (lambda _id=agent_id: self._model_for(_id))
-                        if self._model_for is not None
-                        else None
-                    ),
-                ),
+                self._locked_sender(existing, f"room:{room_id}"),
             )
             return True
+
+    def _locked_sender(self, agent: _Agent, session_key: str):
+        """A task sender for ``agent`` on ``session_key`` that runs one turn
+        at a time. A turn that cannot get the agent within the turn timeout
+        (it is busy elsewhere) gives no reply."""
+        sender = make_room_task_sender(
+            agent.controller,
+            session_key=session_key,
+            timeout=self._turn_timeout,
+            model_for=(
+                (lambda _id=agent.agent_id: self._model_for(_id))
+                if self._model_for is not None
+                else None
+            ),
+        )
+
+        def send(prompt: str) -> str | None:
+            if not agent.turn_lock.acquire(timeout=self._turn_timeout):
+                return None
+            try:
+                return sender(prompt)
+            finally:
+                agent.turn_lock.release()
+
+        return send
+
+    def run_task(self, agent_id: str, prompt: str, session_key: str) -> str | None:
+        """Run one turn of ``agent_id`` on ``session_key`` outside a group (a
+        question from another agent, a task from a peer host, CHAT-177). The
+        member is started on demand and is NOT registered in the binding.
+        ``None`` when it cannot run or gave no answer."""
+        if not agent_id:
+            return None
+        with self._lock:
+            agent = self._agents.get(agent_id)
+            if agent is None:
+                agent = self._start(agent_id, session_key)
+        if agent is None:
+            return None
+        return self._locked_sender(agent, session_key)(prompt)
 
     def release(self, agent_id: str) -> None:
         """Take one member offline: unregister its sender first, then stop its
@@ -347,6 +385,11 @@ class RoomAgentPool:
                 else None
             ),
             room_handoff_for=lambda _key, _id=agent_id: self._handoff_for(_id),
+            peer_tools_for=(
+                (lambda key, _id=agent_id: self._peer_tools_for(_id, key))
+                if self._peer_tools_for is not None
+                else None
+            ),
         )
         try:
             executor.start()

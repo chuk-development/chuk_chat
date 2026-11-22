@@ -4,6 +4,25 @@ Status: design, 2026-11-22. Owner request: the user's PC and the cloud
 computer run at the same time; agents on both can be in one group, talk to
 each other and send files.
 
+**Built (2026-11-22):**
+
+- Relay: the `peer` route and `from_device_id` (api_server, live).
+- Host, phase 2: `peers.json`, `host_peer_introduce` / `host_peer_forget` /
+  `host_peer_list`, the sealed peer body, the peer requests (`task`,
+  `agent_list`, `file_get`, `file_push`), group members with `host_id` (a
+  sender over the peer route, an offline line), the shared file store, and
+  the agent tools `share_file`, `fetch_file`, `send_file_to_agent`,
+  `ask_agent`. Wire shapes and the app's part: `docs/WIRE_CONTRACT.md`,
+  "Hosts that work together". Code: `agents/host/src/chuk_agents_host/
+  peer_hub.py` and its neighbours.
+- Open: the app side of phase 2 (introduce, group editor with a computer
+  per member). A queued fetch does not start by itself when the other host
+  comes back; the agent calls `fetch_file` again and it resumes.
+- Known limit: every host's own agent has the app id `host:cowork-host`
+  (the crypto peer id is the same on every host). A group must not hold the
+  own agents of two hosts: the room keys members by `agent_id`. Agents the
+  app made (`local:...`) are unique.
+
 ## Today (what blocks it)
 
 - The app keeps ONE trust record (`agents_pairing_store.dart`, key
@@ -125,3 +144,43 @@ long crawl, the PC agent uses the result".
    group members with host id.
 4. Files: `share_file`, `fetch_file`, `send_file_to_agent`, sha256 cache.
 5. `ask_agent`.
+
+## App, phase 1: where it lives
+
+- **Store:** `agents_pairing_store.dart`, secure key `cowork_pairings_v2`
+  (`{"version":2,"hosts":{hostId: record},"last_used":hostId}`). The old
+  key `cowork_pairing` is read once, moved, deleted. `hostId` is the
+  `cw_device` uuid, else `local:<channel>` (loopback); a record of the same
+  channel under a new id replaces the old one (host_route). The record
+  carries `name`, `kind` (`pc`|`cloud`) and `legacy_host_agent`.
+- **Host agent ids:** every host signs as `cowork-host`, so only the
+  computer from before CHAT-177 (`legacy_host_agent`, set on the moved old
+  record and on a mirrored `legacy` row) keeps `host:cowork-host`; every
+  later computer's own agent is `host:cowork-host@<hostId>`. The flag rides
+  in the encrypted record, so all devices pick the same ids.
+- **Mirror:** `supabase_pairing_sync.dart` (`AgentsPairingCloud` seam for
+  tests), one row per `(user_id, host_id)`, migration
+  `supabase/migrations/20261122000000_cowork_pairings_multi_host.sql`
+  (NOT applied yet). Apply it before the app ships: the new upsert needs
+  the `host_id` column. Old apps then can no longer write or read the
+  mirror (best-effort paths; their local pairing keeps working).
+- **Restore:** `agents_pairing_restore.dart` restores every row; a paired
+  device reads the mirror every 2 min (and on a nudge) for computers added
+  elsewhere. A host removed on another device is not removed here yet.
+- **Links:** `AgentsRelayLinks` (in `agents_relay_link.dart`):
+  `AgentsRelayLink.instance` is the PRIMARY link (the computer of the open
+  chat, driven by `AgentsThreadView`, `hostId` param); other computers get
+  secondary links, kept up by `AgentsHostLinks` (`agents_host_links.dart`).
+  A host switch hands the sockets over (`takeController` / `adopt`), no new
+  handshake. `secondaryInbound` tags frames with their host.
+- **Relay filter:** `AgentsCloudRelaySocket.acceptsFrameFrom`: a frame with
+  `from_device_id` of another host is dropped; no field = old relay, taken.
+- **UI:** `AgentsHostTag` / `AgentsHostLabels` (rows, only with 2+ hosts),
+  `showAgentHostPicker` (new agent), `AgentsComputersPage` (agent settings
+  > Computers). Cloud box flow runs with a PC paired too
+  (`AgentsCloudBoxFlow.hasComputer`): it books a new box, or goes on with
+  a setup this device began; an existing box it did not set up is left
+  alone.
+- **Still on the primary link only:** groups (phase 2), skills, automations,
+  dashboard, permissions, run ledger and the in-app done notification.
+  `AgentsRelayClient.hostCapabilities` is one static for all hosts.

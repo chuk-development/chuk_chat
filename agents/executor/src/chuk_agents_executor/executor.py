@@ -1555,8 +1555,17 @@ class Executor:
         dashboard=None,
         agent_name_for: Callable[[str], str] | None = None,
         room_handoff_for: Callable[[str], Any] | None = None,
+        peer_tools_for: Callable[[str], Any] | None = None,
+        on_host_peer_frame: Callable[[dict], dict | None] | None = None,
     ) -> None:
         self._name = name
+        # Agents on the user's other computers (CHAT-177): the host answers,
+        # per session key, the backend of ``share_file`` / ``fetch_file`` /
+        # ``send_file_to_agent`` / ``ask_agent``, or ``None`` (no peers).
+        self._peer_tools_for = peer_tools_for
+        # The app's ``host_peer_*`` frames (CHAT-177), answered by the host
+        # with one ``host_peer_list``. ``None`` -> those frames are unknown.
+        self._on_host_peer_frame = on_host_peer_frame
         # A group lead's ``hand_off_tasks`` (§16.1, lead mode): the host's
         # room pool answers, per session key, the running exchange's backend
         # while this agent leads one, else ``None``.
@@ -2380,6 +2389,13 @@ class Executor:
             # current list as one terminal frame, like a replay.
             self._handle_agent_frame(request_id, payload)
             return
+        if kind in ("host_peer_introduce", "host_peer_forget", "host_peer_list"):
+            # The app links this host with another host of the account
+            # (CHAT-177, docs/WIRE_CONTRACT.md, "Hosts that work together").
+            # Only a sealed frame of the paired app gets this far. Answered
+            # with one terminal ``host_peer_list``.
+            self._handle_host_peer_frame(request_id, payload)
+            return
         if kind == "agent_status":
             # What this agent runs on, what it has spent and how long it has
             # been at it (docs/WIRE_CONTRACT.md, "Agent status"). Answered with
@@ -2992,6 +3008,34 @@ class Executor:
             self._terminal(request_id, error_payload(f"agent frame failed: {type(exc).__name__}"))
             return
         self._terminal(request_id, _as_agent_list(rows))
+
+    def _peer_tools_backend(self, session_key: str):
+        """The peer tools for this run (CHAT-177), or ``None``."""
+        hook = self._peer_tools_for
+        if hook is None:
+            return None
+        try:
+            return hook(session_key)
+        except Exception:  # noqa: BLE001 — no tools, never a dead run
+            return None
+
+    def _handle_host_peer_frame(self, request_id: str, payload: dict) -> None:
+        """Hand ``host_peer_introduce`` / ``_forget`` / ``_list`` to the host
+        and send its ``host_peer_list`` as the terminal. Never a bare
+        ``error``: the app reads that as the end of a run."""
+        failure = {"type": "host_peer_list", "ok": False, "peers": []}
+        hook = self._on_host_peer_frame
+        if hook is None:
+            self._terminal(request_id, {**failure, "error": "host peers not enabled"})
+            return
+        try:
+            answer = hook(payload)
+        except Exception as exc:  # noqa: BLE001 — the serve loop must survive a bad hook
+            self._terminal(request_id, {**failure, "error": f"host peers failed: {type(exc).__name__}"})
+            return
+        if not isinstance(answer, dict) or answer.get("type") != "host_peer_list":
+            answer = {**failure, "error": "host peers not enabled"}
+        self._terminal(request_id, answer)
 
     def _room_handoff_backend(self, session_key: str):
         """``hand_off_tasks`` for this run: only while the host says this
@@ -6168,6 +6212,9 @@ class Executor:
             # this agent's id, so a model can only ever rename itself.
             agent_naming=self._agent_naming_backend(session_key),
             room_handoff=self._room_handoff_backend(session_key),
+            # ``share_file`` / ``fetch_file`` / ``send_file_to_agent`` /
+            # ``ask_agent`` (CHAT-177): only while the host has linked peers.
+            peer_tools=self._peer_tools_backend(session_key),
             # ``send_message`` (CHAT-79): a chat message while the work goes
             # on. Only an agent's own thread with a reader; never a restricted
             # mail run.

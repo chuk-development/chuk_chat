@@ -126,10 +126,15 @@ class RoomError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class RoomMember:
-    """One agent in a room: the agent id and the handle it is mentioned by."""
+    """One agent in a room: the agent id and the handle it is mentioned by.
+
+    ``host_id`` names the computer the agent lives on (its relay device id,
+    CHAT-177). ``None`` is this host: the member runs here. Any other value is
+    a member on a peer host; its turns go over the peer route."""
 
     agent_id: str
     handle: str
+    host_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

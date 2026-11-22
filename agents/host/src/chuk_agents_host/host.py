@@ -119,6 +119,9 @@ from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
 from .transport import LocalRelayTransport
 from .room_agents import RoomAgentPool
+from .peer_hub import CAPABILITY as HOST_PEERS_CAPABILITY, PeerHub
+from .peers_store import KIND_CLOUD, KIND_PC, PEERS_FILE, PeerStore, clean_name
+from .shared_files import SharedFileStore
 from chuk_agents_config import resolve_state_home
 
 from .room_service import RoomService, dispatch_room_frame
@@ -457,6 +460,8 @@ class LocalHost:
             agent_name_for=self._browser_coworker_name,
             # A member answers in a group on its own model, as it does alone.
             model_for=self._stored_agent_model,
+            # The peer tools (CHAT-177), read per run: none without peers.
+            peer_tools_for=lambda agent_id, key: self._peer_tools_for(agent_id, key),
         )
 
         # Persistent trust: after the first §15 pairing this file holds the stable
@@ -468,6 +473,25 @@ class LocalHost:
         # is provisioned; the token is what every later relay handshake carries.
         self._account = AccountStore(self._workspace / "account.json")
         self._relay_device_id = self._account.device_id()
+        # Hosts that work together (CHAT-177): the peers the app introduced,
+        # the shared files, and the peer route over the cloud relay.
+        self._cloud_transport: CloudRelayTransport | None = None
+        self._room_service: RoomService | None = None
+        self._peer_hub = PeerHub(
+            own_host_id=self._relay_device_id,
+            identity=self._identity,
+            store=PeerStore(self._workspace / PEERS_FILE),
+            shared=SharedFileStore(self._workspace / "shared-files"),
+            send_frame=self._send_peer_frame,
+            host_name=_host_display_name,
+            host_kind=_host_kind(),
+            run_task=self._room_agents.run_task,
+            list_agents=self._peer_roster_rows,
+            is_own_agent=self._serves_agent,
+            workspace_for=self._workspace_for_agent,
+            room_post=self._room_post,
+            log=self._log,
+        )
         # Which session the host holds (host_credential.py): its own ("host"),
         # the app's ("app", the old way), or only an access token. And whether
         # GoTrue has refused its refresh token, which sends the relay dial to the
@@ -945,12 +969,17 @@ class LocalHost:
                 # docs/WIRE_CONTRACT.md, "Inbound webhooks": a forwarded call
                 # to a webhook automation's URL.
                 on_webhook=self._on_webhook_event,
+                # Hosts that work together (CHAT-177): frames from peer hosts
+                # and the relay's refusals of ours.
+                on_peer=self._peer_hub.on_relay_peer,
+                on_peer_error=self._peer_hub.on_relay_error,
                 # With an install token the channel is fixed: nothing is
                 # scanned, and an expiry means "park on it again", not "print a
                 # fresh code".
                 fixed_pairing_channel=self._install_token is not None,
                 logger=self._log,
             )
+            self._cloud_transport = transport
             # The cloud relay reports no peer list to an executor, so there is no
             # controller to adopt at connect time; presence comes from traffic.
             return transport, None, True
@@ -1040,6 +1069,7 @@ class LocalHost:
         # them unregisters their senders, so nothing is left registered as
         # reachable once this host is down.
         self._room_agents.shutdown()
+        self._peer_hub.shutdown()
         if self._party is not None:
             self._party.stop()
             self._party = None
@@ -1300,6 +1330,86 @@ class LocalHost:
 
         return ask
 
+    # -- hosts that work together (CHAT-177) ---------------------------------
+
+    def _send_peer_frame(self, frame: dict) -> bool:
+        """One ``peer`` frame to the relay. Only the cloud pipe has a peer
+        route; the loopback relay has no other host."""
+        transport = self._cloud_transport
+        return transport.send_peer_frame(frame) if transport is not None else False
+
+    def _serves_agent(self, agent_id: str) -> bool:
+        """True for an agent of this host that a peer may give a task to."""
+        return agent_id in self._primary_agent_ids()[2:] or self._is_own_coworker(agent_id)
+
+    def _peer_roster_rows(self) -> list[dict]:
+        """This host's agents for a peer's ``agent_list``: id, name and the
+        start of the persona (``memory/soul.md``)."""
+        rows: list[dict] = []
+        try:
+            names = self._coworker_names.list()
+        except Exception:  # noqa: BLE001 — an empty roster, not a dead frame
+            names = []
+        seen: set[str] = set()
+        for row in names:
+            agent_id = row.get("agent_id")
+            if not isinstance(agent_id, str) or not agent_id or agent_id in seen:
+                continue
+            seen.add(agent_id)
+            rows.append({
+                "agent_id": agent_id,
+                "name": row.get("name") or agent_id,
+                "persona": self._persona_summary(agent_id),
+            })
+        own = host_agent_id(self._device_id)
+        if own not in seen:
+            rows.append({
+                "agent_id": own,
+                "name": self._agent.name,
+                "persona": self._persona_summary(own),
+            })
+        return rows
+
+    def _persona_summary(self, agent_id: str) -> str:
+        try:
+            soul = Path(self._workspace_for_agent(agent_id)) / "memory" / "soul.md"
+            return soul.read_text(encoding="utf-8")[:200].strip()
+        except (OSError, UnicodeDecodeError):
+            return ""
+
+    def _peer_tools_for(self, agent_id: str, session_key: str):
+        """The peer tools of one run, or ``None`` while no peer is linked (the
+        prompt then carries none of them)."""
+        hub = getattr(self, "_peer_hub", None)
+        if hub is None or not hub.has_peers():
+            return None
+        return hub.tools_for(agent_id, session_key)
+
+    def _room_members_ready(self, room_id: str, members) -> None:
+        """Bring a group's members online: a local member gets its own
+        executor (the pool); a member on a peer host gets a sender over the
+        peer route."""
+        local = [m for m in members if not m.host_id or m.host_id == self._relay_device_id]
+        self._room_agents.ensure_room(room_id, local)
+        for member in members:
+            if member.host_id and member.host_id != self._relay_device_id:
+                self._room_binding.register(
+                    member.agent_id,
+                    self._peer_hub.remote_sender(member.host_id, member.agent_id, room_id),
+                )
+
+    def _room_member_name(self, agent_id: str) -> str:
+        """A member's name: this host's name for it, else the name its own
+        host gave it (the cached peer roster)."""
+        cached = self._peer_hub.cached_name(agent_id)
+        if cached and not self._serves_agent(agent_id):
+            return cached
+        return self._browser_coworker_name(agent_id)
+
+    def _room_post(self, room_id: str, agent_id: str, text: str) -> bool:
+        service = self._room_service
+        return service.post_note(room_id, agent_id, text) if service is not None else False
+
     def _workspace_for_agent(self, agent_id: str) -> str:
         """The host directory an agent works in — one per agent, never shared.
 
@@ -1463,18 +1573,21 @@ class LocalHost:
             transcript=RoomTranscriptStore(self._room_transcript_path),
             # The missing call of docs/ROOMS_GOING_LIVE.md: one executor per
             # member, started on demand and registered in the binding, so a
-            # member answers instead of reporting offline.
-            members_ready=self._room_agents.ensure_room,
+            # member answers instead of reporting offline. A member on a peer
+            # host (CHAT-177) gets a sender over the peer route instead.
+            members_ready=self._room_members_ready,
+            local_host_id=self._relay_device_id,
             # Groups (docs/ROOMS_GOING_LIVE.md, "Groups"): the cheap model of
             # ``auto`` mode, the lead's hand-off tool, the members' names, and
             # an exchange on its own thread so this session's frame loop stays
             # free while members work.
             ask_model=self._room_auto_ask,
             arm_handoff=self._room_agents.arm_handoff,
-            name_for=self._browser_coworker_name,
+            name_for=self._room_member_name,
             background=True,
             auto_timeout=ROOM_AUTO_TIMEOUT_SECONDS,
         )
+        self._room_service = room_service
 
         task_server = TaskServer(
             roster=serve_roster,
@@ -1546,6 +1659,9 @@ class LocalHost:
             # the name the user gave each agent, stamped as ``by``.
             dashboard=self._dashboard,
             agent_name_for=self._browser_coworker_name,
+            # Hosts that work together (CHAT-177).
+            peer_tools_for=lambda key: self._peer_tools_for(self._agent_key(key), key),
+            on_host_peer_frame=self._peer_hub.handle_app_frame,
         )
         built.append(task_server)
         return task_server
@@ -2284,6 +2400,8 @@ class LocalHost:
                 AGENT_DELETE_CAPABILITY,
                 # ``agent_avatar_set`` (docs/agents/NOTIFICATIONS.md).
                 AVATAR_CAPABILITY,
+                # ``host_peer_*`` and group members with ``host_id`` (CHAT-177).
+                HOST_PEERS_CAPABILITY,
             ],
         })
         names = handle_agent_frame(self._coworker_names, payload, log=self._log)
@@ -2698,3 +2816,23 @@ def _jwt_session_id(token: str | None) -> str | None:
         return None
     value = claims.get("session_id") if isinstance(claims, dict) else None
     return value if isinstance(value, str) and value else None
+
+
+def _host_display_name() -> str:
+    """This host's name in agent texts (CHAT-177): ``AGENTS_HOST_NAME``, else
+    the machine's host name. The app shows its own name for each host."""
+    import socket
+
+    raw = os.environ.get("AGENTS_HOST_NAME") or ""
+    if not raw.strip():
+        try:
+            raw = socket.gethostname()
+        except OSError:
+            raw = ""
+    return clean_name(raw)
+
+
+def _host_kind() -> str:
+    """``cloud`` when ``AGENTS_HOST_KIND=cloud`` (the cloud box sets it), else
+    ``pc``."""
+    return KIND_CLOUD if os.environ.get("AGENTS_HOST_KIND", "").strip() == KIND_CLOUD else KIND_PC

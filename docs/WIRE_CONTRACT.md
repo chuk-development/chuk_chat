@@ -5587,3 +5587,182 @@ No signature header and a secret on the row: `bad_signature`.
 7. Thread card: a `fired` event with `reason: "webhook"` shows a webhook
    icon. "N events arrived close together" can show as "N calls merged".
 8. Strings (de/en) for the kind, the fields, the URL note and the errors.
+
+## Hosts that work together (CHAT-177, phase 2)
+
+IMPLEMENTED on the host 2026-11-22. Design: `docs/agents/MULTI_HOST.md`.
+Relay route: api_server `docs/COWORK_RELAY.md`, "Host to host frames".
+Code: `agents/host/src/chuk_agents_host/peers_store.py`, `peer_channel.py`,
+`peer_rpc.py`, `peer_hub.py`, `shared_files.py`;
+`agents/runtime/src/chuk_agents_runtime/peer_tools.py`.
+Tests: `agents/host/tests/test_peer_hosts.py`,
+`agents/manager/tests/test_room_member_host.py`,
+`agents/runtime/tests/test_peer_tools.py`,
+`agents/executor/tests/test_host_peer_frame.py`.
+
+A host is its relay device id (`host_id`, the uuid4 in `cw_device`). A host
+that can do this names `host_peers` in `host_route.capabilities`. The app
+sends the frames below, and group members with `host_id`, only to such a host.
+
+### App to host (sealed app channel): link two hosts
+
+The app makes one fresh 32-byte pair key `K` for hosts A and B. It sends
+`host_peer_introduce` to A (with B's values) and to B (with A's values), each
+over that host's own sealed channel. The same `K` goes to both.
+
+```json
+{"type": "host_peer_introduce",
+ "peer_host_id": "<B relay device id, uuid4>",
+ "peer_public_key": "<base64 of B's 32-byte Ed25519 host key>",
+ "pair_key": "<base64 of K, 32 bytes>",
+ "name": "Cloud-Computer",
+ "kind": "pc" | "cloud"}
+
+{"type": "host_peer_forget", "peer_host_id": "<uuid4>"}
+
+{"type": "host_peer_list"}
+```
+
+- `peer_public_key` is the key the app approved at pairing with B (the
+  peer key of B's trust record). `peer_host_id` is B's `cw_device`.
+- A second introduce for the same peer replaces the record (a new `K`).
+- Unlink a host: send `host_peer_forget` to every other host.
+- The host keeps peers in `peers.json` (0600), next to `paired.json`.
+
+Every one of the three is answered with one terminal `host_peer_list`:
+
+```json
+{"type": "host_peer_list",
+ "request": "host_peer_introduce" | "host_peer_forget" | "host_peer_list",
+ "ok": true,
+ "error": "<reason, only when ok is false>",
+ "host_id": "<this host's relay device id>",
+ "public_key": "<base64 of this host's Ed25519 key>",
+ "name": "<this host's name: AGENTS_HOST_NAME or the host name>",
+ "kind": "pc" | "cloud",
+ "peers": [{"peer_host_id": "<uuid4>", "name": "...", "kind": "pc",
+            "online": true | false | null}]}
+```
+
+`online` is what the host saw last: `true` after a valid frame from the
+peer, `false` after the relay said `peer_unreachable`, `null` when it does
+not know. The app's presence (`executor_status`) is the better source.
+
+Refusals (`ok: false`): `peer_host_id` is not a uuid4, the peer is this host,
+`peer_public_key` is not a 32-byte Ed25519 key, `pair_key` is not 32 bytes,
+more than 32 peers.
+
+### Host to host: the sealed body
+
+Relay frame: `{"req_id", "type": "peer", "target_device_id", "body"}` in,
+`{"type": "peer", "from_device_id", "body"}` out. `body` is one Agents frame
+(the shape of "Wire format", `{v, kv, device_id, seq, ts, nonce, ciphertext,
+sig}`):
+
+- AES-256-GCM under `K`, the header is the AAD, `kv` = 1.
+- Ed25519 signature by the sender's host key.
+- `device_id` = the sender's relay device id. The receiver also checks that
+  it equals `from_device_id`.
+- Replay guard: `ts` within 5 minutes of the receiver's clock, and a sliding
+  window of 4096 `seq` values (a frame that comes late is accepted once, a
+  second copy never). A sender's `seq` starts at its clock in microseconds,
+  so a restart keeps it above the old values.
+- A plaintext over 700 000 bytes goes as `fragment` payloads (the shape of
+  "Fragments"), 512 KiB per slice, one sealed frame each. Every relay frame
+  stays under 1 MB.
+- An unknown sender, a bad signature, a replay or a bad frame is dropped and
+  logged with the sender id and the reason only.
+- A host sends at most 90 `peer` frames per 10 s (the relay allows 200 per
+  user for all hosts together).
+
+### Host to host: requests
+
+The plaintext of one body is one message:
+
+```json
+{"t": "req",   "id": "<hex>", "kind": "<kind>", "args": {...}}
+{"t": "chunk", "id": "<hex>", "data": {...}}
+{"t": "end",   "id": "<hex>", "ok": true, "result": {...}}
+{"t": "end",   "id": "<hex>", "ok": false, "error": "<code>", "message": "<reason>"}
+```
+
+The caller waits for `end`. A `chunk` resets its idle timer. A relay error
+frame for one of the request's frames ends the call at once with the relay's
+code (`peer_unreachable`, `rate_limited`, `payload_too_large`,
+`invalid_target`, `invalid_body`).
+
+| `kind` | `args` | `chunk` | `result` |
+|---|---|---|---|
+| `task` | `{agent_id, text, depth, room_id?, from_agent?}` | `{"event": "working"}` every 20 s | `{text}` |
+| `agent_list` | `{}` | none | `{agents: [{agent_id, name, persona}], host: {host_id, name, kind}}` |
+| `file_get` | `{sha256, offset, chunks?}` (chunks at most 8) | `{offset, data}` (base64, 256 KiB each) | `{sha256, size, next_offset, eof}` |
+| `file_push` | `{agent_id, ref, from_agent?}` | `{"event": "working"}` | `{path, size}` |
+
+- `task` runs the agent `agent_id` of the target host in its own sandbox and
+  returns its final answer. With `room_id` it runs on the session
+  `room:<room_id>` (the member's thread of that group on its host); without
+  it on `ask:<sender host>:<from_agent>`. `depth` is the hop count; a task
+  with `depth` over 2 is refused with `loop_guard`. A call gives up after
+  90 s with no message, and after 30 minutes in all.
+- `agent_list`: `persona` is the first 200 characters of the agent's
+  `memory/soul.md`.
+- `file_get` serves only files that an agent of this host shared (the shared
+  store), never any other file.
+- `file_push`: the target host fetches `ref` from the sender with `file_get`
+  and puts it into the inbox of `agent_id`.
+- Error codes: `bad_request`, `unknown_agent`, `not_ready`, `no_reply`,
+  `loop_guard`, `no_such_file`, `fetch_failed`, `unknown_kind`, `busy`,
+  `handler_failed`, `timeout`, `not_a_peer`.
+
+### Groups with members on several hosts
+
+- `room_create.members[]` and `room_add_member` take an optional `host_id`.
+  Missing, empty or the home host's own id = a member of this host.
+- `room_list.members[]` carries `host_id` only for a member on another host.
+- The home host (the one that got `room_create`) keeps the room, the
+  transcript and the routing. A member on another host runs its turn with a
+  `task` request (`room_id` set); its answer is the member's `room_turn`.
+- A member whose host is offline gets the line `(<host name> is offline, no
+  reply)` as its turn, and the round goes on. The next message tries again.
+- A file an agent shares in a group is posted as that member's `room_turn`:
+  `Shared file <name> (<size> bytes). ref: {"sha256", "name", "size",
+  "host_id"}`.
+
+### Agent tools
+
+Registered only while the host has at least one peer:
+
+- `share_file(path)` -> `{ok, ref: {host_id, sha256, name, size},
+  posted_to_group}`. Only a regular file inside the agent's own workspace
+  (no `..`, no symlink out). At most 200 MiB. The bytes are copied into the
+  host's shared store (`<state>/shared-files/`, outside every workspace).
+- `fetch_file(ref)` -> `{ok, path, size, sha256}`. `path` is
+  `.agents/inbox/<sha256>/<name>` in the agent's own workspace. The host
+  pulls the file in 2 MiB windows, keeps the partial file in its state
+  directory, checks the sha256 and keeps the file in its shared store (a
+  second fetch moves no bytes). A fetch that stops (the other host went
+  offline) resumes at its offset on the next call.
+- `send_file_to_agent(agent, path)` -> `{ok, ref, agent, path}`: share, then
+  put the file into the inbox of that agent (on this host or on a peer).
+- `ask_agent(agent, text)` -> `{ok, agent, answer}`. `agent` is a name, a
+  name with `@<computer name>`, or an agent id. At most 4 calls per run, and
+  at most 2 hops (A asks B, B asks C; C cannot ask on).
+
+### App work
+
+1. On `host_route` with `host_peers`, keep the host's `host_id` (its
+   `cw_device`) and its Ed25519 key (from the trust record).
+2. For every two paired hosts that both name `host_peers`: make `K`
+   (32 random bytes), send `host_peer_introduce` to each, check both
+   `host_peer_list` answers (`ok`). Do it again when a host is added. Store
+   nothing of `K` after both hosts answered `ok`.
+3. Unlink a host: `host_peer_forget` to every other host, then delete the
+   pairing row.
+4. Group editor: a member picked from another computer is sent with its
+   `host_id` in `room_create` / `room_add_member`. Show the computer label
+   next to the member. The group is created on one host (the home host);
+   send all group frames for it to that host only.
+5. Render the offline line and the "Shared file" turn as normal member
+   turns (optional: a file chip that parses the `ref`).
+6. Settings > Computers: show `peers[].online` only as a hint; use
+   `executor_status` for presence.

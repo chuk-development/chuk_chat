@@ -88,8 +88,12 @@ class RoomService:
         name_for: Callable[[str], str] | None = None,
         background: bool = False,
         auto_timeout: float | None = None,
+        local_host_id: str | None = None,
     ) -> None:
         self._rooms = room_store
+        # This host's relay device id (CHAT-177). A member whose ``host_id`` is
+        # this id, empty or missing runs here; any other id is a peer host.
+        self._local_host_id = local_host_id
         self._binding = binding
         self._raw_emit = emit
         self._caps = caps
@@ -145,7 +149,7 @@ class RoomService:
         policy keeps creating the rooms it always did, and it is reconciled like
         the name, because the app owns room state."""
         wanted = [
-            (m["agent_id"], m["handle"])
+            (m["agent_id"], m["handle"], self._member_host(m.get("host_id")))
             for m in members
             if isinstance(m, dict)
             and isinstance(m.get("agent_id"), str)
@@ -162,7 +166,7 @@ class RoomService:
                 self._rooms.rename_room(room_id, name)
             if existing.agent_to_agent != agent_to_agent:
                 self._rooms.set_agent_to_agent(room_id, agent_to_agent)
-            wanted_ids = {agent_id for agent_id, _ in wanted}
+            wanted_ids = {agent_id for agent_id, _, _ in wanted}
             # Remove members the app no longer has.
             for member in existing.members:
                 if member.agent_id not in wanted_ids:
@@ -171,12 +175,18 @@ class RoomService:
                     except RoomError:
                         pass
 
-        have_ids = {m.agent_id for m in (self._rooms.get(room_id).members)}
-        for agent_id, handle in wanted:
-            if agent_id in have_ids:
+        have = {m.agent_id: m for m in (self._rooms.get(room_id).members)}
+        for agent_id, handle, host_id in wanted:
+            if agent_id in have:
+                if have[agent_id].host_id != host_id:
+                    # The app moved the member to another computer.
+                    try:
+                        self._rooms.set_member_host(room_id, agent_id, host_id)
+                    except RoomError:
+                        pass
                 continue
             try:
-                self._rooms.add_member(room_id, agent_id, handle)
+                self._rooms.add_member(room_id, agent_id, handle, host_id)
             except RoomError:
                 # Over the cap or a duplicate: skip this member, keep the room.
                 continue
@@ -224,8 +234,42 @@ class RoomService:
         with self._guard:
             return not any(t.is_alive() for t in self._threads)
 
+    def _member_host(self, raw: object) -> str | None:
+        """The stored host id of a member: ``None`` for this host (no id, an
+        empty id, or this host's own id), else the peer's relay device id."""
+        if not isinstance(raw, str) or not raw.strip():
+            return None
+        value = raw.strip()
+        if self._local_host_id and value == self._local_host_id:
+            return None
+        return value
+
+    def post_note(self, room_id: str, agent_id: str, text: str) -> bool:
+        """Put one line from a member into the group, outside a turn (a file
+        that member shared, CHAT-177). Stored in the transcript and sent to
+        the app as a ``room_turn``. ``False`` when the room or the member is
+        not on this host."""
+        room = self._rooms.get(room_id)
+        member = room.member_by_id(agent_id) if room is not None else None
+        if member is None:
+            return False
+        turn = RoomTurn(round=0, agent_id=agent_id, handle=member.handle, text=text)
+        if self._transcript is not None:
+            self._transcript.append(room_id, turn)
+        self._emit(
+            room_turn_payload(
+                room_id=room_id,
+                round=0,
+                agent_id=agent_id,
+                handle=member.handle,
+                text=text,
+                kind=turn.kind,
+            )
+        )
+        return True
+
     def handle_room_add_member(
-        self, room_id: str, agent_id: str, handle: str
+        self, room_id: str, agent_id: str, handle: str, host_id: str | None = None
     ) -> None:
         """Add an agent to a room the host holds (§16.1). Ignored on an unknown
         room or a member the room cannot take (full, or a duplicate) — the room
@@ -233,7 +277,7 @@ class RoomService:
         if self._rooms.get(room_id) is None:
             return
         try:
-            self._rooms.add_member(room_id, agent_id, handle)
+            self._rooms.add_member(room_id, agent_id, handle, self._member_host(host_id))
         except RoomError:
             return
 
@@ -458,12 +502,21 @@ def turn_wire(turn: RoomTurn) -> dict:
     return out
 
 
+def _member_wire(member: RoomMember) -> dict:
+    """One member as ``room_list`` carries it. ``host_id`` only for a member
+    on a peer host (CHAT-177), so the frame of a one-host group is unchanged."""
+    out = {"agent_id": member.agent_id, "handle": member.handle}
+    if member.host_id:
+        out["host_id"] = member.host_id
+    return out
+
+
 def room_wire(room: GroupRoom) -> dict:
     """One group as ``room_list`` carries it."""
     return {
         "room_id": room.room_id,
         "name": room.name,
-        "members": [{"agent_id": m.agent_id, "handle": m.handle} for m in room.members],
+        "members": [_member_wire(m) for m in room.members],
         "agent_to_agent": room.agent_to_agent,
         "responder": room.responder,
         "lead_agent_id": room.lead_agent_id,
@@ -512,8 +565,11 @@ def dispatch_room_frame(service: RoomService, payload: dict) -> None:
     elif kind == "room_add_member":
         agent_id = payload.get("agent_id")
         handle = payload.get("handle")
+        host_id = payload.get("host_id")
         if isinstance(agent_id, str) and isinstance(handle, str):
-            service.handle_room_add_member(room_id, agent_id, handle)
+            service.handle_room_add_member(
+                room_id, agent_id, handle, host_id if isinstance(host_id, str) else None
+            )
     elif kind == "room_remove_member":
         agent_id = payload.get("agent_id")
         if isinstance(agent_id, str):

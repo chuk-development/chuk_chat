@@ -62,6 +62,7 @@ from .agent_message import PROMPT_SECTION as PROGRESS_PROMPT_SECTION
 from .agent_message import AgentMessageBackend, make_interim_writer, register_message_tools
 from .agent_naming import AgentNamingBackend, naming_prompt_section, register_naming_tools
 from .room_handoff import HandoffBackend, register_handoff_tools
+from .peer_tools import PeerToolsBackend, register_peer_tools
 from .automations import AutomationBackend, register_automation_tools
 from .calls import CallBackend, register_call_tools
 from .takeover import TakeoverBackend, register_takeover_tool
@@ -435,6 +436,7 @@ def build_runtime(
     agent_naming: AgentNamingBackend | None = None,
     agent_message: AgentMessageBackend | None = None,
     room_handoff: HandoffBackend | None = None,
+    peer_tools: PeerToolsBackend | None = None,
     calls: CallBackend | None = None,
     takeover: TakeoverBackend | None = None,
     phase_observer: Callable[[str, str | None], None] | None = None,
@@ -684,6 +686,12 @@ def build_runtime(
     # the executor to the running group exchange. ``None`` (every other run)
     # registers nothing.
     register_handoff_tools(registry, room_handoff)
+
+    # Agents on the user's other computers (CHAT-177): ``share_file``,
+    # ``fetch_file``, ``send_file_to_agent``, ``ask_agent``. Bound by the
+    # executor to one run while the host has linked peers; ``None`` (no
+    # peers, a child run) registers nothing.
+    register_peer_tools(registry, peer_tools)
 
     # The agent calls the user (docs/WIRE_CONTRACT.md, "The agent calls the
     # user"): ``call_user`` rings the app and returns at once, ``call_status``
