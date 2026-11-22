@@ -231,8 +231,9 @@ class _FakeRelayController implements AgentsRelayController {
   Future<void> addRoomMember(
     String roomId,
     String agentId,
-    String handle,
-  ) async {}
+    String handle, {
+    String? hostId,
+  }) async {}
 
   @override
   Future<void> removeRoomMember(String roomId, String agentId) async =>

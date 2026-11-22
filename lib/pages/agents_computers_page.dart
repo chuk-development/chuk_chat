@@ -5,13 +5,19 @@
 /// The page reads the pairing store and the link registry; it owns no socket.
 /// A rename is stored in the encrypted trust record, so every device of the
 /// account shows the same name. Remove unlinks the computer on every device
-/// (its mirrored row is deleted) and drops its link here.
+/// (its mirrored row is deleted) and drops its link here. Before that the
+/// other computers are told to forget it (CHAT-177 phase 2,
+/// [AgentsHostPeering.unlink]).
+///
+/// With two or more computers each one also says how many others it is
+/// linked to (what its `host_peer_list` said last; a hint, not presence).
 library;
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/services/agents/agents_host_peering.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -28,7 +34,12 @@ class AgentsComputersPage extends StatefulWidget {
     this.store,
     this.links,
     this.onAddComputer,
+    this.peering,
   });
+
+  /// Introduces and unlinks computers. Null reads
+  /// [AgentsHostPeering.current] (none: Remove only removes the pairing).
+  final AgentsHostPeering? peering;
 
   /// Null builds the default store (the OS keychain).
   final AgentsPairingStore? store;
@@ -57,6 +68,8 @@ class AgentsComputersPage extends StatefulWidget {
 class _AgentsComputersPageState extends State<AgentsComputersPage> {
   late final AgentsPairingStore _store = widget.store ?? AgentsPairingStore();
   AgentsRelayLinks get _links => widget.links ?? AgentsRelayLinks.instance;
+  late final AgentsHostPeering? _peering =
+      widget.peering ?? AgentsHostPeering.current;
 
   List<AgentsStoredPairing> _hosts = const <AgentsStoredPairing>[];
   bool _loaded = false;
@@ -67,6 +80,7 @@ class _AgentsComputersPageState extends State<AgentsComputersPage> {
     _store.changes.addListener(_read);
     _links.addListener(_onLinks);
     _links.primary.controller.addListener(_onLinks);
+    _peering?.addListener(_onLinks);
     unawaited(_read());
   }
 
@@ -75,6 +89,7 @@ class _AgentsComputersPageState extends State<AgentsComputersPage> {
     _store.changes.removeListener(_read);
     _links.removeListener(_onLinks);
     _links.primary.controller.removeListener(_onLinks);
+    _peering?.removeListener(_onLinks);
     super.dispose();
   }
 
@@ -132,7 +147,13 @@ class _AgentsComputersPageState extends State<AgentsComputersPage> {
       ),
     );
     if (!mounted || confirmed != true) return;
-    await _store.removePairing(host.hostId);
+    final AgentsHostPeering? peering = _peering;
+    if (peering != null) {
+      // The other computers forget it first, then the pairing goes.
+      await peering.unlink(host.hostId);
+    } else {
+      await _store.removePairing(host.hostId);
+    }
     _links.drop(host.hostId);
   }
 
@@ -166,7 +187,7 @@ class _AgentsComputersPageState extends State<AgentsComputersPage> {
                   title: host.effectiveKind == AgentsHostKind.cloud
                       ? 'Cloud computer'
                       : 'Your computer',
-                  subtitle: _isOnline(host) ? 'Online' : 'Offline',
+                  subtitle: _statusLine(host),
                   trailing: _OnlineDot(online: _isOnline(host)),
                 ),
                 ExpressiveRow(
@@ -201,6 +222,22 @@ class _AgentsComputersPageState extends State<AgentsComputersPage> {
         ],
       ),
     );
+  }
+
+  /// "Online" / "Offline", and with two or more computers how many others
+  /// this one is linked to, when it said.
+  String _statusLine(AgentsStoredPairing host) {
+    final String online = _isOnline(host) ? 'Online' : 'Offline';
+    if (_hosts.length < 2) return online;
+    final int? linked = _peering?.linkedCount(host.hostId);
+    if (linked == null) return online;
+    final int others = _hosts.length - 1;
+    final String peers = linked == 0
+        ? 'not linked yet'
+        : linked >= others
+        ? (others == 1 ? 'linked' : 'linked to all')
+        : 'linked to $linked of $others';
+    return '$online · $peers';
   }
 
   bool _isOnline(AgentsStoredPairing host) {

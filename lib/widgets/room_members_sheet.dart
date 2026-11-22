@@ -24,6 +24,7 @@ import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/widgets/agents_host_tag.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class RoomMembersSheet extends StatelessWidget {
@@ -34,7 +35,12 @@ class RoomMembersSheet extends StatelessWidget {
     required this.onAdd,
     required this.onRemove,
     this.onAgentToAgentChanged,
+    this.blockedReason,
   });
+
+  /// Why a candidate cannot join this group (CHAT-177 phase 2), or null.
+  /// A blocked candidate is shown without the add button, with the reason.
+  final String? Function(AgentsAgent candidate)? blockedReason;
 
   final AgentsRoom room;
 
@@ -141,28 +147,52 @@ class RoomMembersSheet extends StatelessWidget {
                     ExpressiveGroup(
                       children: [
                         for (final agent in candidates)
-                          ExpressiveRow(
-                            key: ValueKey<String>('room-candidate-${agent.id}'),
-                            title: agent.name,
-                            leading: ExpressiveFace(
-                              id: agent.id,
-                              label: agent.name,
-                              size: 28,
-                            ),
-                            trailing: IconButton(
-                              tooltip: 'Add',
-                              icon: const AppIcon(
-                                Icons.add_circle_outline,
-                                size: 20,
+                          if (blockedReason?.call(agent)
+                              case final String blocked)
+                            ExpressiveRow(
+                              key: ValueKey<String>(
+                                'room-candidate-${agent.id}',
                               ),
-                              onPressed: () => onAdd(
-                                AgentsRoomMember(
-                                  agentId: agent.id,
-                                  handle: agent.name,
+                              title: agent.name,
+                              subtitle: blocked,
+                              leading: Opacity(
+                                opacity: 0.5,
+                                child: ExpressiveFace(
+                                  id: agent.id,
+                                  label: agent.name,
+                                  size: 28,
+                                ),
+                              ),
+                            )
+                          else
+                            ExpressiveRow(
+                              key: ValueKey<String>(
+                                'room-candidate-${agent.id}',
+                              ),
+                              title: agent.name,
+                              subtitle: AgentsHostLabels.instance.labelFor(
+                                agent.hostId,
+                              ),
+                              leading: ExpressiveFace(
+                                id: agent.id,
+                                label: agent.name,
+                                size: 28,
+                              ),
+                              trailing: IconButton(
+                                tooltip: 'Add',
+                                icon: const AppIcon(
+                                  Icons.add_circle_outline,
+                                  size: 20,
+                                ),
+                                onPressed: () => onAdd(
+                                  AgentsRoomMember(
+                                    agentId: agent.id,
+                                    handle: agent.name,
+                                    hostId: agent.hostId,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
                       ],
                     ),
                 ],

@@ -167,7 +167,12 @@ class _IdleRelayController implements AgentsRelayController {
   Future<void> requestAgentList() async {}
 
   @override
-  Future<void> addRoomMember(String roomId, String agentId, String handle) async {}
+  Future<void> addRoomMember(
+    String roomId,
+    String agentId,
+    String handle, {
+    String? hostId,
+  }) async {}
 
   @override
   Future<void> removeRoomMember(String roomId, String agentId) async {}

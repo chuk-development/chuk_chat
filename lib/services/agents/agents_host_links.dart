@@ -245,8 +245,10 @@ class AgentsHostLinks {
       if (session != null) await controller.provisionAccount(session);
       _failures.remove(id);
       _notBefore.remove(id);
-      // The roster lists the agents of every computer.
+      // The roster lists the agents of every computer, and the group list
+      // the groups every computer is the home of (CHAT-177 phase 2).
       unawaited(controller.requestAgentList().catchError((Object _) {}));
+      unawaited(controller.requestRoomList().catchError((Object _) {}));
     } catch (error) {
       if (kDebugMode) {
         debugPrint('[agents-host-links] dial failed: ${error.runtimeType}');

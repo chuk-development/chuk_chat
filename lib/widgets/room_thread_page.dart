@@ -29,6 +29,7 @@ import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_room_hosts.dart';
 import 'package:chuk_chat/widgets/chat_composer_box.dart';
 import 'package:chuk_chat/widgets/room_mention_picker.dart';
 import 'package:chuk_chat/widgets/room_thread_view.dart';
@@ -235,10 +236,15 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
     onStop();
   }
 
+  /// The app's id for an agent id the home host sent (CHAT-177: a
+  /// computer's own agent comes back as `host:cowork-host`).
+  String _appId(String wireId) =>
+      AgentsRoomHosts.appAgentIdIn(widget.members, wireId);
+
   /// The app's own model of one relay turn.
-  static AgentsRoomTurn _turnFrom(AgentsRelayRoomTurn t) => AgentsRoomTurn(
+  AgentsRoomTurn _turnFrom(AgentsRelayRoomTurn t) => AgentsRoomTurn(
     round: t.round,
-    agentId: t.agentId,
+    agentId: _appId(t.agentId),
     handle: t.handle,
     text: t.text,
     kind: AgentsRoomTurnKind.fromWire(t.kind),
@@ -249,7 +255,10 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
             confidence: t.routedConfidence,
             fallback: t.routedFallback,
           ),
-    toAgentId: t.toAgentId,
+    toAgentId: switch (t.toAgentId) {
+      final String id => _appId(id),
+      null => null,
+    },
     toHandle: t.toHandle,
   );
 
@@ -417,7 +426,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
         setState(() {
           if (!_disconnected) _running = true;
           _stop = null;
-          _working = AgentsRoomMember(agentId: agentId, handle: handle);
+          _working = AgentsRoomMember(agentId: _appId(agentId), handle: handle);
         });
       case AgentsRelayRoomTurn(:final roomId):
         if (roomId != widget.roomId) break; // another room on the same socket

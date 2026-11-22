@@ -5750,6 +5750,8 @@ Registered only while the host has at least one peer:
 
 ### App work
 
+Done 2026-11-22 (app side, `docs/agents/MULTI_HOST.md` "App, phase 2").
+
 1. On `host_route` with `host_peers`, keep the host's `host_id` (its
    `cw_device`) and its Ed25519 key (from the trust record).
 2. For every two paired hosts that both name `host_peers`: make `K`

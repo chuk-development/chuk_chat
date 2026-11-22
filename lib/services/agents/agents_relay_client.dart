@@ -43,6 +43,7 @@ import 'package:chuk_chat/services/agents/agents_frame_codec.dart';
 import 'package:chuk_chat/services/agents/agents_frame_fragments.dart';
 import 'package:chuk_chat/services/agents/agents_pairing.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_reconnect.dart';
 import 'package:chuk_chat/services/agents/agents_reply_frames.dart';
 import 'package:chuk_chat/services/agents/agents_resume_trace.dart';
@@ -1966,8 +1967,15 @@ abstract interface class AgentsRelayController {
   /// the answer arrives on [inbound] as [AgentsRelayAgentList]).
   Future<void> requestAgentList();
 
-  /// Adds a member to [roomId] on the host (§16.1).
-  Future<void> addRoomMember(String roomId, String agentId, String handle);
+  /// Adds a member to [roomId] on the host (§16.1). [hostId] is the
+  /// member's computer when it is not the group's home host (CHAT-177 phase
+  /// 2); [agentId] is then the id that computer knows.
+  Future<void> addRoomMember(
+    String roomId,
+    String agentId,
+    String handle, {
+    String? hostId,
+  });
 
   /// Removes a member from [roomId] on the host (§16.1).
   Future<void> removeRoomMember(String roomId, String agentId);
@@ -2105,6 +2113,25 @@ abstract interface class AgentsAgentStatusControl {
   Stream<AgentsRelayAgentStatus> get agentStatus;
 }
 
+/// Hosts that work together (CHAT-177 phase 2, docs/WIRE_CONTRACT.md "Hosts
+/// that work together"): what one host can do, and the three app-to-host
+/// peer frames. Its own interface, like [AgentsAvatarControl]: test fakes of
+/// [AgentsRelayController] need not grow it.
+abstract interface class AgentsHostPeersControl {
+  /// What this host named in its last `host_route.capabilities`. Empty until
+  /// it says, and again after every new socket.
+  ValueListenable<Set<String>> get capabilities;
+
+  /// Sends one `host_peer_introduce` / `host_peer_forget` / `host_peer_list`
+  /// and returns the host's terminal `host_peer_list`. One request at a
+  /// time per host (the answer carries no request id). Throws when the link
+  /// is down or no answer came within [timeout].
+  Future<Map<String, dynamic>> hostPeerRequest(
+    Map<String, dynamic> frame, {
+    Duration timeout,
+  });
+}
+
 class AgentsRelayClient
     implements
         AgentsRelayController,
@@ -2118,6 +2145,7 @@ class AgentsRelayClient
         AgentsDocumentsControl,
         AgentsAvatarControl,
         AgentsAgentStatusControl,
+        AgentsHostPeersControl,
         AgentsSkillsControl,
         McpProbeControl,
         AgentsSkillProposalControl, // skill proposals
@@ -2233,8 +2261,102 @@ class AgentsRelayClient
   /// The host capability that says it keeps avatars (`agent_avatar_set`).
   static const String agentAvatarCapability = 'agent_avatar';
 
+  ///
+  /// Since CHAT-177 this is the PRIMARY computer's set (the conversation on
+  /// screen): a client bound to a secondary link leaves it alone. Every
+  /// client keeps its own set in [capabilities], and [capabilitiesByHost]
+  /// keeps the last set of every computer by its relay device id.
   static final ValueNotifier<Set<String>> hostCapabilities =
       ValueNotifier<Set<String>>(const <String>{});
+
+  /// The host capability that says it links to other hosts of the account
+  /// (`host_peer_*` frames, group members with `host_id`).
+  static const String hostPeersCapability = 'host_peers';
+
+  /// The last `host_route.capabilities` of every computer, keyed by its relay
+  /// device id (`cw_device`). Kept when a computer goes offline: it is what
+  /// it said last, for the group editor.
+  static final ValueNotifier<Map<String, Set<String>>> capabilitiesByHost =
+      ValueNotifier<Map<String, Set<String>>>(const <String, Set<String>>{});
+
+  /// Test seam: forget every computer's capabilities.
+  @visibleForTesting
+  static void resetCapabilitiesByHost() =>
+      capabilitiesByHost.value = const <String, Set<String>>{};
+
+  final ValueNotifier<Set<String>> _capabilities = ValueNotifier<Set<String>>(
+    const <String>{},
+  );
+
+  @override
+  ValueListenable<Set<String>> get capabilities => _capabilities;
+
+  /// Whether this client is the transport of a secondary link (another
+  /// computer than the one on screen). Such a client must not write the
+  /// primary's [hostCapabilities].
+  bool get _isSecondary =>
+      AgentsRelayLinks.instance.isSecondaryController(this);
+
+  /// A new socket: forget what the last host said it can do until this one
+  /// says so in its `host_route`.
+  void _forgetCapabilities() {
+    _capabilities.value = const <String>{};
+    if (!_isSecondary && hostCapabilities.value.isNotEmpty) {
+      hostCapabilities.value = const <String>{};
+    }
+  }
+
+  // ── host peers (CHAT-177 phase 2) ──
+  Future<void> _hostPeerChain = Future<void>.value();
+  Completer<Map<String, dynamic>>? _hostPeerPending;
+  String? _hostPeerPendingType;
+
+  @override
+  Future<Map<String, dynamic>> hostPeerRequest(
+    Map<String, dynamic> frame, {
+    Duration timeout = const Duration(seconds: 20),
+  }) {
+    final Future<Map<String, dynamic>> next = _hostPeerChain.then(
+      (_) => _hostPeerOnce(frame, timeout),
+    );
+    _hostPeerChain = next.then<void>((_) {}, onError: (Object _) {});
+    return next;
+  }
+
+  Future<Map<String, dynamic>> _hostPeerOnce(
+    Map<String, dynamic> frame,
+    Duration timeout,
+  ) async {
+    final Completer<Map<String, dynamic>> answer =
+        Completer<Map<String, dynamic>>();
+    _hostPeerPending = answer;
+    final Object? type = frame['type'];
+    _hostPeerPendingType = type is String ? type : null;
+    try {
+      await _sendFramePayload(frame);
+      return await answer.future.timeout(timeout);
+    } finally {
+      if (identical(_hostPeerPending, answer)) {
+        _hostPeerPending = null;
+        _hostPeerPendingType = null;
+      }
+    }
+  }
+
+  /// The host's `host_peer_list` answer: completes the request in flight. An
+  /// answer that names another request (a late one) is dropped.
+  void _onHostPeerList(Map<String, dynamic> payload) {
+    final Completer<Map<String, dynamic>>? pending = _hostPeerPending;
+    if (pending == null || pending.isCompleted) return;
+    final Object? request = payload['request'];
+    if (request is String &&
+        _hostPeerPendingType != null &&
+        request != _hostPeerPendingType) {
+      return;
+    }
+    pending.complete(Map<String, dynamic>.of(payload));
+  }
+  // ── end host peers ──
 
   /// Seals and sends one host control frame that has no typed method here
   /// (`agent_permissions_get` / `agent_permissions_set`). Throws when not
@@ -2521,9 +2643,7 @@ class AgentsRelayClient
     _autoReplayed.clear();
     // And maybe a different host: forget what the last one said it can do
     // until this one says so in its `host_route`.
-    if (hostCapabilities.value.isNotEmpty) {
-      hostCapabilities.value = const <String>{};
-    }
+    _forgetCapabilities();
     _provisionGate = Completer<void>();
     if (kDebugMode) {
       debugPrint('[agents-relay] socket connected to ${_logSafe(hostUrl)}');
@@ -2674,9 +2794,7 @@ class AgentsRelayClient
     _autoReplayed.clear();
     // And maybe a different host: forget what the last one said it can do
     // until this one says so in its `host_route`.
-    if (hostCapabilities.value.isNotEmpty) {
-      hostCapabilities.value = const <String>{};
-    }
+    _forgetCapabilities();
     _provisionGate = Completer<void>();
     if (kDebugMode) {
       debugPrint(
@@ -3267,13 +3385,20 @@ class AgentsRelayClient
   }
 
   @override
-  Future<void> addRoomMember(String roomId, String agentId, String handle) =>
-      _sendFramePayload(<String, dynamic>{
-        'type': 'room_add_member',
-        'room_id': roomId,
-        'agent_id': agentId,
-        'handle': handle,
-      });
+  Future<void> addRoomMember(
+    String roomId,
+    String agentId,
+    String handle, {
+    String? hostId,
+  }) => _sendFramePayload(<String, dynamic>{
+    'type': 'room_add_member',
+    'room_id': roomId,
+    'agent_id': agentId,
+    'handle': handle,
+    // Only a member of another computer says so: an old host sees the frame
+    // it has always seen.
+    if (hostId != null && hostId.isNotEmpty) 'host_id': hostId,
+  });
 
   @override
   Future<void> removeRoomMember(String roomId, String agentId) =>
@@ -3638,6 +3763,10 @@ class AgentsRelayClient
       }
     }
     _disposed = true;
+    final Completer<Map<String, dynamic>>? peerAnswer = _hostPeerPending;
+    if (peerAnswer != null && !peerAnswer.isCompleted) {
+      peerAnswer.completeError(StateError('Link closed'));
+    }
     if (identical(_scheduler.reconnectHost, _reattachForScheduler)) {
       // Our hooks, not a successor client's: withdraw them.
       _scheduler.reconnectHost = null;
@@ -3651,6 +3780,7 @@ class AgentsRelayClient
     if (!_inbound.isClosed) await _inbound.close();
     if (!_agentStatus.isClosed) await _agentStatus.close();
     _state.dispose();
+    _capabilities.dispose();
   }
 
   // --- internals -------------------------------------------------------------
@@ -3884,10 +4014,28 @@ class AgentsRelayClient
             for (final Object? c in capabilities)
               if (c is String && c.isNotEmpty) c,
           };
-          if (!setEquals(named, hostCapabilities.value)) {
+          if (!setEquals(named, _capabilities.value)) {
+            _capabilities.value = named;
+          }
+          if (!_isSecondary && !setEquals(named, hostCapabilities.value)) {
             hostCapabilities.value = named;
           }
+          // CHAT-177: every computer's set, by its relay device id.
+          final String? hostId =
+              url?.queryParameters['cw_device'] ??
+              _establishedTrust?.relayDeviceId;
+          if (hostId != null &&
+              hostId.isNotEmpty &&
+              hostId != 'cowork-host' &&
+              !setEquals(named, capabilitiesByHost.value[hostId])) {
+            capabilitiesByHost.value = <String, Set<String>>{
+              ...capabilitiesByHost.value,
+              hostId: named,
+            };
+          }
         }
+      case 'host_peer_list':
+        _onHostPeerList(payload);
       case 'delta':
         final text =
             payload['text'] ?? payload['delta'] ?? payload['content'] ?? '';

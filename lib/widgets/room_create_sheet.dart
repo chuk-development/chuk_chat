@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/widgets/agents_host_tag.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/room_settings_controls.dart';
 
@@ -29,10 +30,18 @@ class RoomCreateSheet extends StatefulWidget {
     required this.agents,
     required this.onSubmit,
     this.onCancel,
+    this.blockedReason,
   });
 
-  /// The agents that can join. Usually the roster's visible agents.
+  /// The agents that can join. Usually the roster's visible agents, of every
+  /// computer (CHAT-177 phase 2); each row names its computer.
   final List<AgentsAgent> agents;
+
+  /// Why [candidate] cannot join next to [chosen] (two computers' own
+  /// agents, a computer that cannot share groups), or null when it can. The
+  /// row is then shown disabled with the reason. Null: every agent can join.
+  final String? Function(AgentsAgent candidate, List<AgentsAgent> chosen)?
+  blockedReason;
 
   final void Function(AgentsRoomDraft draft) onSubmit;
   final VoidCallback? onCancel;
@@ -83,7 +92,17 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
   List<AgentsRoomMember> get _members => <AgentsRoomMember>[
     for (final agent in widget.agents)
       if (_selected.contains(agent.id))
-        AgentsRoomMember(agentId: agent.id, handle: agent.name),
+        AgentsRoomMember(
+          agentId: agent.id,
+          handle: agent.name,
+          hostId: agent.hostId,
+        ),
+  ];
+
+  /// The chosen agents, in roster order.
+  List<AgentsAgent> get _chosen => <AgentsAgent>[
+    for (final agent in widget.agents)
+      if (_selected.contains(agent.id)) agent,
   ];
 
   /// The lead for lead mode: the one picked, else the first chosen member.
@@ -293,15 +312,29 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
   Widget _memberTile(BuildContext context, AgentsAgent agent) {
     final selected = _selected.contains(agent.id);
     final role = agent.role;
+    // A chosen agent stays enabled, so it can always be unchecked.
+    final String? blocked = selected
+        ? null
+        : widget.blockedReason?.call(agent, _chosen);
+    final String? subtitle = blocked ?? role;
     return CheckboxListTile(
+      key: ValueKey<String>('room-create-agent-${agent.id}'),
       value: selected,
-      onChanged: (on) => _toggle(agent.id, on),
+      onChanged: blocked == null ? (on) => _toggle(agent.id, on) : null,
       controlAffinity: ListTileControlAffinity.leading,
-      secondary: ExpressiveFace(id: agent.id, label: agent.name, size: 32),
-      title: Text(agent.name, overflow: TextOverflow.ellipsis),
-      subtitle: role == null
+      secondary: Opacity(
+        opacity: blocked == null ? 1 : 0.5,
+        child: ExpressiveFace(id: agent.id, label: agent.name, size: 32),
+      ),
+      title: Row(
+        children: [
+          Flexible(child: Text(agent.name, overflow: TextOverflow.ellipsis)),
+          AgentsHostTag(hostId: agent.hostId, leadingGap: 6),
+        ],
+      ),
+      subtitle: subtitle == null
           ? null
-          : Text(role, overflow: TextOverflow.ellipsis),
+          : Text(subtitle, overflow: TextOverflow.ellipsis),
       dense: true,
     );
   }

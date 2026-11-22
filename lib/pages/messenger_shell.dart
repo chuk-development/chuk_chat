@@ -171,6 +171,8 @@ import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_factory.dart';
 import 'package:chuk_chat/services/agents/agents_host_links.dart';
+import 'package:chuk_chat/services/agents/agents_host_peering.dart';
+import 'package:chuk_chat/services/agents/agents_room_hosts.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_shell_status.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';

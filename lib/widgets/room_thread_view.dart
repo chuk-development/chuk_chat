@@ -20,6 +20,8 @@
 /// caps; it only shows them.
 library;
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -28,6 +30,8 @@ import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/bubble_shape.dart';
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/widgets/agents_host_tag.dart';
+import 'package:chuk_chat/widgets/icons/huge_icon.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 
@@ -316,26 +320,48 @@ class RoomThreadView extends StatelessWidget {
           child: _withCaption(
             context,
             caption,
-            MessageBubble(
-              message: turn.text,
-              isUser: false,
-              messengerMode: true,
-              showToolCalls: false,
-              startsNewGroup: startsRun,
-              endsGroup: endsRun,
-              maxWidth: lane,
-              senderLabel: startsRun
-                  ? Text(
-                      _name(turn.agentId, turn.handle),
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: accent,
-                        fontWeight: FontWeight.w800,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    )
-                  : null,
+            _withFileChip(
+              turn.text,
+              MessageBubble(
+                // A shared file's reference is drawn as the chip below.
+                message: RoomSharedFile.withoutRef(turn.text),
+                isUser: false,
+                messengerMode: true,
+                showToolCalls: false,
+                startsNewGroup: startsRun,
+                endsGroup: endsRun,
+                maxWidth: lane,
+                senderLabel: startsRun
+                    ? Text(
+                        _name(turn.agentId, turn.handle),
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: accent,
+                          fontWeight: FontWeight.w800,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      )
+                    : null,
+              ),
             ),
           ),
+        ),
+      ],
+    );
+  }
+
+  /// [bubble] with a chip for the file a member shared (CHAT-177 phase 2),
+  /// or [bubble] alone when the turn carries no file reference.
+  Widget _withFileChip(String text, Widget bubble) {
+    final RoomSharedFile? file = RoomSharedFile.tryParse(text);
+    if (file == null) return bubble;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        bubble,
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: RoomSharedFileChip(file: file),
         ),
       ],
     );
@@ -502,6 +528,152 @@ class RoomThreadView extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A file a group member shared (CHAT-177 phase 2). The turn reads
+/// `Shared file NAME (SIZE bytes). ref: {...}`, and the reference carries
+/// `sha256`, `name`, `size` and `host_id`. The file stays on its computer;
+/// the chip only names it.
+@immutable
+class RoomSharedFile {
+  const RoomSharedFile({
+    required this.name,
+    required this.size,
+    required this.sha256,
+    this.hostId,
+  });
+
+  final String name;
+  final int size;
+  final String sha256;
+
+  /// The computer the file lives on, or null when the reference names none.
+  final String? hostId;
+
+  static final RegExp _ref = RegExp(r'ref:\s*(\{.*\})\s*$', dotAll: true);
+
+  /// The reference at the end of [text], or null when there is none.
+  static RoomSharedFile? tryParse(String text) {
+    if (!text.contains('ref:')) return null;
+    final RegExpMatch? match = _ref.firstMatch(text);
+    if (match == null) return null;
+    try {
+      final String? body = match.group(1);
+      if (body == null) return null;
+      final Object? raw = jsonDecode(body);
+      if (raw is! Map) return null;
+      final Object? name = raw['name'];
+      final Object? size = raw['size'];
+      final Object? sha = raw['sha256'];
+      final Object? host = raw['host_id'];
+      if (name is! String || name.isEmpty || sha is! String || sha.isEmpty) {
+        return null;
+      }
+      if (size is! num || size < 0) return null;
+      return RoomSharedFile(
+        name: name,
+        size: size.toInt(),
+        sha256: sha,
+        hostId: host is String && host.isNotEmpty ? host : null,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// [text] without a trailing file reference, or [text] when it has none
+  /// (the chip names the file, the bubble keeps the sentence).
+  static String withoutRef(String text) {
+    final RegExpMatch? match = _ref.firstMatch(text);
+    if (match == null || tryParse(text) == null) return text;
+    final String head = text.substring(0, match.start).trim();
+    return head.isEmpty ? text : head;
+  }
+
+  /// The size for people: bytes, KB, MB or GB.
+  String get sizeLabel {
+    if (size < 1024) return '$size B';
+    const List<String> units = <String>['KB', 'MB', 'GB'];
+    double value = size / 1024;
+    int unit = 0;
+    while (value >= 1024 && unit < units.length - 1) {
+      value /= 1024;
+      unit++;
+    }
+    return '${value.toStringAsFixed(value < 10 ? 1 : 0)} ${units[unit]}';
+  }
+}
+
+/// A flat chip with the file icon, the name, the size and the computer the
+/// file lives on (only while two or more computers are paired). No action:
+/// the agents fetch the file themselves.
+class RoomSharedFileChip extends StatelessWidget {
+  const RoomSharedFileChip({super.key, required this.file, this.labels});
+
+  final RoomSharedFile file;
+
+  /// The computer labels. Null reads [AgentsHostLabels.instance].
+  final AgentsHostLabels? labels;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final AgentsHostLabels source = labels ?? AgentsHostLabels.instance;
+    return ListenableBuilder(
+      listenable: source,
+      builder: (BuildContext context, Widget? _) {
+        final String? computer = file.hostId == null
+            ? null
+            : source.labelFor(file.hostId);
+        final String detail = computer == null
+            ? file.sizeLabel
+            : '${file.sizeLabel} · $computer';
+        return Container(
+          key: const ValueKey<String>('room-shared-file'),
+          constraints: const BoxConstraints(maxWidth: 320),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              HugeIcon(HugeIcons.file01, size: 20, color: scheme.primary),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      file.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: scheme.onSurface,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      detail,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

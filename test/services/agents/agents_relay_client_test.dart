@@ -2553,4 +2553,94 @@ void main() {
     });
   });
   // ── end F1 ──
+
+  // ── CHAT-177 phase 2: hosts that work together ──
+  group('host peers', () {
+    tearDown(() {
+      AgentsRelayClient.resetCapabilitiesByHost();
+      AgentsRelayClient.hostCapabilities.value = const <String>{};
+    });
+
+    test(
+      'host_route keeps the capabilities per client and per computer',
+      () async {
+        final (client, host, _) = await paired();
+        await host.emit(<String, dynamic>{
+          'type': 'host_route',
+          'url': 'wss://api.chuk.chat/v2/relay/ws?cw_device=pc-uuid',
+          'capabilities': <String>['host_peers', 'agent_delete'],
+        });
+        await settle();
+        expect(client.capabilities.value, <String>{
+          'host_peers',
+          'agent_delete',
+        });
+        expect(AgentsRelayClient.capabilitiesByHost.value['pc-uuid'], <String>{
+          'host_peers',
+          'agent_delete',
+        });
+        await client.dispose();
+      },
+    );
+
+    test('a host_peer request waits for the host_peer_list answer', () async {
+      final (client, host, _) = await paired();
+      final Future<Map<String, dynamic>> answer = client.hostPeerRequest(
+        <String, dynamic>{'type': 'host_peer_list'},
+      );
+      await settle();
+      expect(host.received.last['type'], 'host_peer_list');
+      // An answer to another request is not this one's.
+      await host.emit(<String, dynamic>{
+        'type': 'host_peer_list',
+        'request': 'host_peer_forget',
+        'ok': true,
+        'peers': <Object>[],
+      });
+      await host.emit(<String, dynamic>{
+        'type': 'host_peer_list',
+        'request': 'host_peer_list',
+        'ok': true,
+        'host_id': 'pc-uuid',
+        'peers': <Object>[
+          <String, Object?>{'peer_host_id': 'box-uuid', 'online': true},
+        ],
+      });
+      final Map<String, dynamic> reply = await answer;
+      expect(reply['request'], 'host_peer_list');
+      expect((reply['peers'] as List).single['peer_host_id'], 'box-uuid');
+      await client.dispose();
+    });
+
+    test('a host_peer request with no answer times out', () async {
+      final (client, _, _) = await paired();
+      await expectLater(
+        client.hostPeerRequest(<String, dynamic>{
+          'type': 'host_peer_list',
+        }, timeout: const Duration(milliseconds: 50)),
+        throwsA(isA<TimeoutException>()),
+      );
+      await client.dispose();
+    });
+
+    test('room_add_member names the computer only for another one', () async {
+      final (client, host, _) = await paired();
+      await client.addRoomMember('room:1', 'local:a', 'a');
+      await client.addRoomMember(
+        'room:1',
+        'host:cowork-host',
+        'b',
+        hostId: 'box-uuid',
+      );
+      await settle();
+      final List<Map<String, dynamic>> adds = host.received
+          .where((p) => p['type'] == 'room_add_member')
+          .toList();
+      expect(adds.first.containsKey('host_id'), isFalse);
+      expect(adds.last['host_id'], 'box-uuid');
+      expect(adds.last['agent_id'], 'host:cowork-host');
+      await client.dispose();
+    });
+  });
+  // ── end CHAT-177 phase 2 ──
 }

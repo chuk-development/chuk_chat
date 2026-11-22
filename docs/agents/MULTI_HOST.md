@@ -15,9 +15,10 @@ each other and send files.
   `ask_agent`. Wire shapes and the app's part: `docs/WIRE_CONTRACT.md`,
   "Hosts that work together". Code: `agents/host/src/chuk_agents_host/
   peer_hub.py` and its neighbours.
-- Open: the app side of phase 2 (introduce, group editor with a computer
-  per member). A queued fetch does not start by itself when the other host
-  comes back; the agent calls `fetch_file` again and it resumes.
+- App, phase 2: introduce, unlink, groups across computers, the shared
+  file chip. See "App, phase 2: where it lives" below.
+- Open: a queued fetch does not start by itself when the other host comes
+  back; the agent calls `fetch_file` again and it resumes.
 - Known limit: every host's own agent has the app id `host:cowork-host`
   (the crypto peer id is the same on every host). A group must not hold the
   own agents of two hosts: the room keys members by `agent_id`. Agents the
@@ -181,6 +182,51 @@ long crawl, the PC agent uses the result".
   (`AgentsCloudBoxFlow.hasComputer`): it books a new box, or goes on with
   a setup this device began; an existing box it did not set up is left
   alone.
-- **Still on the primary link only:** groups (phase 2), skills, automations,
-  dashboard, permissions, run ledger and the in-app done notification.
-  `AgentsRelayClient.hostCapabilities` is one static for all hosts.
+- **Still on the primary link only:** skills, automations, dashboard,
+  permissions, run ledger and the in-app done notification. Groups go to
+  their home host since phase 2.
+- **Capabilities:** every client keeps its own set
+  (`AgentsRelayClient.capabilities`), `capabilitiesByHost` keeps the last set
+  of every computer by relay device id, and the static `hostCapabilities`
+  is the primary computer's only (a client bound to a secondary link leaves
+  it alone).
+
+## App, phase 2: where it lives
+
+- **Introduce:** `agents_host_peering.dart` (`AgentsHostPeering`, started by
+  the shell next to `AgentsHostLinks`). A pass runs on a pairing change, a
+  link or capability change and every 2 min. It reads each ready computer's
+  `host_peer_list` (ready = link up and `host_peers`; a list older than 2
+  min, or of a computer that just came up, is read again) and introduces
+  every pair that is not linked both ways: one fresh key from
+  `Random.secure()`, A first, then B; B refuses = forget to A. A failed pair
+  waits 1 min. The key is wiped after the pass and never logged. Requests go
+  through `AgentsHostPeersControl.hostPeerRequest` (one at a time per host;
+  the answer has no request id, it is matched by `request`).
+- **Unlink:** Settings > Computers > Remove calls `AgentsHostPeering.unlink`:
+  forget to every other computer, then `removePairing` (store and Supabase
+  row). A computer that is offline gets its forget when it comes back,
+  while the app runs (kept in memory only).
+- **Groups:** `agents_room_hosts.dart`. `AgentsRoom.homeHostId` (the host
+  that got `room_create`, or the one that listed the group) and
+  `AgentsRoomMember.hostId` (the member's computer). `AgentsRoomFrames`
+  sends every group frame to the home host's link only. Wire ids: a
+  computer's own agent `host:cowork-host@<id>` goes out as
+  `host:cowork-host`; a turn that comes back with it is the group's one
+  host-own member. `host_id` rides only for a member of another computer.
+  The home of a new group is the computer on screen when it has a member,
+  else the first member's.
+- **Editor rules:** two computers' own agents in one group are shown
+  disabled; members across computers need every computer involved to name
+  `host_peers` (else "X is offline" / "X needs an update"). Rows show the
+  computer label.
+- **Group lists:** every computer's `room_list` is merged (secondary links
+  ask for it after they come up), with the listing computer as home.
+- **Shared file:** `RoomSharedFile` / `RoomSharedFileChip` in
+  `room_thread_view.dart` parse the `ref: {...}` of a "Shared file" turn and
+  show name, size and computer. No download action.
+- **Settings > Computers:** with two or more computers the row says how many
+  others each one is linked to (its last `host_peer_list`).
+- **Limits:** a computer removed on another device is not forgotten by the
+  peers from here (phase 1 restore limit). Pending forgets are lost when the
+  app quits; the next introduce pass does not undo a stale peer on a host.

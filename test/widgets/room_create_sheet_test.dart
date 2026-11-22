@@ -362,4 +362,70 @@ void main() {
     expect(drafts.single.leadAgentId, isNull);
     expect(drafts.single.bulletin, isEmpty);
   });
+
+  // CHAT-177 phase 2: agents of every computer; two computers' own agents
+  // never share a group.
+  testWidgets('a blocked agent is disabled with its reason, members carry '
+      'their computer', (tester) async {
+    final drafts = <AgentsRoomDraft>[];
+    final agents = <AgentsAgent>[
+      AgentsAgent(
+        id: 'host:cowork-host',
+        name: 'pc',
+        hostId: 'pc',
+        threads: const <AgentsThreadInfo>[],
+      ),
+      AgentsAgent(
+        id: 'host:cowork-host@box',
+        name: 'cloud',
+        hostId: 'box',
+        threads: const <AgentsThreadInfo>[],
+      ),
+      AgentsAgent(
+        id: 'local:c',
+        name: 'crawler',
+        hostId: 'box',
+        threads: const <AgentsThreadInfo>[],
+      ),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: RoomCreateSheet(
+            agents: agents,
+            onSubmit: drafts.add,
+            blockedReason: (candidate, chosen) =>
+                candidate.id.startsWith('host:') &&
+                    chosen.any((a) => a.id.startsWith('host:'))
+                ? 'Only one computer\'s own agent fits in a group'
+                : null,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('room-create-agent-host:cowork-host')),
+    );
+    await tester.pumpAndSettle();
+
+    final cloud = tester.widget<CheckboxListTile>(
+      find.byKey(const ValueKey('room-create-agent-host:cowork-host@box')),
+    );
+    expect(cloud.onChanged, isNull);
+    expect(
+      find.text('Only one computer\'s own agent fits in a group'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('room-create-agent-local:c')));
+    await tester.enterText(
+      find.byKey(const ValueKey('room-create-name')),
+      'Crew',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle();
+    expect(drafts.single.members.map((m) => m.hostId), <String?>['pc', 'box']);
+  });
 }

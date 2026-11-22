@@ -180,6 +180,25 @@ class AgentsRelayLinks extends ChangeNotifier {
   /// The computers that have a secondary link.
   Iterable<String> get secondaryHostIds => _secondary.keys;
 
+  /// Whether [controller] is the transport of a secondary link (another
+  /// computer than the one on screen).
+  bool isSecondaryController(Object controller) {
+    for (final AgentsRelayLink link in _secondary.values) {
+      if (identical(link.controller.value, controller)) return true;
+    }
+    return false;
+  }
+
+  /// The paired controller of [hostId] (primary or secondary), or null while
+  /// its link is down. Never makes a link.
+  AgentsRelayController? pairedControllerFor(String hostId) {
+    final AgentsRelayLink? link = hostId == primary.hostId.value
+        ? primary
+        : _secondary[hostId];
+    if (link == null || !link.isUp) return null;
+    return link.controller.value;
+  }
+
   /// Whether the link of [hostId] is up and paired.
   bool isOnline(String hostId) {
     if (hostId == primary.hostId.value) return primary.isUp;

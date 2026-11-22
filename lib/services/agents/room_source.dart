@@ -265,6 +265,7 @@ class LocalRoomSource extends RoomSource {
           ? draft.bulletin.substring(0, kRoomBulletinMaxChars)
           : draft.bulletin,
       workdir: draft.workdir.trim(),
+      homeHostId: draft.homeHostId,
     );
     _rooms.add(room);
     notifyListeners();

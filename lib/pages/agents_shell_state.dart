@@ -115,6 +115,89 @@ mixin AgentsShellHost on State<MessengerShell> {
   AgentsHostLinks? _hostLinks;
   StreamSubscription<AgentsHostInbound>? _secondaryInboundSub;
 
+  /// Introduces the paired computers to each other (CHAT-177 phase 2).
+  AgentsHostPeering? _hostPeering;
+
+  /// The live controller of [hostId]'s computer: the shell's own for the
+  /// computer on screen (and a null id), else its secondary link's.
+  AgentsRelayController? _controllerForHost(String? hostId) {
+    if (hostId == null || hostId == AgentsRelayLinks.instance.primaryHostId) {
+      return _controller.value;
+    }
+    return AgentsRelayLinks.instance.secondaryFor(hostId)?.controller.value;
+  }
+
+  /// Every frame of a group goes to its home host only (CHAT-177 phase 2).
+  late final AgentsRoomFrames _roomFrames = AgentsRoomFrames(
+    controllerFor: _controllerForHost,
+    primaryHostId: () => AgentsRelayLinks.instance.primaryHostId,
+  );
+
+  /// The controller of a home host that is not on screen, as a listenable a
+  /// group page re-binds to. One per computer, made on first use.
+  final Map<String, _HostControllerListenable> _hostControllers =
+      <String, _HostControllerListenable>{};
+
+  ValueListenable<AgentsRelayController?> _roomControllerListenable(
+    AgentsRoom room,
+  ) {
+    final String? home = _roomFrames.homeOf(room);
+    if (home == null) return _controller;
+    return _hostControllers.putIfAbsent(
+      home,
+      () => _HostControllerListenable(home, _controller, _controllerForHost),
+    );
+  }
+
+  /// The computer an agent lives on: its own, else the one on screen.
+  String? _agentHost(AgentsAgent agent) =>
+      agent.hostId ?? AgentsRelayLinks.instance.primaryHostId;
+
+  /// The members of [room] as (agent id, computer).
+  List<(String, String?)> _roomChosen(AgentsRoom room) {
+    final String? home = _roomFrames.homeOf(room);
+    return <(String, String?)>[
+      for (final AgentsRoomMember m in room.members)
+        (m.agentId, m.hostId ?? home),
+    ];
+  }
+
+  /// Why [candidate] cannot join a group of [chosen] (CHAT-177 phase 2).
+  String? _roomBlockedReason(
+    AgentsAgent candidate,
+    Iterable<(String, String?)> chosen,
+  ) {
+    if (_pairedHosts.value.length < 2) return null;
+    final String? primary = AgentsRelayLinks.instance.primaryHostId;
+    return AgentsRoomHosts.blockedReason(
+      candidateId: candidate.id,
+      candidateHost: _agentHost(candidate),
+      chosen: chosen,
+      capabilitiesOf: (String hostId) {
+        final Set<String>? known =
+            AgentsRelayClient.capabilitiesByHost.value[hostId];
+        if (known != null) return known;
+        if (hostId == primary && AgentsRelayLinks.instance.primary.isUp) {
+          return AgentsRelayClient.hostCapabilities.value;
+        }
+        return null;
+      },
+      labelOf: (String? hostId) =>
+          _pairingFor(hostId)?.label ?? 'This computer',
+    );
+  }
+
+  /// [member] with its computer filled in (an agent from before CHAT-177
+  /// lives on the computer on screen).
+  AgentsRoomMember _placedMember(AgentsRoomMember member) =>
+      member.hostId != null
+      ? member
+      : AgentsRoomMember(
+          agentId: member.agentId,
+          handle: member.handle,
+          hostId: AgentsRelayLinks.instance.primaryHostId,
+        );
+
   bool get _hasCloudHost => _pairedHosts.value.any(
     (AgentsStoredPairing p) => p.effectiveKind == AgentsHostKind.cloud,
   );
@@ -233,7 +316,8 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// Rooms deleted while the socket was down. The host never heard the delete
   /// (a deleted room has no later "open" to reconcile it, unlike an edit), so it
   /// would keep an orphan. These flush the moment a transport arrives.
-  final Set<String> _pendingHostDeletes = <String>{};
+  /// `room id -> its home host` (null: the computer on screen).
+  final Map<String, String?> _pendingHostDeletes = <String, String?>{};
 
   /// How long a notification tap may wait for its thread to be listed. A tap
   /// for a thread that never appears (deleted on the host, another account)
@@ -446,7 +530,11 @@ mixin AgentsShellHost on State<MessengerShell> {
             () => _buildRelayController(_pairingStore, widget.sessionSource),
         sessionSource: widget.sessionSource,
       )..start();
+      _hostPeering = AgentsHostPeering(store: _pairingStore)..start();
     }
+    // A group on another computer re-sends its deletes when that computer's
+    // link comes up.
+    AgentsRelayLinks.instance.addListener(_flushPendingHostDeletes);
     // A mail key made while the app runs goes to the host at once
     // (docs/AGENT_MAIL.md §6.1); each provision sends it too.
     AgentMailKeyHandover.instance.start();
@@ -487,8 +575,8 @@ mixin AgentsShellHost on State<MessengerShell> {
       return;
     }
     if (event is AgentsRelayRoomList) {
-      // Groups live on the computer on screen (phase 2 spans computers).
-      if (hostId == null) _applyHostRooms(event);
+      // Every computer lists the groups it is the home of (CHAT-177 phase 2).
+      _applyHostRooms(event, host);
       return;
     }
     if (event is! AgentsRelayAgentList) return;
@@ -531,10 +619,19 @@ mixin AgentsShellHost on State<MessengerShell> {
 
   /// The host's groups (`room_list`): merged into the local list, which keeps
   /// a group the host does not have yet (it is pushed when opened).
-  void _applyHostRooms(AgentsRelayRoomList event) {
+  void _applyHostRooms(AgentsRelayRoomList event, String? hostId) {
     final List<AgentsRoom> listed = <AgentsRoom>[
       for (final AgentsRelayRoomListEntry entry in event.rooms)
-        ?AgentsRoom.fromJson(entry.payload),
+        if (AgentsRoom.fromJson(entry.payload) case final AgentsRoom room)
+          AgentsRoomHosts.fromHostList(
+            room,
+            hostId,
+            // A computer's own agent, under the app's id for that computer.
+            (String host, String wireId) => _hostAgentIdFor(
+              host,
+              AgentsRoomHosts.wireAgentId(wireId).substring('host:'.length),
+            ),
+          ),
     ];
     _hostKnownRooms.addAll(listed.map((AgentsRoom r) => r.id));
     _rooms.applyHostRooms(listed);
@@ -812,6 +909,11 @@ mixin AgentsShellHost on State<MessengerShell> {
     _pairingStore.changes.removeListener(_onPairedHostsChanged);
     AgentsRelayLinks.instance.primary.hostId.removeListener(_publishHostLabels);
     unawaited(_hostLinks?.dispose() ?? Future<void>.value());
+    _hostPeering?.dispose();
+    AgentsRelayLinks.instance.removeListener(_flushPendingHostDeletes);
+    for (final _HostControllerListenable l in _hostControllers.values) {
+      l.dispose();
+    }
     _pairedHosts.dispose();
     AgentMailKeyHandover.instance.stop();
     _pairingStore.changes.removeListener(_onPairingStoreChanged);
@@ -1475,22 +1577,29 @@ mixin AgentsShellHost on State<MessengerShell> {
       context: context,
       builder: (sheetContext) => RoomCreateSheet(
         agents: agents,
+        blockedReason: (AgentsAgent candidate, List<AgentsAgent> chosen) =>
+            _roomBlockedReason(candidate, <(String, String?)>[
+              for (final AgentsAgent a in chosen) (a.id, _agentHost(a)),
+            ]),
         onCancel: () => Navigator.of(sheetContext).pop(),
         onSubmit: (draft) {
-          final room = _rooms.addRoom(draft);
-          // Push the room to the host so a later message can drive it. It rides
-          // the shared socket if the transport is up; if not, the create sheet
-          // still succeeds locally and the room syncs on the next open/send.
-          _controller.value?.createRoom(
-            room.id,
-            room.name,
-            <Map<String, String>>[
-              for (final m in room.members)
-                <String, String>{'agent_id': m.agentId, 'handle': m.handle},
-            ],
-            agentToAgent: room.agentToAgent,
-            settings: room.settingsWire(),
+          // CHAT-177 phase 2: every member names its computer, and the group
+          // lives on one of them (the one on screen when it has a member).
+          final List<AgentsRoomMember> members = <AgentsRoomMember>[
+            for (final AgentsRoomMember m in draft.members) _placedMember(m),
+          ];
+          final room = _rooms.addRoom(
+            draft.placed(
+              members: members,
+              homeHostId: AgentsRoomHosts.pickHome(<String?>[
+                for (final AgentsRoomMember m in members) m.hostId,
+              ], AgentsRelayLinks.instance.primaryHostId),
+            ),
           );
+          // Push the room to its home host so a later message can drive it.
+          // If that link is down, the create sheet still succeeds locally and
+          // the room syncs on the next open/send.
+          _roomFrames.create(room);
           Navigator.of(sheetContext).pop();
         },
       ),
@@ -1544,9 +1653,12 @@ mixin AgentsShellHost on State<MessengerShell> {
     source: _rooms,
     roomId: roomId,
     agents: _roster.visibleAgents,
+    blockedReason: (AgentsRoom room, AgentsAgent candidate) =>
+        _roomBlockedReason(candidate, _roomChosen(room)),
     onSettingsChanged: (String id, Map<String, Object?> settings) {
       if (settings.isEmpty) return;
-      unawaited(_controller.value?.setRoomSettings(id, settings));
+      final AgentsRoom? room = _rooms.byId(id);
+      if (room != null) unawaited(_roomFrames.setSettings(room, settings));
     },
     onAddMember: _addRoomMember,
     onRemoveMember: (String id, String agentId) {
@@ -1556,33 +1668,42 @@ mixin AgentsShellHost on State<MessengerShell> {
   );
 
   void _addRoomMember(String roomId, AgentsRoomMember member) {
-    _rooms.addMemberToRoom(roomId, member);
-    unawaited(
-      _controller.value?.addRoomMember(roomId, member.agentId, member.handle),
-    );
+    final AgentsRoomMember placed = _placedMember(member);
+    _rooms.addMemberToRoom(roomId, placed);
+    final AgentsRoom? room = _rooms.byId(roomId);
+    if (room != null) unawaited(_roomFrames.addMember(room, placed));
   }
 
   /// Returns true when the group fell below two members and was deleted.
   bool _removeRoomMember(String roomId, String agentId) {
+    final AgentsRoom? before = _rooms.byId(roomId);
     final roomDeleted = _rooms.removeMemberFromRoom(roomId, agentId);
+    if (before == null) return roomDeleted;
     // Keep the host consistent: a group that fell below two members was
     // deleted locally, so the host must delete it, not just drop a member.
     if (roomDeleted) {
-      _hostDeleteRoom(roomId);
+      _hostDeleteRoom(roomId, _roomFrames.homeOf(before));
     } else {
-      unawaited(_controller.value?.removeRoomMember(roomId, agentId));
+      unawaited(_roomFrames.removeMember(before, agentId));
     }
     return roomDeleted;
   }
 
   void _setRoomAgentToAgent(String roomId, bool enabled) {
     _rooms.setAgentToAgent(roomId, enabled);
-    unawaited(_controller.value?.setRoomAgentToAgent(roomId, enabled));
+    final AgentsRoom? room = _rooms.byId(roomId);
+    if (room == null) return;
+    unawaited(
+      _roomFrames.controllerOf(room)?.setRoomAgentToAgent(roomId, enabled),
+    );
   }
 
   /// A room's conversation, for the phone route and the desktop centre pane.
   Widget _buildRoomBody(AgentsRoom room) {
-    final controller = _controller.value;
+    // The group's home host (CHAT-177 phase 2), not always the one on screen.
+    final controller = _roomFrames.controllerOf(room);
+    AgentsRelayController? live() =>
+        _roomFrames.controllerOf(_rooms.byId(room.id) ?? room);
     // With a live socket the room streams over it (RoomThreadPage keeps only
     // its own room's frames); without one — the thread view has not built the
     // transport yet — it shows an honest waiting state. Driving a room is
@@ -1607,16 +1728,16 @@ mixin AgentsShellHost on State<MessengerShell> {
       agents: _roster.agents,
       emptyHint: _l10n.agentsRoomEmptyHint,
       inbound: controller.inbound,
-      // Re-bind to the new socket on a reconnect: the page follows
-      // _controller, re-subscribes to the fresh inbound and re-runs onReady
-      // (re-create + re-request history) automatically.
-      rebind: _controller,
+      // Re-bind to the new socket on a reconnect: the page follows the home
+      // host's controller, re-subscribes to the fresh inbound and re-runs
+      // onReady (re-create + re-request history) automatically.
+      rebind: _roomControllerListenable(room),
       // Read the live controller each time, not the one captured at open, so
       // a send after a reconnect goes to the new socket.
-      onSend: (message) => _controller.value?.sendRoomTask(room.id, message),
-      onStop: () => unawaited(_controller.value?.stopRoom(room.id)),
+      onSend: (message) => live()?.sendRoomTask(room.id, message),
+      onStop: () => unawaited(live()?.stopRoom(room.id)),
       onReady: () {
-        final c = _controller.value;
+        final c = live();
         if (c != null) _onRoomOpened(c, room);
       },
     );
@@ -1629,19 +1750,13 @@ mixin AgentsShellHost on State<MessengerShell> {
   void _onRoomOpened(AgentsRelayController controller, AgentsRoom room) {
     // The newest local copy, not the one captured when the page opened.
     final AgentsRoom current = _rooms.byId(room.id) ?? room;
-    controller.createRoom(
-      current.id,
-      current.name,
-      <Map<String, String>>[
-        for (final m in current.members)
-          <String, String>{'agent_id': m.agentId, 'handle': m.handle},
-      ],
-      agentToAgent: current.agentToAgent,
+    _roomFrames.create(
+      current,
       // A group the host listed keeps the host's settings; one it has not
       // seen yet (made while it was away) brings its own.
       settings: _hostKnownRooms.contains(current.id)
           ? const <String, Object?>{}
-          : current.settingsWire(),
+          : null,
     );
     controller.requestRoomHistory(current.id);
   }
@@ -1663,32 +1778,23 @@ mixin AgentsShellHost on State<MessengerShell> {
         builder: (sheetContext) => RoomMembersSheet(
           room: room,
           candidates: candidates,
+          blockedReason: (AgentsAgent candidate) =>
+              _roomBlockedReason(candidate, _roomChosen(room)),
           onAdd: (member) {
-            _rooms.addMemberToRoom(roomId, member);
-            _controller.value?.addRoomMember(
-              roomId,
-              member.agentId,
-              member.handle,
-            );
+            _addRoomMember(roomId, member);
             Navigator.of(sheetContext).pop();
             showSheet(ctx); // reopen with the updated room
           },
           onAgentToAgentChanged: (enabled) {
-            _rooms.setAgentToAgent(roomId, enabled);
-            _controller.value?.setRoomAgentToAgent(roomId, enabled);
+            _setRoomAgentToAgent(roomId, enabled);
             Navigator.of(sheetContext).pop();
             showSheet(ctx); // reopen with the updated room
           },
           onRemove: (agentId) {
-            final roomDeleted = _rooms.removeMemberFromRoom(roomId, agentId);
-            // Keep the host consistent: if the room fell below two members it was
-            // deleted locally, so the host must delete it, not just drop a
-            // member (which would strand a one-member room there).
-            if (roomDeleted) {
-              _hostDeleteRoom(roomId);
-            } else {
-              _controller.value?.removeRoomMember(roomId, agentId);
-            }
+            // Keep the host consistent: if the room fell below two members it
+            // was deleted locally, so the host must delete it, not just drop
+            // a member (which would strand a one-member room there).
+            final roomDeleted = _removeRoomMember(roomId, agentId);
             Navigator.of(sheetContext).pop();
             // If the room survived, reopen the sheet; if it was deleted, stop.
             if (!roomDeleted) showSheet(ctx);
@@ -1706,34 +1812,43 @@ mixin AgentsShellHost on State<MessengerShell> {
     // in [_applyHostRooms]).
     unawaited(controller.requestRoomList());
     // A transport arrived: flush any room deletes made while it was down.
-    if (_pendingHostDeletes.isNotEmpty) {
-      final pending = List<String>.of(_pendingHostDeletes);
-      _pendingHostDeletes.clear();
-      for (final roomId in pending) {
-        controller.deleteRoom(roomId);
-      }
+    _flushPendingHostDeletes();
+  }
+
+  /// Sends the room deletes whose home host is up again.
+  void _flushPendingHostDeletes() {
+    if (_pendingHostDeletes.isEmpty) return;
+    for (final MapEntry<String, String?> e in Map<String, String?>.of(
+      _pendingHostDeletes,
+    ).entries) {
+      final AgentsRelayController? controller = _controllerForHost(e.value);
+      if (controller == null) continue;
+      _pendingHostDeletes.remove(e.key);
+      unawaited(controller.deleteRoom(e.key));
     }
   }
 
-  /// Delete a room on the host, or queue it if the socket is down so it is not
-  /// silently dropped and left as an orphan on the host.
-  void _hostDeleteRoom(String roomId) {
-    final controller = _controller.value;
+  /// Delete a room on its home host [homeHostId], or queue it if that socket
+  /// is down so it is not silently dropped and left as an orphan on the host.
+  void _hostDeleteRoom(String roomId, [String? homeHostId]) {
+    final controller = _controllerForHost(homeHostId);
     if (controller != null) {
       controller.deleteRoom(roomId);
     } else {
-      _pendingHostDeletes.add(roomId);
+      _pendingHostDeletes[roomId] = homeHostId;
     }
   }
 
   void _deleteRoom(String roomId) {
+    final AgentsRoom? room = _rooms.byId(roomId);
     _rooms.removeRoom(roomId);
-    _hostDeleteRoom(roomId);
+    _hostDeleteRoom(roomId, room == null ? null : _roomFrames.homeOf(room));
   }
 
   void _renameRoom(String roomId, String name) {
     _rooms.renameRoom(roomId, name);
-    _controller.value?.renameRoom(roomId, name);
+    final AgentsRoom? room = _rooms.byId(roomId);
+    if (room != null) _roomFrames.controllerOf(room)?.renameRoom(roomId, name);
   }
 
   void _deleteAgent(String agentId, {bool fromHost = false}) {
@@ -1756,18 +1871,19 @@ mixin AgentsShellHost on State<MessengerShell> {
       unawaited(_readMarks.forget(thread.key));
     }
     // The rooms the agent was in, captured before the cascade rewrites them.
-    final wasIn = <String>[
+    final wasIn = <AgentsRoom>[
       for (final room in _rooms.rooms)
-        if (room.members.any((m) => m.agentId == agentId)) room.id,
+        if (room.members.any((m) => m.agentId == agentId)) room,
     ];
     final deleted = _rooms.removeAgentFromRooms(agentId).toSet();
     // Keep the host consistent: a room that survived lost one member (sync the
     // removal); a room that fell below two members was deleted (sync that).
-    for (final roomId in wasIn) {
-      if (deleted.contains(roomId)) {
-        _hostDeleteRoom(roomId);
+    // Each goes to the room's home host.
+    for (final room in wasIn) {
+      if (deleted.contains(room.id)) {
+        _hostDeleteRoom(room.id, _roomFrames.homeOf(room));
       } else {
-        _controller.value?.removeRoomMember(roomId, agentId);
+        _roomFrames.removeMember(room, agentId);
       }
     }
     if (_selectedAgentId == agentId) {
@@ -1795,7 +1911,8 @@ mixin AgentsShellHost on State<MessengerShell> {
         ? _controller.value
         : _controllerForAgent(agent);
     if (controller is! AgentsRelayClient) return;
-    if (!AgentsRelayClient.hostCapabilities.value.contains(
+    // That computer's own capabilities (CHAT-177), not the screen's.
+    if (!controller.capabilities.value.contains(
       AgentsRelayClient.agentDeleteCapability,
     )) {
       return;
@@ -1863,4 +1980,39 @@ DateTime? newestMessageTime(List<ChatMessage>? messages) {
     if (at != null && (newest == null || at.isAfter(newest))) newest = at;
   }
   return newest;
+}
+
+/// The controller of one computer that may not be on screen, as a
+/// [ValueListenable] a group page re-binds to (CHAT-177 phase 2). It follows
+/// the shell's own controller (the computer on screen) and the link
+/// registry, so it is right after the user switches computers too.
+class _HostControllerListenable extends ChangeNotifier
+    implements ValueListenable<AgentsRelayController?> {
+  _HostControllerListenable(this.hostId, this._primary, this._lookup) {
+    _value = _lookup(hostId);
+    _primary.addListener(_update);
+    AgentsRelayLinks.instance.addListener(_update);
+  }
+
+  final String hostId;
+  final ValueListenable<AgentsRelayController?> _primary;
+  final AgentsRelayController? Function(String? hostId) _lookup;
+  AgentsRelayController? _value;
+
+  @override
+  AgentsRelayController? get value => _value;
+
+  void _update() {
+    final AgentsRelayController? next = _lookup(hostId);
+    if (identical(next, _value)) return;
+    _value = next;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _primary.removeListener(_update);
+    AgentsRelayLinks.instance.removeListener(_update);
+    super.dispose();
+  }
 }

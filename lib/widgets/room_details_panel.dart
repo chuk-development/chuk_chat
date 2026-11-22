@@ -19,6 +19,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
+import 'package:chuk_chat/widgets/agents_host_tag.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
@@ -36,7 +37,12 @@ class RoomDetailsPanel extends StatefulWidget {
     this.onAddMember,
     this.onRemoveMember,
     this.onAgentToAgentChanged,
+    this.blockedReason,
   });
+
+  /// Why an agent cannot join this group (CHAT-177 phase 2), or null. A
+  /// blocked agent is listed without the add action, with the reason.
+  final String? Function(AgentsRoom room, AgentsAgent candidate)? blockedReason;
 
   final RoomSource source;
   final String roomId;
@@ -192,6 +198,17 @@ class _RoomDetailsPanelState extends State<RoomDetailsPanel> {
     );
   }
 
+  /// [text] with the computer's label after it, while two or more
+  /// computers are paired (CHAT-177).
+  static String? _withComputer(String? text, String? hostId) {
+    final String? computer = hostId == null
+        ? null
+        : AgentsHostLabels.instance.labelFor(hostId);
+    if (computer == null) return text;
+    if (text == null || text.isEmpty) return computer;
+    return '$text · $computer';
+  }
+
   Widget _body(BuildContext context, AgentsRoom room) {
     final ThemeData theme = Theme.of(context);
     final AppLocalizations l = roomL10n(context);
@@ -240,7 +257,7 @@ class _RoomDetailsPanelState extends State<RoomDetailsPanel> {
                   size: 36,
                 ),
                 title: roomMemberName(widget.agents, m.agentId, m.handle),
-                subtitle: '@${m.handle}',
+                subtitle: _withComputer('@${m.handle}', m.hostId),
                 trailing: onRemove == null
                     ? null
                     : IconButton(
@@ -261,20 +278,36 @@ class _RoomDetailsPanelState extends State<RoomDetailsPanel> {
           ExpressiveGroup(
             children: <Widget>[
               for (final AgentsAgent a in candidates)
-                ExpressiveRow(
-                  key: ValueKey<String>('room-details-add-${a.id}'),
-                  leading: ExpressiveFace(id: a.id, label: a.name, size: 36),
-                  title: a.name,
-                  subtitle: a.role,
-                  onTap: () => onAdd(
-                    room.id,
-                    AgentsRoomMember(agentId: a.id, handle: a.name),
+                if (widget.blockedReason?.call(room, a)
+                    case final String blocked)
+                  ExpressiveRow(
+                    key: ValueKey<String>('room-details-add-${a.id}'),
+                    leading: Opacity(
+                      opacity: 0.5,
+                      child: ExpressiveFace(id: a.id, label: a.name, size: 36),
+                    ),
+                    title: a.name,
+                    subtitle: blocked,
+                  )
+                else
+                  ExpressiveRow(
+                    key: ValueKey<String>('room-details-add-${a.id}'),
+                    leading: ExpressiveFace(id: a.id, label: a.name, size: 36),
+                    title: a.name,
+                    subtitle: _withComputer(a.role, a.hostId),
+                    onTap: () => onAdd(
+                      room.id,
+                      AgentsRoomMember(
+                        agentId: a.id,
+                        handle: a.name,
+                        hostId: a.hostId,
+                      ),
+                    ),
+                    trailing: AppIcon(
+                      Icons.add_circle_outline,
+                      color: theme.colorScheme.primary,
+                    ),
                   ),
-                  trailing: AppIcon(
-                    Icons.add_circle_outline,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
             ],
           ),
         ],

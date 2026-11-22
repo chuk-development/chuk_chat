@@ -14,19 +14,29 @@ import 'package:flutter/foundation.dart';
 /// mentioned by.
 @immutable
 class AgentsRoomMember {
-  const AgentsRoomMember({required this.agentId, required this.handle});
+  const AgentsRoomMember({
+    required this.agentId,
+    required this.handle,
+    this.hostId,
+  });
 
   final String agentId;
   final String handle;
+
+  /// The computer the agent lives on (its relay device id, CHAT-177 phase
+  /// 2). Null: the group's home computer. A member on another computer than
+  /// the home one goes to the host with `host_id`.
+  final String? hostId;
 
   @override
   bool operator ==(Object other) =>
       other is AgentsRoomMember &&
       other.agentId == agentId &&
-      other.handle == handle;
+      other.handle == handle &&
+      other.hostId == hostId;
 
   @override
-  int get hashCode => Object.hash(agentId, handle);
+  int get hashCode => Object.hash(agentId, handle, hostId);
 }
 
 /// Who answers a user message in a group (`responder`, WIRE_CONTRACT).
@@ -77,11 +87,18 @@ class AgentsRoom {
     this.fallbackAgentId,
     this.bulletin = '',
     this.workdir = '',
+    this.homeHostId,
   });
 
   final String id;
   final String name;
   final List<AgentsRoomMember> members;
+
+  /// The computer the group lives on (CHAT-177 phase 2): the host that got
+  /// its `room_create`, or the one that listed it. It keeps the transcript
+  /// and the routing, so every frame of the group goes to it. Null: a group
+  /// from before, on the computer on screen.
+  final String? homeHostId;
 
   /// Whether the agents may pull each other in by writing `@handle`
   /// (`agent_to_agent`, WIRE_CONTRACT). True is what a room has always done, so
@@ -139,6 +156,7 @@ class AgentsRoom {
     bool clearFallback = false,
     String? bulletin,
     String? workdir,
+    String? homeHostId,
   }) => AgentsRoom(
     id: id,
     name: name ?? this.name,
@@ -151,6 +169,7 @@ class AgentsRoom {
         : (fallbackAgentId ?? this.fallbackAgentId),
     bulletin: bulletin ?? this.bulletin,
     workdir: workdir ?? this.workdir,
+    homeHostId: homeHostId ?? this.homeHostId,
   );
 
   /// The local copy (the app keeps its groups across restarts). The keys are
@@ -160,10 +179,16 @@ class AgentsRoom {
     'name': name,
     'members': <Map<String, String>>[
       for (final m in members)
-        <String, String>{'agent_id': m.agentId, 'handle': m.handle},
+        <String, String>{
+          'agent_id': m.agentId,
+          'handle': m.handle,
+          'host_id': ?m.hostId,
+        },
     ],
     'agent_to_agent': agentToAgent,
     ...settingsWire(),
+    // App-only: the host knows itself.
+    'home_host_id': ?homeHostId,
   };
 
   /// Reads [toJson]'s shape, which is also the shape of one `room_list`
@@ -185,7 +210,14 @@ class AgentsRoom {
       final handle = m['handle'];
       if (agentId is! String || agentId.isEmpty || handle is! String) continue;
       if (!seen.add(agentId)) continue;
-      members.add(AgentsRoomMember(agentId: agentId, handle: handle));
+      final hostId = m['host_id'];
+      members.add(
+        AgentsRoomMember(
+          agentId: agentId,
+          handle: handle,
+          hostId: hostId is String && hostId.isNotEmpty ? hostId : null,
+        ),
+      );
     }
     if (members.length < 2) return null;
     String? optionalId(Object? v) => v is String && v.isNotEmpty ? v : null;
@@ -201,6 +233,7 @@ class AgentsRoom {
       fallbackAgentId: optionalId(raw['fallback_agent_id']),
       bulletin: bulletin is String ? bulletin : '',
       workdir: workdir is String ? workdir : '',
+      homeHostId: optionalId(raw['home_host_id']),
     );
   }
 }
@@ -218,10 +251,30 @@ class AgentsRoomDraft {
     this.fallbackAgentId,
     this.bulletin = '',
     this.workdir = '',
+    this.homeHostId,
   });
 
   final String name;
   final List<AgentsRoomMember> members;
+
+  /// See [AgentsRoom.homeHostId]. The shell picks it; the form leaves it null.
+  final String? homeHostId;
+
+  /// This draft with [members] and [homeHostId] set by the shell.
+  AgentsRoomDraft placed({
+    required List<AgentsRoomMember> members,
+    required String? homeHostId,
+  }) => AgentsRoomDraft(
+    name: name,
+    members: members,
+    agentToAgent: agentToAgent,
+    responder: responder,
+    leadAgentId: leadAgentId,
+    fallbackAgentId: fallbackAgentId,
+    bulletin: bulletin,
+    workdir: workdir,
+    homeHostId: homeHostId,
+  );
 
   /// The policy the form chose; see [AgentsRoom.agentToAgent]. Defaults to the
   /// behaviour a room has always had, so a caller that knows nothing about the
@@ -390,10 +443,8 @@ enum AgentsRoomStop {
     AgentsRoomStop.stopped => 'Stopped',
     AgentsRoomStop.turnFailed => 'An agent\'s turn failed',
     AgentsRoomStop.noSuchRoom => 'This group is not on your computer yet',
-    AgentsRoomStop.agentToAgentOff =>
-      'Agents do not reply to each other here',
-    AgentsRoomStop.noAddressee =>
-      'Nobody was mentioned. Write @name or @all.',
+    AgentsRoomStop.agentToAgentOff => 'Agents do not reply to each other here',
+    AgentsRoomStop.noAddressee => 'Nobody was mentioned. Write @name or @all.',
     AgentsRoomStop.leadDone => 'Everyone has weighed in',
   };
 }
