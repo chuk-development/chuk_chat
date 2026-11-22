@@ -57,6 +57,7 @@ import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/agents/agents_derived_threads.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_thread_modes.dart';
+import 'package:chuk_chat/widgets/agents_host_tag.dart';
 import 'package:chuk_chat/widgets/agents_wait_label.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
@@ -1325,6 +1326,9 @@ class MobileAgentRow extends StatelessWidget {
                                 color: scheme.onSurfaceVariant,
                               ),
                             ],
+                            // The agent's computer (CHAT-177), only while
+                            // more than one is paired.
+                            AgentsHostTag(hostId: agent.hostId, leadingGap: 6),
                             if (waitKind != null) ...<Widget>[
                               const SizedBox(width: 8),
                               AgentsWaitPill(kind: waitKind!),

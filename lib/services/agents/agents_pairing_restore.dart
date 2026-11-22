@@ -88,6 +88,8 @@ class AgentsPairingRestore {
     Future<void> Function(Duration delay)? sleep,
     List<Duration> backoff = kDefaultBackoff,
     Duration heartbeat = const Duration(seconds: 1),
+    Duration cloudMergeEvery = const Duration(minutes: 2),
+    DateTime Function()? now,
   }) : _store = store,
        _sessionSource = sessionSource,
        _onRestored = onRestored,
@@ -96,7 +98,9 @@ class AgentsPairingRestore {
        _loadEncryptionKey = loadEncryptionKey ?? _defaultLoadKey,
        _sleep = sleep,
        _backoff = backoff,
-       _heartbeat = heartbeat;
+       _heartbeat = heartbeat,
+       _cloudMergeEvery = cloudMergeEvery,
+       _now = now ?? DateTime.now;
 
   /// Fast at first — the two blockers that resolve in the first seconds of a
   /// cold start are the session load and the key unlock — then patient.
@@ -120,6 +124,13 @@ class AgentsPairingRestore {
   final List<Duration> _backoff;
   final Duration _heartbeat;
 
+  /// How often a paired device reads the mirror for computers another device
+  /// of the account added. A nudge (resume, sign-in) reads it at once.
+  final Duration _cloudMergeEvery;
+  final DateTime Function() _now;
+  DateTime? _lastMerge;
+  bool _mergeRequested = false;
+
   /// Why the last pass ended as it did. Starts at
   /// [AgentsPairingRestoreReason.checking]; the shell listens.
   ValueListenable<AgentsPairingRestoreReason> get reason => _reason;
@@ -133,7 +144,9 @@ class AgentsPairingRestore {
   bool _running = false;
   bool _disposed = false;
   bool _done = false;
-  String? _published;
+
+  /// Records already published this session, as `user:record` fingerprints.
+  final Set<String> _published = <String>{};
   Timer? _timer;
 
   /// How many passes the loop has made. Test-visible so a test can assert the
@@ -155,6 +168,7 @@ class AgentsPairingRestore {
   /// Nudges the supervisor to try again now instead of waiting out its sleep.
   /// Called when something that could unblock a restore just happened.
   void nudge() {
+    _mergeRequested = true;
     final wake = _wake;
     if (wake != null && !wake.isCompleted) wake.complete();
   }
@@ -206,40 +220,23 @@ class AgentsPairingRestore {
   /// One pass. Returns true when there is nothing left to do — either the
   /// device is paired now, or it already was.
   Future<bool> _attempt() async {
+    final List<AgentsStoredPairing> locals;
     try {
-      // A local pairing is not proof it was uploaded. Retry once the account
-      // key becomes available, and again after a route/pairing change.
-      final existing = await _store.loadPairing();
-      if (existing != null) {
-        final account = _sessionSource.current();
-        final address = AgentsCloudRelayAddress.tryParse(existing.hostUrl);
-        if (account != null &&
-            (address?.targetDeviceId == null ||
-                address?.targetDeviceId == 'cowork-host')) {
-          final cloud = await _store.loadPairingFromCloud();
-          if (cloud != null && _hasCloudRoute(cloud)) {
-            await _store.savePairing(cloud);
-            if (!_disposed) await _onRestored();
-          }
-          return _end(AgentsPairingRestoreReason.paired, settled: true);
-        }
-        if (account != null &&
-            AgentsCloudRelayAddress.tryParse(
-                  existing.hostUrl,
-                )?.targetDeviceId !=
-                null) {
-          final fingerprint =
-              '${account.userId}:${jsonEncode(existing.toJson())}';
-          if (_published != fingerprint &&
-              await _store.publishPairing(existing)) {
-            _published = fingerprint;
-          }
-        }
-        return _end(AgentsPairingRestoreReason.paired, settled: true);
-      }
+      locals = await _store.listPairings();
     } catch (_) {
       // A locked keystore is a "not yet", not a "never".
       return _end(AgentsPairingRestoreReason.localStoreFailed, settled: false);
+    }
+    if (locals.isNotEmpty) {
+      try {
+        await _syncPaired(locals);
+      } catch (error) {
+        // The local pairings stand; the sync tries again on the next pass.
+        if (kDebugMode) {
+          debugPrint('[agents-restore] sync failed: ${error.runtimeType}');
+        }
+      }
+      return _end(AgentsPairingRestoreReason.paired, settled: true);
     }
 
     // The mirror is keyed to the account and encrypted with the account's key.
@@ -260,15 +257,14 @@ class AgentsPairingRestore {
       }
     }
 
-    AgentsCloudPairingRead read;
+    AgentsCloudPairingsRead read;
     try {
-      read = await _store.readPairingFromCloud();
+      read = await _store.readPairingsFromCloud();
     } catch (_) {
       return _end(AgentsPairingRestoreReason.network, settled: false);
     }
-    final AgentsStoredPairing? restored = read.pairing;
     if (_disposed) return false;
-    if (restored == null) {
+    if (read.pairings.isEmpty) {
       return _end(switch (read.outcome) {
         AgentsCloudPairingOutcome.noSession =>
           AgentsPairingRestoreReason.noSession,
@@ -277,42 +273,103 @@ class AgentsPairingRestore {
         AgentsCloudPairingOutcome.network => AgentsPairingRestoreReason.network,
         AgentsCloudPairingOutcome.decryptFailed =>
           AgentsPairingRestoreReason.decryptFailed,
-        AgentsCloudPairingOutcome.noRecord ||
-        AgentsCloudPairingOutcome.found =>
+        AgentsCloudPairingOutcome.noRecord || AgentsCloudPairingOutcome.found =>
           AgentsPairingRestoreReason.noCloudRecord,
       }, settled: false);
     }
-    if (!_hasCloudRoute(restored)) {
+    final List<AgentsStoredPairing> routable = <AgentsStoredPairing>[
+      for (final AgentsStoredPairing p in read.pairings)
+        if (_hasCloudRoute(p)) p,
+    ];
+    if (routable.isEmpty) {
       return _end(AgentsPairingRestoreReason.noCloudRoute, settled: false);
     }
 
-    // The mirror was written by another device. Its address may be that
-    // device's own loopback, which is meaningless here — the relay plus the
-    // host's device id is what this machine can actually dial.
-    final normalised = AgentsStoredPairing(
-      hostUrl: AgentsCloudRelayAddress.forRestoredTrust(
-        restored.hostUrl,
-        restored.peerDeviceId,
-      ),
-      channelId: restored.channelId,
-      channelKey: restored.channelKey,
-      peerDeviceId: restored.peerDeviceId,
-      peerPublicKey: restored.peerPublicKey,
-    );
-
-    try {
-      await _store.savePairing(normalised);
-    } catch (_) {
-      // The record is in hand but could not be written. Reconnecting from it
-      // this session is still better than nothing, so fall through.
-      if (kDebugMode) {
-        debugPrint('[agents-restore] could not persist the restored pairing');
+    // Every computer of the account comes back, not only the first.
+    for (final AgentsStoredPairing restored in routable) {
+      try {
+        await _store.savePairing(_normalise(restored));
+      } catch (_) {
+        // The record is in hand but could not be written. The next pass
+        // tries again; the others still go in.
+        if (kDebugMode) {
+          debugPrint('[agents-restore] could not persist a restored pairing');
+        }
       }
     }
+    _lastMerge = _now();
     if (_disposed) return true;
     await _onRestored();
     return _end(AgentsPairingRestoreReason.paired, settled: true);
   }
+
+  /// The device is paired. Publishes what the mirror does not have yet,
+  /// replaces a local-only record with its cloud copy, and adds the
+  /// computers another device of this account paired since.
+  Future<void> _syncPaired(List<AgentsStoredPairing> locals) async {
+    final account = _sessionSource.current();
+    if (account == null) return;
+    // A local pairing is not proof it was uploaded. Retry once the account
+    // key becomes available, and again after a route/pairing change.
+    for (final AgentsStoredPairing local in locals) {
+      if (!_hasCloudRoute(local)) continue;
+      final fingerprint = '${account.userId}:${jsonEncode(local.toJson())}';
+      if (_published.contains(fingerprint)) continue;
+      if (await _store.publishPairing(local)) _published.add(fingerprint);
+    }
+    final bool localOnly = locals.any((p) => !_hasCloudRoute(p));
+    final DateTime now = _now();
+    final DateTime? last = _lastMerge;
+    final bool due =
+        _mergeRequested ||
+        localOnly ||
+        last == null ||
+        now.difference(last) >= _cloudMergeEvery;
+    if (!due) return;
+    _mergeRequested = false;
+    _lastMerge = now;
+    final List<AgentsStoredPairing> cloud = await _store
+        .loadPairingsFromCloud();
+    if (_disposed) return;
+    final Set<String> known = <String>{
+      for (final AgentsStoredPairing p in locals) p.hostId,
+    };
+    final Set<String> channels = <String>{
+      for (final AgentsStoredPairing p in locals) p.channelId,
+    };
+    var replacedLocal = false;
+    for (final AgentsStoredPairing remote in cloud) {
+      if (!_hasCloudRoute(remote)) continue;
+      final AgentsStoredPairing normalised = _normalise(remote);
+      if (known.contains(normalised.hostId)) continue;
+      // The same host as a local-only record: its cloud route replaces it
+      // (the store folds the two by channel).
+      if (channels.contains(normalised.channelId)) replacedLocal = true;
+      await _store.savePairing(normalised);
+    }
+    // A local-only record became dialable: the view reconnects from it. A
+    // computer added on another device needs no remount: the host links
+    // follow the store.
+    if (replacedLocal && !_disposed) await _onRestored();
+  }
+
+  /// The mirror was written by another device. Its address may be that
+  /// device's own loopback, which is meaningless here — the relay plus the
+  /// host's device id is what this machine can actually dial.
+  static AgentsStoredPairing _normalise(AgentsStoredPairing restored) =>
+      AgentsStoredPairing(
+        hostUrl: AgentsCloudRelayAddress.forRestoredTrust(
+          restored.hostUrl,
+          restored.peerDeviceId,
+        ),
+        channelId: restored.channelId,
+        channelKey: restored.channelKey,
+        peerDeviceId: restored.peerDeviceId,
+        peerPublicKey: restored.peerPublicKey,
+        displayName: restored.displayName,
+        kind: restored.kind,
+        legacyHostAgent: restored.legacyHostAgent,
+      );
 
   Future<void> _waitBeforeRetry() async {
     final index = (_attempts - 1).clamp(0, _backoff.length - 1);
@@ -338,9 +395,8 @@ class AgentsPairingRestore {
   static bool _defaultHasKey() => EncryptionService.hasKey;
 
   static bool _hasCloudRoute(AgentsStoredPairing trust) {
-    final target = AgentsCloudRelayAddress.tryParse(
-      trust.hostUrl,
-    )?.targetDeviceId;
+    final target = AgentsCloudRelayAddress.tryParse(trust.hostUrl)
+        ?.targetDeviceId;
     return target != null && target.isNotEmpty && target != 'cowork-host';
   }
 

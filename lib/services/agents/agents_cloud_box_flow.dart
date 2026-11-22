@@ -78,6 +78,7 @@ class AgentsCloudBoxFlow extends ChangeNotifier {
     required AgentsInstallClaimWaiter claimWaiter,
     required AgentsInstallPairer pair,
     AgentsCloudBoxPlanGate? planIncludesBox,
+    bool Function()? hasComputer,
     this.slowAfter = const Duration(minutes: 2),
     this.maxTokens = 3,
     this.minGap = const Duration(seconds: 10),
@@ -89,10 +90,19 @@ class AgentsCloudBoxFlow extends ChangeNotifier {
        _claimWaiter = claimWaiter,
        _pair = pair,
        _planIncludesBox = planIncludesBox ?? _unknownPlan,
+       _hasComputer = hasComputer ?? _noComputer,
        _now = now ?? DateTime.now,
        _random = random;
 
   static bool? _unknownPlan() => null;
+  static bool _noComputer() => false;
+
+  /// Whether a computer is paired already (CHAT-177). The box is then ADDED
+  /// next to it: the flow only books a new box, or goes on with a setup this
+  /// device began (its pending token). A box that exists and that this
+  /// device did not set up is either one of the paired computers or comes
+  /// back with the restore, so the flow leaves it alone.
+  final bool Function() _hasComputer;
 
   final AgentsCloudBoxApi _api;
   final AgentsInstallTicketStore _store;
@@ -250,6 +260,19 @@ class AgentsCloudBoxFlow extends ChangeNotifier {
       _hiddenForPlan = true;
       _set(AgentsCloudBoxPhase.hidden);
       return;
+    }
+    if (_hasComputer() && current.state != AgentsCloudBoxState.none) {
+      AgentsInstallTicket? pending;
+      try {
+        pending = await _store.loadFor(userId: userId, now: _now());
+      } catch (_) {
+        pending = null;
+      }
+      if (_stale(generation)) return;
+      if (pending == null) {
+        _set(AgentsCloudBoxPhase.hidden);
+        return;
+      }
     }
 
     for (var attempt = 0; attempt < maxTokens; attempt++) {

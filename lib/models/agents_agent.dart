@@ -62,9 +62,17 @@ class AgentsAgent {
     this.knownToHost = false,
     this.running = false,
     this.lastActivity,
+    this.hostId,
   });
 
   final String id;
+
+  /// The computer this agent lives on (CHAT-177): the host id of its pairing
+  /// (`AgentsStoredPairing.hostId`). Null for an agent from before several
+  /// computers existed; the shell stamps such agents with the one paired
+  /// computer. A chat belongs to its agent, so this is also the computer of
+  /// every thread of the agent.
+  final String? hostId;
   final String name;
 
   /// An optional short role the user gave the agent — "researcher",
@@ -127,6 +135,7 @@ class AgentsAgent {
     bool? running,
     DateTime? lastActivity,
     List<AgentsThreadInfo>? threads,
+    String? hostId,
   }) => AgentsAgent(
     id: id,
     name: name ?? this.name,
@@ -139,5 +148,6 @@ class AgentsAgent {
     running: running ?? this.running,
     lastActivity: lastActivity ?? this.lastActivity,
     threads: threads ?? this.threads,
+    hostId: hostId ?? this.hostId,
   );
 }

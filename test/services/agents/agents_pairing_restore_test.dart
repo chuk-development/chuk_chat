@@ -44,18 +44,50 @@ class _FakeMirror extends SupabasePairingSync {
   AgentsCloudPairingOutcome missing = AgentsCloudPairingOutcome.keyLocked;
 
   @override
-  Future<AgentsCloudPairingRead> readEncryptedPairing() async {
+  Future<AgentsCloudPairingsRead> readEncryptedPairings() async {
     reads++;
     return available
-        ? AgentsCloudPairingRead(AgentsCloudPairingOutcome.found, record)
-        : AgentsCloudPairingRead(missing);
+        ? AgentsCloudPairingsRead(
+            AgentsCloudPairingOutcome.found,
+            <AgentsStoredPairing>[record],
+          )
+        : AgentsCloudPairingsRead(missing);
   }
 
   @override
   Future<void> saveEncryptedPairing(AgentsStoredPairing pairing) async {}
 
   @override
-  Future<void> clearEncryptedPairing() async {}
+  Future<void> clearEncryptedPairing({String? hostId}) async {}
+}
+
+/// The mirror of an account with several computers (CHAT-177).
+class _MultiMirror extends SupabasePairingSync {
+  _MultiMirror(this.records);
+
+  final List<AgentsStoredPairing> records;
+  int reads = 0;
+
+  @override
+  Future<AgentsCloudPairingsRead> readEncryptedPairings() async {
+    reads++;
+    return records.isEmpty
+        ? const AgentsCloudPairingsRead(AgentsCloudPairingOutcome.noRecord)
+        : AgentsCloudPairingsRead(
+            AgentsCloudPairingOutcome.found,
+            List<AgentsStoredPairing>.of(records),
+          );
+  }
+
+  @override
+  Future<bool> publishEncryptedPairing(AgentsStoredPairing pairing) async =>
+      true;
+
+  @override
+  Future<void> saveEncryptedPairing(AgentsStoredPairing pairing) async {}
+
+  @override
+  Future<void> clearEncryptedPairing({String? hostId}) async {}
 }
 
 class _Session implements AccountSessionSource {
@@ -157,68 +189,65 @@ void main() {
     },
   );
 
-  test(
-    'keeps trying while the session and the key are still missing, then restores',
-    () async {
-      final mirror = _FakeMirror(record);
-      final session = _Session();
-      final store = AgentsPairingStore(
-        backend: _MemoryStore(),
-        cloudSync: mirror,
-      );
+  test('keeps trying while the session and the key are still missing, then restores', () async {
+    final mirror = _FakeMirror(record);
+    final session = _Session();
+    final store = AgentsPairingStore(
+      backend: _MemoryStore(),
+      cloudSync: mirror,
+    );
 
-      var hasKey = false;
-      var keyLoads = 0;
-      var restored = 0;
+    var hasKey = false;
+    var keyLoads = 0;
+    var restored = 0;
 
-      final supervisor = AgentsPairingRestore(
-        store: store,
-        sessionSource: session,
-        onRestored: () async => restored++,
-        authChanges: const Stream<Never>.empty(),
-        hasEncryptionKey: () => hasKey,
-        loadEncryptionKey: () async {
-          keyLoads++;
-          return hasKey;
-        },
-        sleep: noSleep,
-      )..start();
-      addTearDown(supervisor.dispose);
+    final supervisor = AgentsPairingRestore(
+      store: store,
+      sessionSource: session,
+      onRestored: () async => restored++,
+      authChanges: const Stream<Never>.empty(),
+      hasEncryptionKey: () => hasKey,
+      loadEncryptionKey: () async {
+        keyLoads++;
+        return hasKey;
+      },
+      sleep: noSleep,
+    )..start();
+    addTearDown(supervisor.dispose);
 
-      // No session yet: the old one-shot restore gave up here, for good.
-      await until(
-        () => supervisor.attempts > 3,
-        reason: 'retries with no session',
-      );
-      expect(supervisor.isSettled, isFalse);
-      expect(mirror.reads, 0, reason: 'nothing to read without an account');
+    // No session yet: the old one-shot restore gave up here, for good.
+    await until(
+      () => supervisor.attempts > 3,
+      reason: 'retries with no session',
+    );
+    expect(supervisor.isSettled, isFalse);
+    expect(mirror.reads, 0, reason: 'nothing to read without an account');
 
-      // Signed in, but the key is not unlocked: still a "not yet".
-      session.session = const AccountSession(
-        accessToken: 'jwt',
-        refreshToken: 'refresh',
-        userId: 'user-1',
-      );
-      await until(() => keyLoads > 0, reason: 'tries to unlock the key');
-      expect(supervisor.isSettled, isFalse);
-      expect(mirror.reads, 0);
+    // Signed in, but the key is not unlocked: still a "not yet".
+    session.session = const AccountSession(
+      accessToken: 'jwt',
+      refreshToken: 'refresh',
+      userId: 'user-1',
+    );
+    await until(() => keyLoads > 0, reason: 'tries to unlock the key');
+    expect(supervisor.isSettled, isFalse);
+    expect(mirror.reads, 0);
 
-      // Key unlocked, mirror answers: the device links itself.
-      hasKey = true;
-      mirror.available = true;
-      await until(() => supervisor.isSettled, reason: 'restores once it can');
+    // Key unlocked, mirror answers: the device links itself.
+    hasKey = true;
+    mirror.available = true;
+    await until(() => supervisor.isSettled, reason: 'restores once it can');
 
-      expect(restored, 1);
-      final saved = await store.loadPairing();
-      expect(saved, isNotNull);
-      expect(saved!.peerDeviceId, 'host-device-uuid');
-      // The loopback the other machine wrote is not what this device dials.
-      expect(
-        saved.hostUrl,
-        Uri.parse('wss://api.chuk.chat/v2/relay/ws?cw_device=host-device-uuid'),
-      );
-    },
-  );
+    expect(restored, 1);
+    final saved = await store.loadPairing();
+    expect(saved, isNotNull);
+    expect(saved!.peerDeviceId, 'host-device-uuid');
+    // The loopback the other machine wrote is not what this device dials.
+    expect(
+      saved.hostUrl,
+      Uri.parse('wss://api.chuk.chat/v2/relay/ws?cw_device=host-device-uuid'),
+    );
+  });
 
   test(
     'an auth event wakes the supervisor instead of waiting out a sleep',
@@ -324,20 +353,19 @@ void main() {
       expect(mirror.reads, 0, reason: 'no read without the key');
     });
 
-    final Map<AgentsCloudPairingOutcome, AgentsPairingRestoreReason> mapped =
-        <AgentsCloudPairingOutcome, AgentsPairingRestoreReason>{
-          AgentsCloudPairingOutcome.noRecord:
-              AgentsPairingRestoreReason.noCloudRecord,
-          AgentsCloudPairingOutcome.network: AgentsPairingRestoreReason.network,
-          AgentsCloudPairingOutcome.decryptFailed:
-              AgentsPairingRestoreReason.decryptFailed,
-          AgentsCloudPairingOutcome.keyLocked:
-              AgentsPairingRestoreReason.keyLocked,
-          AgentsCloudPairingOutcome.noSession:
-              AgentsPairingRestoreReason.noSession,
-        };
+    final Map<AgentsCloudPairingOutcome, AgentsPairingRestoreReason>
+    mapped = <AgentsCloudPairingOutcome, AgentsPairingRestoreReason>{
+      AgentsCloudPairingOutcome.noRecord:
+          AgentsPairingRestoreReason.noCloudRecord,
+      AgentsCloudPairingOutcome.network: AgentsPairingRestoreReason.network,
+      AgentsCloudPairingOutcome.decryptFailed:
+          AgentsPairingRestoreReason.decryptFailed,
+      AgentsCloudPairingOutcome.keyLocked: AgentsPairingRestoreReason.keyLocked,
+      AgentsCloudPairingOutcome.noSession: AgentsPairingRestoreReason.noSession,
+    };
     for (final MapEntry<AgentsCloudPairingOutcome, AgentsPairingRestoreReason>
-        entry in mapped.entries) {
+        entry
+        in mapped.entries) {
       test('a mirror read of ${entry.key.name} reads as ${entry.value.name}, '
           'and the supervisor keeps trying', () async {
         final mirror = _FakeMirror(record)..missing = entry.key;
@@ -407,6 +435,125 @@ void main() {
         AgentsPairingRestoreReason.localStoreFailed,
       );
       expect(supervisor.reason.value.mayStillRestore, isTrue);
+    });
+  });
+  group('several computers (CHAT-177)', () {
+    late AgentsStoredPairing box;
+
+    setUpAll(() async {
+      final hostKey = await AgentsDeviceKeys.generate();
+      box = AgentsStoredPairing(
+        hostUrl: Uri.parse(
+          'wss://api.chuk.chat/v2/relay/ws?cw_device=cloud-box-uuid',
+        ),
+        channelId: 'chan-box',
+        channelKey: Uint8List.fromList(List<int>.filled(32, 7)),
+        peerDeviceId: 'cowork-host',
+        peerPublicKey: await hostKey.extractPublicKey(),
+        kind: AgentsHostKind.cloud,
+      );
+    });
+
+    _Session signedIn() => _Session()
+      ..session = const AccountSession(
+        accessToken: 'jwt',
+        refreshToken: 'refresh',
+        userId: 'user-1',
+      );
+
+    test('a fresh device restores every computer of the account', () async {
+      final mirror = _MultiMirror(<AgentsStoredPairing>[record, box]);
+      final store = AgentsPairingStore(
+        backend: _MemoryStore(),
+        cloudSync: mirror,
+      );
+      var restored = 0;
+      final supervisor = AgentsPairingRestore(
+        store: store,
+        sessionSource: signedIn(),
+        onRestored: () async => restored++,
+        authChanges: const Stream<Never>.empty(),
+        hasEncryptionKey: () => true,
+        sleep: noSleep,
+      )..start();
+      addTearDown(supervisor.dispose);
+
+      await until(() => supervisor.isSettled, reason: 'restore settles');
+
+      final List<AgentsStoredPairing> list = await store.listPairings();
+      expect(
+        list.map((AgentsStoredPairing p) => p.hostId),
+        unorderedEquals(<String>['host-device-uuid', 'cloud-box-uuid']),
+      );
+      expect(
+        (await store.loadPairing(hostId: 'cloud-box-uuid'))!.kind,
+        AgentsHostKind.cloud,
+      );
+      expect(restored, 1);
+      expect(supervisor.reason.value, AgentsPairingRestoreReason.paired);
+    });
+
+    test(
+      'a paired device picks up a computer another device added, no remount',
+      () async {
+        final mirror = _MultiMirror(<AgentsStoredPairing>[record]);
+        final store = AgentsPairingStore(
+          backend: _MemoryStore(),
+          cloudSync: mirror,
+        );
+        await store.savePairing(record);
+        var restored = 0;
+        final supervisor = AgentsPairingRestore(
+          store: store,
+          sessionSource: signedIn(),
+          onRestored: () async => restored++,
+          authChanges: const Stream<Never>.empty(),
+          hasEncryptionKey: () => true,
+          sleep: noSleep,
+          cloudMergeEvery: Duration.zero,
+        )..start();
+        addTearDown(supervisor.dispose);
+        await until(() => mirror.reads >= 1, reason: 'first merge');
+
+        // The cloud box was paired on the phone.
+        mirror.records.add(box);
+        final int seen = mirror.reads;
+        await until(() => mirror.reads > seen + 1, reason: 'next merge');
+
+        final List<AgentsStoredPairing> list = await store.listPairings();
+        expect(list.map((AgentsStoredPairing p) => p.hostId), <String>[
+          'host-device-uuid',
+          'cloud-box-uuid',
+        ]);
+        // The view stays on its computer; the box gets a secondary link.
+        expect(restored, 0);
+      },
+    );
+
+    test('a paired device reads the mirror only every so often', () async {
+      final mirror = _MultiMirror(<AgentsStoredPairing>[record]);
+      final store = AgentsPairingStore(
+        backend: _MemoryStore(),
+        cloudSync: mirror,
+      );
+      await store.savePairing(record);
+      final supervisor = AgentsPairingRestore(
+        store: store,
+        sessionSource: signedIn(),
+        onRestored: () async {},
+        authChanges: const Stream<Never>.empty(),
+        hasEncryptionKey: () => true,
+        sleep: noSleep,
+      )..start();
+      addTearDown(supervisor.dispose);
+
+      final int attempts = supervisor.attempts;
+      await until(() => supervisor.attempts > attempts + 5);
+      expect(mirror.reads, 1);
+
+      // A nudge (resume, sign-in) reads it at once.
+      supervisor.nudge();
+      await until(() => mirror.reads == 2, reason: 'nudge merges');
     });
   });
 }

@@ -170,6 +170,7 @@ import 'package:chuk_chat/services/agents/agents_pairing_restore.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_factory.dart';
+import 'package:chuk_chat/services/agents/agents_host_links.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_shell_status.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
@@ -195,6 +196,8 @@ import 'package:chuk_chat/widgets/agents_cloud_box_billing_sheets.dart'
     show showCloudBoxBookSheet;
 import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
+import 'package:chuk_chat/widgets/agents_host_picker.dart';
+import 'package:chuk_chat/widgets/agents_host_tag.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
 import 'package:chuk_chat/widgets/room_create_sheet.dart';
 import 'package:chuk_chat/widgets/room_details_panel.dart';
@@ -237,7 +240,13 @@ class MessengerShell extends StatefulWidget {
     this.homeBuilder,
     this.installClaimWaiter,
     this.cloudBoxApi,
+    this.multiHostLinks = true,
   });
+
+  /// Whether the shell keeps a socket up for every paired computer that is
+  /// not on screen (CHAT-177, [AgentsHostLinks]). A widget test that drives
+  /// one fake controller turns it off.
+  final bool multiHostLinks;
 
   /// Builds the relay transport controller. Injectable so widget tests supply
   /// a fake without a socket. Defaults to a real [AgentsRelayClient] with the
@@ -766,7 +775,10 @@ class _MessengerShellState extends State<MessengerShell>
     if (controller == null || !controller.state.value.isPaired) return;
     if (_roster.agents.isNotEmpty) return;
     _firstAgentCreated = true;
-    final AgentsAgent agent = _roster.addAgent(name: _firstAgentName());
+    final AgentsAgent agent = _roster.addAgent(
+      name: _firstAgentName(),
+      hostId: AgentsRelayLinks.instance.primaryHostId,
+    );
     unawaited(_createOnHost(agent, null, startAutomation: false));
   }
 

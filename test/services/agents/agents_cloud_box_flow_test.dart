@@ -100,11 +100,15 @@ void main() {
     included = true;
   });
 
-  AgentsCloudBoxFlow flow({String? userId = 'user-1'}) => AgentsCloudBoxFlow(
+  AgentsCloudBoxFlow flow({
+    String? userId = 'user-1',
+    bool hasComputer = false,
+  }) => AgentsCloudBoxFlow(
     api: api,
     store: store,
     sessionSource: _Session(userId),
     planIncludesBox: () => included,
+    hasComputer: () => hasComputer,
     now: () => clock,
     claimWaiter:
         (
@@ -432,6 +436,46 @@ void main() {
         }),
         isTrue,
       );
+    });
+  });
+
+  group('next to a paired computer (CHAT-177)', () {
+    test('a booked plan with no box yet adds one', () async {
+      final AgentsCloudBoxFlow f = flow(hasComputer: true);
+      unawaited(f.maybeStart());
+      await pumpEventQueue();
+
+      expect(f.phase, AgentsCloudBoxPhase.settingUp);
+      expect(api.tokens, hasLength(1));
+      waits.single.result.complete('box-device');
+      await pumpEventQueue();
+      expect(paired, hasLength(1));
+      expect(f.phase, AgentsCloudBoxPhase.linked);
+    });
+
+    test('a box this device did not set up is left alone', () async {
+      api.fetchAnswer = const AgentsCloudBoxStatus(
+        state: AgentsCloudBoxState.running,
+      );
+      final AgentsCloudBoxFlow f = flow(hasComputer: true);
+      await f.maybeStart();
+
+      expect(f.phase, AgentsCloudBoxPhase.hidden);
+      expect(api.tokens, isEmpty);
+      expect(waits, isEmpty);
+    });
+
+    test('a setup this device began goes on after a restart', () async {
+      await store.loadOrMint(userId: 'user-1', now: clock);
+      api.fetchAnswer = const AgentsCloudBoxStatus(
+        state: AgentsCloudBoxState.settingUp,
+      );
+      final AgentsCloudBoxFlow f = flow(hasComputer: true);
+      unawaited(f.maybeStart());
+      await pumpEventQueue();
+
+      expect(f.phase, AgentsCloudBoxPhase.settingUp);
+      expect(api.tokens, hasLength(1));
     });
   });
 }

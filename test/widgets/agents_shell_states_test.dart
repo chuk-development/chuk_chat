@@ -55,8 +55,8 @@ class _Mirror extends SupabasePairingSync {
   final AgentsCloudPairingOutcome outcome;
 
   @override
-  Future<AgentsCloudPairingRead> readEncryptedPairing() async =>
-      AgentsCloudPairingRead(outcome);
+  Future<AgentsCloudPairingsRead> readEncryptedPairings() async =>
+      AgentsCloudPairingsRead(outcome);
 
   @override
   Future<bool> publishEncryptedPairing(AgentsStoredPairing pairing) async =>
@@ -66,7 +66,7 @@ class _Mirror extends SupabasePairingSync {
   Future<void> saveEncryptedPairing(AgentsStoredPairing pairing) async {}
 
   @override
-  Future<void> clearEncryptedPairing() async {}
+  Future<void> clearEncryptedPairing({String? hostId}) async {}
 }
 
 class _Session implements AccountSessionSource {
@@ -103,8 +103,10 @@ class _EmptyHostRoster extends LocalAgentRosterSource {
     String peerDeviceId, {
     String? label,
     Set<String> replaceableLabels = const <String>{},
+    String? hostId,
+    String? agentId,
   }) => AgentsAgent(
-    id: 'host:$peerDeviceId',
+    id: agentId ?? 'host:$peerDeviceId',
     name: peerDeviceId,
     onHost: true,
     threads: const <AgentsThreadInfo>[],

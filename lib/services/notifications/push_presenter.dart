@@ -103,9 +103,18 @@ class PushPresenter {
       final LocalNotifications local =
           notifications ?? LocalNotifications.instance;
       if (!local.isInitialized) await local.initialize();
+      // The seal is keyed by channel, and every paired computer has its
+      // own (CHAT-177): each one is tried.
       final SealedPreview? opened = await _open(
         data,
-        loadPairing ?? () => AgentsPairingStore().loadPairing(),
+        loadPairing == null
+            ? () => AgentsPairingStore().listPairings()
+            : () async {
+                final AgentsStoredPairing? one = await loadPairing();
+                return one == null
+                    ? const <AgentsStoredPairing>[]
+                    : <AgentsStoredPairing>[one];
+              },
       );
       final PushToastText? text = textFor(
         data,
@@ -158,19 +167,22 @@ class PushPresenter {
 
   static Future<SealedPreview?> _open(
     Map<Object?, Object?> data,
-    PairingLoader loadPairing,
+    Future<List<AgentsStoredPairing>> Function() loadPairings,
   ) async {
     if (data['preview_sealed'] == null) return null;
     try {
-      final AgentsStoredPairing? pairing = await loadPairing().timeout(
+      final List<AgentsStoredPairing> pairings = await loadPairings().timeout(
         const Duration(seconds: 5),
       );
-      if (pairing == null) return null;
-      return await openPreviewFromPushData(
-        data,
-        channelId: pairing.channelId,
-        channelKey: pairing.channelKey,
-      );
+      for (final AgentsStoredPairing pairing in pairings) {
+        final SealedPreview? opened = await openPreviewFromPushData(
+          data,
+          channelId: pairing.channelId,
+          channelKey: pairing.channelKey,
+        );
+        if (opened != null) return opened;
+      }
+      return null;
     } catch (_) {
       // Secure storage can be locked in the background. Generic text then.
       return null;

@@ -5591,7 +5591,7 @@ No signature header and a secret on the row: `bad_signature`.
 ## Hosts that work together (CHAT-177, phase 2)
 
 IMPLEMENTED on the host 2026-11-22. Design: `docs/agents/MULTI_HOST.md`.
-Relay route: api_server `docs/COWORK_RELAY.md`, "Host to host frames".
+Relay route: the api_server repo, COWORK_RELAY.md in its docs folder, section "Host to host frames".
 Code: `agents/host/src/chuk_agents_host/peers_store.py`, `peer_channel.py`,
 `peer_rpc.py`, `peer_hub.py`, `shared_files.py`;
 `agents/runtime/src/chuk_agents_runtime/peer_tools.py`.

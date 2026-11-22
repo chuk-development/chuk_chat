@@ -39,7 +39,7 @@ class _RecordingMirror extends SupabasePairingSync {
   }
 
   @override
-  Future<void> clearEncryptedPairing() async {}
+  Future<void> clearEncryptedPairing({String? hostId}) async {}
 }
 
 class _Session implements AccountSessionSource {

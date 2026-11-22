@@ -24,22 +24,27 @@ The ciphertext value is the JSON envelope produced by `EncryptionService.encrypt
 
 ## Table
 
-One row per user. The user id is the primary key, so a re-pair overwrites the
-previous mirror (last-writer-wins).
+One row per user and paired computer (CHAT-177,
+`docs/agents/MULTI_HOST.md`). The primary key is `(user_id, host_id)`, so a
+re-pair of the same computer overwrites its row (last-writer-wins) and a
+second computer adds a row. Migration:
+`supabase/migrations/20261122000000_cowork_pairings_multi_host.sql`.
 
 ```sql
 create table if not exists public.cowork_pairings (
   user_id    uuid        not null
              references auth.users (id) on delete cascade,
+  host_id    text        not null default 'legacy',
   ciphertext text        not null,
   updated_at timestamptz not null default now(),
-  primary key (user_id)
+  primary key (user_id, host_id)
 );
 ```
 
 | column       | type          | notes                                                        |
 | ------------ | ------------- | ------------------------------------------------------------ |
-| `user_id`    | `uuid`        | PK. Owner; FK to `auth.users`. `on delete cascade`.          |
+| `user_id`    | `uuid`        | PK part. Owner; FK to `auth.users`. `on delete cascade`.     |
+| `host_id`    | `text`        | PK part. The host's relay device id (uuid4 in `cw_device`). `'legacy'` for a row from before CHAT-177; the app re-keys it after it decrypts it. |
 | `ciphertext` | `text`        | AES-256-GCM envelope JSON. Never plaintext.                  |
 | `updated_at` | `timestamptz` | Last write. Set by the client on every upsert.               |
 
@@ -84,18 +89,24 @@ Grants (Supabase's `authenticated` role; RLS still filters every statement):
 grant select, insert, update, delete on public.cowork_pairings to authenticated;
 ```
 
-The client upserts with `on_conflict = user_id`, so both the `insert` and
-`update` policies must be present for a re-pair to succeed.
+The client upserts with `on_conflict = user_id,host_id`, so both the `insert`
+and `update` policies must be present for a re-pair to succeed.
 
 ## Client access pattern
 
-- Save: `upsert({user_id, ciphertext, updated_at}, onConflict: user_id)` after a
-  successful pairing. Best-effort; failures are swallowed so offline pairing
-  still works.
-- Load: `select(ciphertext).eq(user_id, <uid>).maybeSingle()` on a fresh
-  install, then decrypt. Returns nothing usable unless the same user is signed
-  in and the encryption key is unlocked (password entered).
-- Clear: `delete().eq(user_id, <uid>)` on un-pair.
+- Save: `upsert({user_id, host_id, ciphertext, updated_at}, onConflict:
+  user_id,host_id)` after a successful pairing, a rename or a trust update.
+  Best-effort; failures are swallowed so offline pairing still works.
+- Load: `select(host_id, ciphertext).eq(user_id, <uid>)` (all rows), then
+  decrypt each. Returns nothing usable unless the same user is signed in and
+  the encryption key is unlocked (password entered). A `legacy` row is written
+  again under its real host id, then the legacy row is deleted.
+- Clear: `delete().eq(user_id, <uid>).eq(host_id, <id>)` on "Remove this
+  computer"; without `host_id` on a full un-pair.
+- An app from before CHAT-177 upserts on `user_id` alone and reads with
+  `maybeSingle()`. After the migration its upsert fails (no such unique key)
+  and its read fails with two or more rows. Both are best-effort paths, so it
+  keeps its local pairing but cannot mirror or restore.
 
 ## Security note (business risk)
 

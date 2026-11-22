@@ -79,29 +79,139 @@ mixin AgentsShellHost on State<MessengerShell> {
     ),
     sessionSource: widget.sessionSource,
     claimWaiter: widget.installClaimWaiter ?? _waitForInstallClaim,
-    pair: _pairWithInvite,
+    pair: _pairCloudBox,
     planIncludesBox: () =>
         agentsPlanIncludesCloudBox(UserStatusService.status.value),
+    // CHAT-177: the box is added next to a paired computer, not swapped in.
+    hasComputer: () => _hasComputer.value == true,
   );
 
-  /// Starts the cloud computer setup when there is no computer, and stops it
-  /// when one arrived some other way (a restore, the install page).
+  /// Starts the cloud computer setup once it is known whether a computer is
+  /// paired. Since CHAT-177 the box is ADDED next to a PC: the flow runs with
+  /// or without one, and only a cloud computer that is already paired stops
+  /// it.
   void _onHasComputerForCloudBox() {
-    switch (_hasComputer.value) {
-      case false:
-        unawaited(_cloudBox.maybeStart());
-      case true:
-        if (_cloudBox.phase != AgentsCloudBoxPhase.linked) _cloudBox.stop();
-      case null:
-        return;
-    }
+    if (_hasComputer.value == null) return;
+    if (_hasCloudHost) return;
+    unawaited(_cloudBox.maybeStart());
   }
 
   /// A new user status (after a payment the pricing page refreshes it) may
   /// now include a cloud computer.
   void _onUserStatusForCloudBox() {
-    if (_hasComputer.value == false) unawaited(_cloudBox.planChanged());
+    if (_hasComputer.value != null && !_hasCloudHost) {
+      unawaited(_cloudBox.planChanged());
+    }
   }
+
+  // ── computers (CHAT-177) ──
+  /// Every paired computer, in the order they were added. Read again on
+  /// every store change; the host labels, the new-agent picker and Settings
+  /// > Computers read it.
+  final ValueNotifier<List<AgentsStoredPairing>> _pairedHosts =
+      ValueNotifier<List<AgentsStoredPairing>>(const <AgentsStoredPairing>[]);
+
+  /// Keeps a socket up for every computer that is not on screen.
+  AgentsHostLinks? _hostLinks;
+  StreamSubscription<AgentsHostInbound>? _secondaryInboundSub;
+
+  bool get _hasCloudHost => _pairedHosts.value.any(
+    (AgentsStoredPairing p) => p.effectiveKind == AgentsHostKind.cloud,
+  );
+
+  /// The paired computer [hostId], or null.
+  AgentsStoredPairing? _pairingFor(String? hostId) {
+    if (hostId == null) return null;
+    for (final AgentsStoredPairing p in _pairedHosts.value) {
+      if (p.hostId == hostId) return p;
+    }
+    return null;
+  }
+
+  /// The roster id of [hostId]'s own agent ([AgentsStoredPairing.hostAgentId]).
+  /// An unknown computer keeps the old id.
+  String _hostAgentIdFor(String? hostId, String peerDeviceId) =>
+      _pairingFor(hostId)?.hostAgentId(peerDeviceId) ?? 'host:$peerDeviceId';
+
+  Future<void> _readPairedHosts() async {
+    List<AgentsStoredPairing> hosts;
+    try {
+      hosts = await _pairingStore.listPairings();
+    } catch (_) {
+      return;
+    }
+    if (!mounted) return;
+    _pairedHosts.value = hosts;
+    _publishHostLabels();
+    // The agents from before CHAT-177 have no computer: while exactly one
+    // is paired, they all live on it.
+    if (hosts.length == 1) _roster.assignHost(hosts.single.hostId);
+    // A cloud computer that arrived (restore, another device) ends a setup
+    // that still waits.
+    if (_hasCloudHost && _cloudBox.phase != AgentsCloudBoxPhase.linked) {
+      _cloudBox.stop();
+    }
+  }
+
+  /// Pairs the cloud computer the zero-click setup made. Without a computer
+  /// it is the view's own pairing (the box becomes the computer on screen).
+  /// With one, it pairs on a transport of its own, so the conversation on
+  /// screen keeps its socket: the box is added and gets a secondary link.
+  Future<void> _pairCloudBox(AgentsPairingInvite invite) async {
+    AgentsStoredPairing? trust;
+    if (_pairedHosts.value.isEmpty) {
+      trust = await _pairWithInvite(invite);
+    } else {
+      final AgentsRelayController controller =
+          await (widget.relayControllerBuilder ??
+              () =>
+                  _buildRelayController(_pairingStore, widget.sessionSource))();
+      try {
+        trust = await pairAgentsFromInvite(
+          controller: controller,
+          invite: invite,
+          sessionSource: widget.sessionSource,
+          store: _pairingStore,
+        );
+      } finally {
+        controller.dispose();
+      }
+    }
+    if (trust != null) {
+      await _pairingStore.setHostKind(trust.hostId, AgentsHostKind.cloud);
+    }
+  }
+
+  /// The computer of a new agent: asked only while more than one is paired
+  /// (default: the one used last); else the one there is, or null.
+  Future<String?> _pickHostForNewAgent() async {
+    final List<AgentsStoredPairing> hosts = _pairedHosts.value;
+    if (hosts.length < 2) {
+      return hosts.isEmpty
+          ? AgentsRelayLinks.instance.primaryHostId
+          : hosts.single.hostId;
+    }
+    String? last;
+    try {
+      last = await _pairingStore.lastUsedHostId();
+    } catch (_) {
+      last = null;
+    }
+    if (!mounted) return null;
+    return showAgentHostPicker(
+      context,
+      hosts: hosts,
+      initialHostId: last ?? AgentsRelayLinks.instance.primaryHostId,
+      isOnline: AgentsRelayLinks.instance.isOnline,
+    );
+  }
+
+  /// The computer labels the rows draw ([AgentsHostTag]).
+  void _publishHostLabels() => AgentsHostLabels.instance.update(
+    _pairedHosts.value,
+    AgentsRelayLinks.instance.primaryHostId,
+  );
+  // ── end computers ──
 
   /// The last local read of the pairing store, and whether one has finished.
   bool _localPairing = false;
@@ -256,7 +366,9 @@ mixin AgentsShellHost on State<MessengerShell> {
         _pairingRestore?.nudge();
         // A cloud computer setup that failed or was left half done is picked
         // up again (CHAT-164). The flow keeps 10 s between two requests.
-        if (_hasComputer.value == false) unawaited(_cloudBox.resumed());
+        if (_hasComputer.value != null && !_hasCloudHost) {
+          unawaited(_cloudBox.resumed());
+        }
         final controller = _controller.value;
         if (controller != null && controller.state.value.isPaired) {
           unawaited(controller.requestAgentList().catchError((Object _) {}));
@@ -318,6 +430,23 @@ mixin AgentsShellHost on State<MessengerShell> {
     // inbound frame of the bound controller, so this sees each `agent_list`
     // without owning the socket.
     _hostInboundSub = AgentsRelayLink.instance.inbound.listen(_onHostInbound);
+    // CHAT-177: the other computers' links, each frame tagged with its
+    // computer, and the supervisor that keeps their sockets up.
+    _secondaryInboundSub = AgentsRelayLinks.instance.secondaryInbound.listen(
+      (AgentsHostInbound e) => _onHostInbound(e.event, hostId: e.hostId),
+    );
+    _pairingStore.changes.addListener(_onPairedHostsChanged);
+    AgentsRelayLinks.instance.primary.hostId.addListener(_publishHostLabels);
+    unawaited(_readPairedHosts());
+    if (widget.multiHostLinks) {
+      _hostLinks = AgentsHostLinks(
+        store: _pairingStore,
+        build:
+            widget.relayControllerBuilder ??
+            () => _buildRelayController(_pairingStore, widget.sessionSource),
+        sessionSource: widget.sessionSource,
+      )..start();
+    }
     // A mail key made while the app runs goes to the host at once
     // (docs/AGENT_MAIL.md §6.1); each provision sends it too.
     AgentMailKeyHandover.instance.start();
@@ -325,12 +454,20 @@ mixin AgentsShellHost on State<MessengerShell> {
 
   StreamSubscription<AgentsRelayInbound>? _hostInboundSub;
 
+  void _onPairedHostsChanged() => unawaited(_readPairedHosts());
+
   /// Ids deleted in this session. The host still lists them (delete is not on
   /// the wire yet, see WIRE_CONTRACT "Agent names"); a list must not bring
   /// an agent back the user just removed.
   final Set<String> _deletedAgentIds = <String>{};
 
-  void _onHostInbound(AgentsRelayInbound event) {
+  /// [hostId] is the computer of a secondary link; null is the primary
+  /// link's computer.
+  void _onHostInbound(AgentsRelayInbound event, {String? hostId}) {
+    final String? host = hostId ?? AgentsRelayLinks.instance.primaryHostId;
+    final AgentsRelayController? hostController = hostId == null
+        ? _controller.value
+        : AgentsRelayLinks.instance.secondaryFor(hostId)?.controller.value;
     // A frame that proves the host ran (or is running) a thread's turn also
     // proves the agent lives on the host (bead chuk_chat-89vl): a held
     // `task_ack`, a heartbeat, a live run, or a run terminal — a replayed one
@@ -350,7 +487,8 @@ mixin AgentsShellHost on State<MessengerShell> {
       return;
     }
     if (event is AgentsRelayRoomList) {
-      _applyHostRooms(event);
+      // Groups live on the computer on screen (phase 2 spans computers).
+      if (hostId == null) _applyHostRooms(event);
       return;
     }
     if (event is! AgentsRelayAgentList) return;
@@ -360,14 +498,32 @@ mixin AgentsShellHost on State<MessengerShell> {
     for (final String id in event.deleted) {
       if (id.startsWith('host:')) continue;
       if (_roster.byId(id) == null && _deletedAgentIds.contains(id)) continue;
+      // A computer deletes only its own agents.
+      final AgentsAgent? known = _roster.byId(id);
+      if (known != null && !_onHost(known, host)) continue;
       _deleteAgent(id, fromHost: true);
+    }
+    final String? peer = hostController?.state.value.peerDeviceId;
+    if (hostId != null && peer != null) {
+      // A secondary computer's own agent: the primary one comes from
+      // [_onPaired].
+      _roster.ensureHostAgent(
+        peer,
+        label: _pairingFor(hostId)?.effectiveKind == AgentsHostKind.cloud
+            ? 'Cloud computer'
+            : _l10n.agentsHostYourComputer,
+        hostId: hostId,
+        agentId: _hostAgentIdFor(hostId, peer),
+      );
     }
     _roster.applyHostNames(
       event.agents,
-      peerDeviceId: _controller.value?.state.value.peerDeviceId,
+      peerDeviceId: peer,
       ignore: _deletedAgentIds,
+      hostId: host,
+      hostAgentId: peer == null ? null : _hostAgentIdFor(host, peer),
     );
-    _reannounceMissingAgents(event.agents);
+    _reannounceMissingAgents(event.agents, host, hostController);
     // The host answered, so it is linked and authenticated: a good time to
     // send the faces it has not got yet.
     _scheduleAvatarSync();
@@ -384,6 +540,26 @@ mixin AgentsShellHost on State<MessengerShell> {
     _rooms.applyHostRooms(listed);
   }
 
+  /// Whether [agent] lives on [hostId]. An agent with no computer yet lives
+  /// on the computer on screen.
+  bool _onHost(AgentsAgent agent, String? hostId) {
+    final String? own = agent.hostId;
+    if (own == null || hostId == null) {
+      return hostId == null ||
+          hostId == AgentsRelayLinks.instance.primaryHostId;
+    }
+    return own == hostId;
+  }
+
+  /// The live controller of [agent]'s computer, or null while it is down.
+  AgentsRelayController? _controllerForAgent(AgentsAgent agent) {
+    final String? host = agent.hostId;
+    if (host == null || host == AgentsRelayLinks.instance.primaryHostId) {
+      return _controller.value;
+    }
+    return AgentsRelayLinks.instance.secondaryFor(host)?.controller.value;
+  }
+
   /// Ids re-sent to the host this session, so a host that keeps dropping an
   /// `agent_create` cannot turn each `agent_list` answer into another send.
   final Set<String> _reannouncedAgentIds = <String>{};
@@ -393,11 +569,19 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// first announce was lost stays on this device and never appears on the
   /// user's other devices. The host upserts by id, so a resend is harmless;
   /// its `agent_list` answer comes back through [_onHostInbound].
-  void _reannounceMissingAgents(List<AgentsHostAgentName> listed) {
-    final controller = _controller.value;
+  void _reannounceMissingAgents(
+    List<AgentsHostAgentName> listed,
+    String? hostId,
+    AgentsRelayController? controller,
+  ) {
     if (controller == null) return;
     for (final AgentsAgent agent in agentsMissingOnHost(
-      _roster.agents,
+      // Only this computer's agents: an agent of another computer is
+      // missing here on purpose.
+      <AgentsAgent>[
+        for (final AgentsAgent a in _roster.agents)
+          if (_onHost(a, hostId)) a,
+      ],
       listed,
       skip: <String>{..._deletedAgentIds, ..._reannouncedAgentIds},
     )) {
@@ -624,6 +808,11 @@ mixin AgentsShellHost on State<MessengerShell> {
     NotificationRouter.instance.pending.removeListener(_onNotificationTap);
     _cancelWaitingTap();
     _hostInboundSub?.cancel();
+    _secondaryInboundSub?.cancel();
+    _pairingStore.changes.removeListener(_onPairedHostsChanged);
+    AgentsRelayLinks.instance.primary.hostId.removeListener(_publishHostLabels);
+    unawaited(_hostLinks?.dispose() ?? Future<void>.value());
+    _pairedHosts.dispose();
     AgentMailKeyHandover.instance.stop();
     _pairingStore.changes.removeListener(_onPairingStoreChanged);
     _restoreReason.removeListener(_resolveHasComputer);
@@ -874,17 +1063,17 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// the encrypted mirror is written. Without a thread view (it is always
   /// mounted in practice) it pairs on a transport of its own and then remounts
   /// the view, which reconnects from the stored trust.
-  Future<void> _pairWithInvite(AgentsPairingInvite invite) async {
+  Future<AgentsStoredPairing?> _pairWithInvite(
+    AgentsPairingInvite invite,
+  ) async {
     final AgentsThreadViewState? view = _threadViewState;
-    if (view != null) {
-      await view.pairWithInvite(invite);
-      return;
-    }
+    if (view != null) return view.pairWithInvite(invite);
     final AgentsRelayController controller =
         await (widget.relayControllerBuilder ??
             () => _buildRelayController(_pairingStore, widget.sessionSource))();
+    AgentsStoredPairing? trust;
     try {
-      await pairAgentsFromInvite(
+      trust = await pairAgentsFromInvite(
         controller: controller,
         invite: invite,
         sessionSource: widget.sessionSource,
@@ -894,6 +1083,7 @@ mixin AgentsShellHost on State<MessengerShell> {
       controller.dispose();
     }
     if (mounted) setState(() => _threadViewKey = GlobalKey());
+    return trust;
   }
 
   /// The install page's wait: the app's own device identity claims the
@@ -1043,6 +1233,7 @@ mixin AgentsShellHost on State<MessengerShell> {
       AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
 
   void _onPaired(String peerDeviceId) {
+    final String? hostId = AgentsRelayLinks.instance.primaryHostId;
     // A person reads "Your computer", not the raw device id. The same label
     // in the other languages may be replaced, so a language change follows.
     final AgentsAgent agent = _roster.ensureHostAgent(
@@ -1052,6 +1243,8 @@ mixin AgentsShellHost on State<MessengerShell> {
         for (final Locale locale in AppLocalizations.supportedLocales)
           AppLocalizations(locale).agentsHostYourComputer,
       },
+      hostId: hostId,
+      agentId: _hostAgentIdFor(hostId, peerDeviceId),
     );
     // The names the host keeps (bead cowork-817): asked on every pair, so a
     // reinstall and a second device show the same agents. The answer
@@ -1096,6 +1289,8 @@ mixin AgentsShellHost on State<MessengerShell> {
           () => _buildRelayController(_pairingStore, widget.sessionSource),
       sessionSource: widget.sessionSource,
       pairingStore: _pairingStore,
+      // The open agent's computer (CHAT-177); the view moves its link there.
+      hostId: agent?.hostId,
       threadKey: _selectedThreadKey,
       // The jump to the first new message (bead chuk_chat-f5wd).
       unreadSince: _readMarks.unreadSince(_selectedThreadKey),
@@ -1155,6 +1350,11 @@ mixin AgentsShellHost on State<MessengerShell> {
       suggestedName: suggested,
     );
     if (!mounted || request == null || request.name.isEmpty) return;
+    // CHAT-177: with more than one computer, the user picks where the agent
+    // runs; the computer used last is chosen already.
+    final String? hostId = await _pickHostForNewAgent();
+    if (!mounted) return;
+    if (_pairedHosts.value.length > 1 && hostId == null) return;
     final template = request.template;
     final l = _l10n;
     final templateName = template == null ? null : l.tpl(template.nameKey);
@@ -1163,6 +1363,7 @@ mixin AgentsShellHost on State<MessengerShell> {
       // The role line names the template, unless the name already says it.
       role: templateName == request.name ? null : templateName,
       brief: template == null ? null : l.tpl(template.descriptionKey),
+      hostId: hostId,
     );
     if (template != null) {
       unawaited(
@@ -1190,7 +1391,9 @@ mixin AgentsShellHost on State<MessengerShell> {
     AgentTemplate? template, {
     required bool startAutomation,
   }) async {
-    final controller = _controller.value;
+    // The agent's own computer (CHAT-177), which may not be the one on
+    // screen.
+    final controller = _controllerForAgent(agent);
     final starter = template?.starter;
     final l = _l10n;
     final outcome = await announceAgentToHost(
@@ -1237,7 +1440,7 @@ mixin AgentsShellHost on State<MessengerShell> {
     _roster.renameAgent(agentId, name);
     final agent = _roster.byId(agentId);
     if (agent == null) return;
-    unawaited(_controller.value?.renameAgent(agentId, agent.name));
+    unawaited(_controllerForAgent(agent)?.renameAgent(agentId, agent.name));
   }
 
   Future<void> _openAgentRename(AgentsAgent agent) async {
@@ -1587,7 +1790,10 @@ mixin AgentsShellHost on State<MessengerShell> {
 
   void _hostDeleteAgent(String agentId) {
     if (agentId.startsWith('host:')) return;
-    final controller = _controller.value;
+    final AgentsAgent? agent = _roster.byId(agentId);
+    final controller = agent == null
+        ? _controller.value
+        : _controllerForAgent(agent);
     if (controller is! AgentsRelayClient) return;
     if (!AgentsRelayClient.hostCapabilities.value.contains(
       AgentsRelayClient.agentDeleteCapability,

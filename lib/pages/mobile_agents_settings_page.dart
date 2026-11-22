@@ -8,6 +8,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/pages/agent_mailbox_page.dart';
 import 'package:chuk_chat/pages/agent_model_page.dart';
+import 'package:chuk_chat/pages/agents_computers_page.dart';
 import 'package:chuk_chat/pages/agents_login_vault_page.dart';
 import 'package:chuk_chat/pages/mobile_agent_permissions_page.dart'; // polish
 import 'package:chuk_chat/pages/pricing_page.dart' show openBillingPortal;
@@ -404,7 +405,10 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
                   children: [
                     _HostRow(
                       agent: agent,
-                      link: widget.link ?? AgentsRelayLink.instance,
+                      // The link of the agent's own computer (CHAT-177).
+                      link:
+                          widget.link ??
+                          AgentsRelayLinks.instance.linkFor(agent.hostId),
                     ),
                     _row(
                       'Host & activity',
@@ -412,6 +416,19 @@ class _AgentSettingsViewState extends State<AgentSettingsView> {
                       Icons.computer_outlined,
                       widget.onControls,
                       subtitle: l.agentsCwHostSubtitle,
+                    ),
+                    // Every computer of the account (CHAT-177).
+                    _row(
+                      'computers',
+                      'Computers',
+                      Icons.laptop_mac,
+                      () => unawaited(
+                        openSettingsSurface(
+                          context,
+                          (_) => const AgentsComputersPage(),
+                        ),
+                      ),
+                      subtitle: 'Your PC and cloud computer: names, status',
                     ),
                     // checkpoints: the pins of the agent's files.
                     if (widget.chatId case final String chat)

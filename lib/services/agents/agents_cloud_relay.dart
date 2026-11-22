@@ -386,6 +386,16 @@ class AgentsCloudRelaySocket implements RelaySocket, RelaySocketProbe {
   /// The host device id a claim on [pairingChannel] returned, or null when this
   /// process has not claimed it. The claim is the only source of that id, so
   /// this is what a caller persists in the trust record after a first pairing.
+  /// Whether a relayed frame whose sender is [fromDeviceId] belongs on a
+  /// socket that talks to [targetDeviceId]. A frame with no sender (an old
+  /// relay) or a socket with no target yet (a pairing claim still running)
+  /// takes it; otherwise the two ids must match.
+  static bool acceptsFrameFrom(Object? fromDeviceId, String? targetDeviceId) {
+    if (fromDeviceId is! String || fromDeviceId.isEmpty) return true;
+    if (targetDeviceId == null || targetDeviceId.isEmpty) return true;
+    return fromDeviceId == targetDeviceId;
+  }
+
   static String? learnedTarget({
     required Uri base,
     required String pairingChannel,
@@ -1044,6 +1054,13 @@ class AgentsCloudRelaySocket implements RelaySocket, RelaySocketProbe {
       case 'cowork_relay':
         final payload = frame['payload'];
         if (payload == null) return;
+        // The relay fans every executor frame out to every app socket of
+        // the account. Since CHAT-177 it names the sending host; a socket
+        // that talks to another host drops the frame. An old relay names
+        // nobody, and then the frame is taken as before.
+        if (!acceptsFrameFrom(frame['from_device_id'], _targetDeviceId)) {
+          return;
+        }
         // Upward it must look exactly like the local relay: one JSON text
         // frame carrying the envelope.
         final text = payload is String ? payload : jsonEncode(payload);

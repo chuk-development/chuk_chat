@@ -76,8 +76,8 @@ class _MemoryStore implements AgentsSecureKeyValueStore {
 /// The encrypted mirror, with nothing in it.
 class _EmptyMirror extends SupabasePairingSync {
   @override
-  Future<AgentsCloudPairingRead> readEncryptedPairing() async =>
-      const AgentsCloudPairingRead(AgentsCloudPairingOutcome.noRecord);
+  Future<AgentsCloudPairingsRead> readEncryptedPairings() async =>
+      const AgentsCloudPairingsRead(AgentsCloudPairingOutcome.noRecord);
 
   @override
   Future<bool> publishEncryptedPairing(AgentsStoredPairing pairing) async =>
@@ -87,7 +87,7 @@ class _EmptyMirror extends SupabasePairingSync {
   Future<void> saveEncryptedPairing(AgentsStoredPairing pairing) async {}
 
   @override
-  Future<void> clearEncryptedPairing() async {}
+  Future<void> clearEncryptedPairing({String? hostId}) async {}
 }
 
 class _Session implements AccountSessionSource {

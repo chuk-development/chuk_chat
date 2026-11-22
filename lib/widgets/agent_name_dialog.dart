@@ -30,12 +30,14 @@ Future<String?> showAgentNameDialog(
   required String title,
   required String submitLabel,
   String initialName = '',
+  String hintText = 'Agent name',
 }) => showDialog<String>(
   context: context,
   builder: (_) => AgentNameDialog(
     title: title,
     submitLabel: submitLabel,
     initialName: initialName,
+    hintText: hintText,
   ),
 );
 
@@ -45,11 +47,15 @@ class AgentNameDialog extends StatefulWidget {
     required this.title,
     required this.submitLabel,
     this.initialName = '',
+    this.hintText = 'Agent name',
   });
 
   final String title;
   final String submitLabel;
   final String initialName;
+
+  /// The field's hint. A computer's name uses the same dialog.
+  final String hintText;
 
   @override
   State<AgentNameDialog> createState() => _AgentNameDialogState();
@@ -128,7 +134,7 @@ class _AgentNameDialogState extends State<AgentNameDialog> {
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: scheme.surfaceContainerHighest,
-                  hintText: 'Agent name',
+                  hintText: widget.hintText,
                   hintStyle: text.titleMedium?.copyWith(
                     color: scheme.onSurfaceVariant,
                     fontWeight: FontWeight.w500,

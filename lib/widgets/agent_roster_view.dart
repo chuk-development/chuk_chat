@@ -22,6 +22,7 @@
 library;
 
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -44,6 +45,7 @@ import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/utils/roster_time_label.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
+import 'package:chuk_chat/widgets/agents_host_tag.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:chuk_chat/widgets/agent_name_dialog.dart';
 import 'package:chuk_chat/widgets/agents_wait_label.dart';
@@ -274,10 +276,13 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     unawaited(AgentsThreadModes.instance.loadWaits());
     _search.addListener(_onSearch);
     _searchFocus.addListener(_onSearchFocusChanged);
+    // The computer labels (CHAT-177) come and go with the second computer.
+    AgentsHostLabels.instance.addListener(_onSearch);
   }
 
   @override
   void dispose() {
+    AgentsHostLabels.instance.removeListener(_onSearch);
     _searchFocus.removeListener(_onSearchFocusChanged);
     _search.removeListener(_onSearch);
     _searchFocus.dispose();
@@ -733,9 +738,8 @@ class _AgentRosterViewState extends State<AgentRosterView> {
             // No scrollbar: the desktop default draws one over the cards, and
             // the list already says where it stands through its group lids.
             child: ScrollConfiguration(
-              behavior: ScrollConfiguration.of(
-                context,
-              ).copyWith(scrollbars: false),
+              behavior: ScrollConfiguration.of(context)
+                  .copyWith(scrollbars: false),
               child: CustomScrollView(
                 slivers: <Widget>[
                   // Room for the head bar and the navigation block, both of
@@ -971,8 +975,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
       if (main.isNotEmpty)
         ..._group(
           _kGroupMain,
-          AppLocalizations.of(context)?.agentsYourAssistant ??
-              'Your assistant',
+          AppLocalizations.of(context)?.agentsYourAssistant ?? 'Your assistant',
           <Widget>[for (final AgentsAgent a in main) _agentTile(context, a)],
         ),
       if (pinned.isNotEmpty)
@@ -984,13 +987,9 @@ class _AgentRosterViewState extends State<AgentRosterView> {
           ],
         ),
       if (rest.isNotEmpty)
-        ..._group(
-          _kGroupAgents,
-          'Sidekicks',
-          <Widget>[
-            for (final AgentsAgent a in rest) ..._agentTiles(context, a),
-          ],
-        ),
+        ..._group(_kGroupAgents, 'Sidekicks', <Widget>[
+          for (final AgentsAgent a in rest) ..._agentTiles(context, a),
+        ]),
       if (rooms.isNotEmpty)
         ..._group(
           _kGroupRooms,
@@ -998,21 +997,16 @@ class _AgentRosterViewState extends State<AgentRosterView> {
           <Widget>[for (final AgentsRoom r in rooms) _roomTile(context, r)],
         ),
       if (hidden.isNotEmpty)
-        ..._group(
-          _kGroupHidden,
-          'Hidden',
-          <Widget>[
-            for (final AgentsAgent a in hidden) _hiddenTile(context, a),
-          ],
-        ),
+        ..._group(_kGroupHidden, 'Hidden', <Widget>[
+          for (final AgentsAgent a in hidden) _hiddenTile(context, a),
+        ]),
     ];
   }
 
   /// The Home row: a card of its own above the groups, shaped like an agent
   /// row so the eye reads it as the first place in the list.
   Widget _homeTile(BuildContext context) {
-    final String label =
-        AppLocalizations.of(context)?.agentsModeHome ?? 'Home';
+    final String label = AppLocalizations.of(context)?.agentsModeHome ?? 'Home';
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
@@ -1079,8 +1073,8 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     return <Widget>[
       _agentTile(context, agent),
       for (final AgentsThreadInfo thread in agent.threads)
-        for (final AgentsDerivedThread t in AgentsDerivedThreads.instance
-            .forOwner(thread.key))
+        for (final AgentsDerivedThread t
+            in AgentsDerivedThreads.instance.forOwner(thread.key))
           Padding(
             key: ValueKey<String>('derived-tile-${t.key}'),
             padding: const EdgeInsets.only(left: 24),
@@ -1156,11 +1150,21 @@ class _AgentRosterViewState extends State<AgentRosterView> {
           ),
           // What waits on the user and the unread dot end the message line,
           // so the time above stays at the far right edge of every row.
-          previewTrailing: waitKind == null && !unread
+          // The agent's computer (CHAT-177) leads them, only while more
+          // than one computer is paired.
+          previewTrailing:
+              waitKind == null &&
+                  !unread &&
+                  AgentsHostLabels.instance.labelFor(agent.hostId) == null
               ? null
               : Row(
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
+                    AgentsHostTag(hostId: agent.hostId),
+                    if (AgentsHostLabels.instance.labelFor(agent.hostId) !=
+                            null &&
+                        (waitKind != null || unread))
+                      const SizedBox(width: 6),
                     if (waitKind != null) AgentsWaitPill(kind: waitKind),
                     if (waitKind != null && unread) const SizedBox(width: 6),
                     if (unread)
@@ -1310,9 +1314,8 @@ class _AgentRosterViewState extends State<AgentRosterView> {
             right: 0,
             bottom: hasSettings ? _kBottomChromeHeight + _kBottomInset : 0,
             child: ScrollConfiguration(
-              behavior: ScrollConfiguration.of(
-                context,
-              ).copyWith(scrollbars: false),
+              behavior: ScrollConfiguration.of(context)
+                  .copyWith(scrollbars: false),
               child: ListView(
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 children: <Widget>[

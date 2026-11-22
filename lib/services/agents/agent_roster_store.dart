@@ -180,6 +180,9 @@ class AgentRosterStore {
               'name': agent.name,
               'onHost': agent.onHost,
               if (agent.knownToHost) 'knownToHost': true,
+              // The computer it lives on (CHAT-177). The cache holds the
+              // agents of every computer; this keys each one to its own.
+              'hostId': ?agent.hostId,
               // The last time the app saw this agent do something. Kept so
               // a cold start shows a real time instead of "no activity yet".
               if (agent.lastActivity != null)
@@ -242,6 +245,9 @@ class AgentRosterStore {
       knownToHost: row['knownToHost'] == true,
       threads: threads,
       lastActivity: _readTime(row['lastActivity']),
+      hostId: row['hostId'] is String && (row['hostId'] as String).isNotEmpty
+          ? row['hostId'] as String
+          : null,
     );
   }
 

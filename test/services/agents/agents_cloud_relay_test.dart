@@ -467,6 +467,58 @@ void main() {
       await socket.close();
     });
 
+    group('from_device_id (CHAT-177)', () {
+      test('the rule: no sender or no target takes it, else ids match', () {
+        expect(AgentsCloudRelaySocket.acceptsFrameFrom(null, 'host-1'), isTrue);
+        expect(AgentsCloudRelaySocket.acceptsFrameFrom('', 'host-1'), isTrue);
+        expect(AgentsCloudRelaySocket.acceptsFrameFrom('host-2', null), isTrue);
+        expect(
+          AgentsCloudRelaySocket.acceptsFrameFrom('host-1', 'host-1'),
+          isTrue,
+        );
+        expect(
+          AgentsCloudRelaySocket.acceptsFrameFrom('host-2', 'host-1'),
+          isFalse,
+        );
+      });
+
+      test('a socket drops the frames of another host', () async {
+        final server = _FakeRelayServer();
+        final socket = await AgentsCloudRelaySocket.connect(
+          address: AgentsCloudRelayAddress.forHost(
+            base: Uri.parse('wss://api.chuk.chat'),
+            targetDeviceId: 'host-1',
+          ),
+          deviceId: appDeviceId,
+          sessionSource: signedIn,
+          inner: (_) async => server,
+        );
+        final List<Map<String, dynamic>> upward = <Map<String, dynamic>>[];
+        final sub = socket.incoming.listen(
+          (dynamic raw) =>
+              upward.add(jsonDecode(raw as String) as Map<String, dynamic>),
+        );
+        Map<String, dynamic> relayed(String n, [String? from]) =>
+            <String, dynamic>{
+              'req_id': 'r$n',
+              'type': 'cowork_relay',
+              'from_device_id': ?from,
+              'payload': jsonEncode(<String, dynamic>{'n': n}),
+            };
+        server._deliver(relayed('other', 'host-2'));
+        server._deliver(relayed('own', 'host-1'));
+        // An old relay names nobody: the frame is taken as before.
+        server._deliver(relayed('old'));
+        await Future<void>.delayed(Duration.zero);
+        expect(upward.map((Map<String, dynamic> e) => e['n']), <String>[
+          'own',
+          'old',
+        ]);
+        await sub.cancel();
+        await socket.close();
+      });
+    });
+
     group('probe (bead chuk_chat-kl8x)', () {
       Future<(AgentsCloudRelaySocket, _FakeRelayServer)> dial() async {
         final server = _FakeRelayServer();

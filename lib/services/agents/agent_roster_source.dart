@@ -76,21 +76,34 @@ abstract class AgentRosterSource extends ChangeNotifier {
   /// the raw device id. A host agent still named after its device id, or
   /// after one of [replaceableLabels] (the same label in another language),
   /// takes [label]; a name the host sent is kept.
+  ///
+  /// [hostId] is the computer (CHAT-177); [agentId] overrides the default id
+  /// `host:<peerDeviceId>`, which only the first computer can have (every
+  /// host signs as the same peer id).
   AgentsAgent ensureHostAgent(
     String peerDeviceId, {
     String? label,
     Set<String> replaceableLabels = const <String>{},
+    String? hostId,
+    String? agentId,
   });
 
   /// Adds an agent the user just onboarded. The returned agent always has its
   /// one permanent thread, so selecting it opens the conversation immediately.
+  /// [hostId] is the computer it runs on.
   AgentsAgent addAgent({
     required String name,
     String? role,
     String? brief,
     ScheduleSpec? schedule,
     List<String> attachmentNames,
+    String? hostId,
   });
+
+  /// Stamps every agent that has no computer yet with [hostId]. Called while
+  /// exactly one computer is paired: the agents from before CHAT-177 all
+  /// live on it.
+  void assignHost(String hostId) {}
 
   /// Renames an agent (bead cowork-817). The trimmed name replaces the old
   /// one; an empty name or an unknown id is a no-op. The id and the thread key
@@ -103,10 +116,16 @@ abstract class AgentRosterSource extends ChangeNotifier {
   /// `host` renames the `host:<peerDeviceId>` row (skipped when the host is
   /// not paired). Ids in [ignore] — deleted in this session — are left out.
   /// A list never removes anything.
+  ///
+  /// [hostId] is the computer that sent the list: a new agent gets it, and
+  /// an agent with no computer yet takes it. [hostAgentId] is the id of that
+  /// computer's own agent when it is not `host:<peerDeviceId>`.
   void applyHostNames(
     List<AgentsHostAgentName> names, {
     required String? peerDeviceId,
     Set<String> ignore = const <String>{},
+    String? hostId,
+    String? hostAgentId,
   });
 
   /// Marks a run as in flight (or finished) for [agentId].
@@ -272,12 +291,20 @@ class LocalAgentRosterSource extends AgentRosterSource {
     String peerDeviceId, {
     String? label,
     Set<String> replaceableLabels = const <String>{},
+    String? hostId,
+    String? agentId,
   }) {
-    final id = 'host:$peerDeviceId';
+    final id = agentId ?? 'host:$peerDeviceId';
     final String? wanted = (label == null || label.trim().isEmpty)
         ? null
         : label.trim();
-    final existing = byId(id);
+    var existing = byId(id);
+    if (existing != null && hostId != null && existing.hostId == null) {
+      existing = existing.copyWith(hostId: hostId);
+      _agents[_indexOf(id, orNull: true)] = existing;
+      _persist();
+      notifyListeners();
+    }
     if (existing != null) {
       final bool placeholder =
           existing.name == peerDeviceId ||
@@ -296,6 +323,7 @@ class LocalAgentRosterSource extends AgentRosterSource {
       id: id,
       name: wanted ?? peerDeviceId,
       onHost: true,
+      hostId: hostId,
       threads: <AgentsThreadInfo>[
         // One permanent session per bot: its key is the agent id, so the
         // session_key the task rides with is stable across restarts and there
@@ -316,6 +344,7 @@ class LocalAgentRosterSource extends AgentRosterSource {
     String? brief,
     ScheduleSpec? schedule,
     List<String> attachmentNames = const <String>[],
+    String? hostId,
   }) {
     final id =
         'local:${name.trim()}:${_agents.length}:${_random.nextInt(1 << 30)}';
@@ -326,6 +355,7 @@ class LocalAgentRosterSource extends AgentRosterSource {
       brief: (brief != null && brief.trim().isNotEmpty) ? brief.trim() : null,
       schedule: schedule,
       attachmentNames: List<String>.unmodifiable(attachmentNames),
+      hostId: hostId,
       threads: <AgentsThreadInfo>[
         // One permanent session per bot: its key is the agent id, stable for
         // the life of the agent.
@@ -354,11 +384,14 @@ class LocalAgentRosterSource extends AgentRosterSource {
     List<AgentsHostAgentName> names, {
     required String? peerDeviceId,
     Set<String> ignore = const <String>{},
+    String? hostId,
+    String? hostAgentId,
   }) {
     var changed = false;
     for (final entry in names) {
       final id = entry.host
-          ? (peerDeviceId == null ? null : 'host:$peerDeviceId')
+          ? (hostAgentId ??
+                (peerDeviceId == null ? null : 'host:$peerDeviceId'))
           : entry.agentId;
       if (id == null || ignore.contains(id)) continue;
       final index = _indexOf(id, orNull: true);
@@ -366,8 +399,13 @@ class LocalAgentRosterSource extends AgentRosterSource {
         // Listed by the host means kept by the host: it runs there now, even
         // when the app created it.
         final AgentsAgent known = _agents[index];
-        if (known.name == entry.name && known.knownToHost) continue;
-        _agents[index] = known.copyWith(name: entry.name, knownToHost: true);
+        final bool stamp = hostId != null && known.hostId == null;
+        if (known.name == entry.name && known.knownToHost && !stamp) continue;
+        _agents[index] = known.copyWith(
+          name: entry.name,
+          knownToHost: true,
+          hostId: stamp ? hostId : null,
+        );
         changed = true;
         continue;
       }
@@ -379,6 +417,7 @@ class LocalAgentRosterSource extends AgentRosterSource {
           id: id,
           name: entry.name,
           knownToHost: true,
+          hostId: hostId,
           threads: <AgentsThreadInfo>[
             AgentsThreadInfo(key: id, title: 'General'),
           ],
@@ -389,6 +428,19 @@ class LocalAgentRosterSource extends AgentRosterSource {
     if (!changed) return;
     // The host has spoken: the cache is rewritten from what the roster holds
     // now, so the snapshot can never outvote the next launch's `agent_list`.
+    _persist();
+    notifyListeners();
+  }
+
+  @override
+  void assignHost(String hostId) {
+    var changed = false;
+    for (var i = 0; i < _agents.length; i++) {
+      if (_agents[i].hostId != null) continue;
+      _agents[i] = _agents[i].copyWith(hostId: hostId);
+      changed = true;
+    }
+    if (!changed) return;
     _persist();
     notifyListeners();
   }
@@ -432,7 +484,10 @@ class LocalAgentRosterSource extends AgentRosterSource {
 
   /// [memory] with the stored [stored] activity times filled in where
   /// [memory] has none. Returns [memory] itself when nothing was missing.
-  static AgentsAgent _withStoredActivity(AgentsAgent memory, AgentsAgent stored) {
+  static AgentsAgent _withStoredActivity(
+    AgentsAgent memory,
+    AgentsAgent stored,
+  ) {
     final storedThreads = <String, DateTime?>{
       for (final thread in stored.threads) thread.key: thread.lastActivity,
     };

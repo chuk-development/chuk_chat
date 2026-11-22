@@ -22,6 +22,7 @@ import 'package:chuk_chat/services/agents/agent_mail_service.dart'
     show AgentMailTokenSource, supabaseAgentMailToken;
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/automations/agents_automation.dart';
 import 'package:chuk_chat/services/automations/automations_source.dart';
@@ -264,11 +265,15 @@ class AgentsWebhooksService {
 }
 
 /// The host's relay executor id: the `device_id` a server webhook routes to.
-/// Null when no cloud pairing is stored.
-Future<String?> agentsHostRelayDeviceId([AgentsPairingStore? store]) async {
+/// Null when no cloud pairing is stored. [hostId] picks the computer
+/// (CHAT-177); null takes the computer used last.
+Future<String?> agentsHostRelayDeviceId([
+  AgentsPairingStore? store,
+  String? hostId,
+]) async {
   try {
     final AgentsStoredPairing? pairing = await (store ?? AgentsPairingStore())
-        .loadPairing();
+        .loadPairing(hostId: hostId);
     if (pairing == null) return null;
     final String? id = AgentsCloudRelayAddress.tryParse(pairing.hostUrl)
         ?.targetDeviceId;
@@ -379,7 +384,14 @@ Future<WebhookCreateResult> createWebhookAutomation({
   final AgentsWebhookCreated created;
   try {
     created = await api.create(
-      deviceId: await (deviceId ?? agentsHostRelayDeviceId)(),
+      // The computer on screen: the automation goes to the same host
+      // (AutomationsSource sends over the primary link, CHAT-177).
+      deviceId:
+          await (deviceId ??
+              () => agentsHostRelayDeviceId(
+                null,
+                AgentsRelayLinks.instance.primaryHostId,
+              ))(),
       agentId: webhookAgentIdFor(sessionKey),
     );
   } on AgentsWebhookException catch (error) {

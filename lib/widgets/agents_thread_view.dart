@@ -31,6 +31,7 @@ import 'package:chuk_chat/services/agents/agents_invite_pairing.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_uri.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_host_links.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_resume_trace.dart';
@@ -114,6 +115,7 @@ class AgentsThreadView extends StatefulWidget {
     required this.controllerBuilder,
     required this.sessionSource,
     this.pairingStore,
+    this.hostId,
     this.devHostUrl = kAgentsDevHostUrl,
     this.threadKey = 'default',
     this.fileSaver = const DownloadsAgentFileSaver(),
@@ -176,6 +178,13 @@ class AgentsThreadView extends StatefulWidget {
   /// null the view has no persistence: it always shows the code connect form
   /// (the legacy behaviour, used by widget tests that inject a fake controller).
   final AgentsPairingStore? pairingStore;
+
+  /// The computer this view talks to (CHAT-177): the host id of the open
+  /// agent's computer (`AgentsStoredPairing.hostId`). Null takes the
+  /// computer used last. A change moves the view's link to that computer:
+  /// it takes the computer's open socket from [AgentsHostLinks] when there is
+  /// one, and hands its old socket back for the computer it leaves.
+  final String? hostId;
 
   /// A developer's escape hatch, never the product path: with a non-empty
   /// value the connect bar also shows a host address and a pairing-code field
@@ -554,6 +563,12 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   void didUpdateWidget(AgentsThreadView oldWidget) {
     super.didUpdateWidget(oldWidget);
     _registerApprovalThread();
+    final String? nextHost = widget.hostId;
+    if (nextHost != null &&
+        nextHost != oldWidget.hostId &&
+        nextHost != _storedPairing?.hostId) {
+      unawaited(_switchHost(nextHost));
+    }
     if (oldWidget.threadKey != widget.threadKey) {
       ChatOrigin.claimAgentsThread(widget.threadKey);
       _running = _ledger.isRunning(widget.threadKey);
@@ -845,7 +860,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     final store = widget.pairingStore;
     if (store != null) {
       try {
-        _storedPairing = await store.loadPairing();
+        _storedPairing =
+            await store.loadPairing(hostId: widget.hostId) ??
+            await store.loadPairing();
+        _setPrimaryHost(_storedPairing?.hostId);
       } catch (_) {
         // A storage failure (locked keystore, missing plugin in a test) simply
         // means "not paired yet" — fall back to the code connect form.
@@ -866,6 +884,83 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     if (_storedPairing != null) {
       await _reconnect();
     }
+  }
+
+  /// Makes [hostId] the primary link's computer (CHAT-177) and remembers it
+  /// as the computer used last.
+  void _setPrimaryHost(String? hostId) {
+    AgentsRelayLinks.instance.setPrimaryHost(hostId);
+    if (hostId != null) {
+      unawaited(
+        widget.pairingStore?.markUsed(hostId).catchError((Object _) {}),
+      );
+    }
+  }
+
+  /// Moves the view to the computer [hostId]: the open agent lives there.
+  ///
+  /// The computer's socket is usually open already (a secondary link of
+  /// [AgentsHostLinks]); the view takes it, so the switch costs no handshake.
+  /// The socket of the computer the view leaves goes back to the supervisor
+  /// while it is still good. Without an open socket the view dials as on a
+  /// reconnect.
+  Future<void> _switchHost(String hostId) async {
+    final AgentsPairingStore? store = widget.pairingStore;
+    if (store == null || _busy) return;
+    AgentsStoredPairing? next;
+    try {
+      next = await store.loadPairing(hostId: hostId);
+    } catch (_) {
+      next = null;
+    }
+    if (!mounted || next == null || widget.hostId != hostId) return;
+    if (_storedPairing?.hostId == hostId) return;
+    final AgentsStoredPairing? leaving = _storedPairing;
+    final AgentsRelayController? old = _controller;
+    final AgentsHostLinks? hostLinks = AgentsHostLinks.current;
+    final AgentsRelayController? adopted = hostLinks?.takeController(hostId);
+    _autoReconnectTimer?.cancel();
+    _autoReconnectTimer = null;
+    _reconnectAttempts = 0;
+    _failedReconnects = 0;
+    _manuallyDisconnected = false;
+    setState(() {
+      _storedPairing = next;
+      _localError = null;
+    });
+    _setPrimaryHost(hostId);
+    final bool handBack =
+        old != null &&
+        leaving != null &&
+        hostLinks != null &&
+        old.state.value.isPaired;
+    if (adopted != null) {
+      _swapController(adopted, disposeOld: !handBack);
+      if (handBack) hostLinks.adopt(leaving.hostId, old);
+      // The adopted link is paired already: run the paired path (replay,
+      // outbox) for this view.
+      _lastPhase = null;
+      _onStateChanged();
+      return;
+    }
+    if (handBack) {
+      old.state.removeListener(_onStateChanged);
+      setState(() => _controller = null);
+      if (identical(_link.controller.value, old)) _link.unbind();
+      hostLinks.adopt(leaving.hostId, old);
+    }
+    await reconnect(force: true);
+  }
+
+  /// Puts [next] in place of the live controller and points the link at it.
+  void _swapController(AgentsRelayController next, {required bool disposeOld}) {
+    final AgentsRelayController? old = _controller;
+    old?.state.removeListener(_onStateChanged);
+    next.state.addListener(_onStateChanged);
+    setState(() => _controller = next);
+    _link.bind(next);
+    widget.onController?.call(next);
+    if (old != null && disposeOld) unawaited(old.dispose());
   }
 
   /// [_buildController], with a failure turned into state the user can see
@@ -1340,9 +1435,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       // The authenticated host may have migrated our loopback trust to its
       // cloud route since this view was mounted. Do not keep dialling a stale
       // in-memory URL after a host restart.
-      final latest = await widget.pairingStore?.loadPairing() ?? stored;
+      final latest = await widget.pairingStore?.reloadPairing(stored) ?? stored;
       if (!mounted) return;
       _storedPairing = latest;
+      _setPrimaryHost(latest.hostId);
       AgentsResumeTrace.mark('reconnect: pairing loaded');
       await controller.reconnect(hostUrl: latest.hostUrl, pairing: latest);
       AgentsResumeTrace.mark('reconnect: relay handshake done');
@@ -1439,7 +1535,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       store: widget.pairingStore,
       hostUrl: hostUrl,
     );
-    if (trust != null && mounted) setState(() => _storedPairing = trust);
+    if (trust != null && mounted) {
+      setState(() => _storedPairing = trust);
+      _setPrimaryHost(trust.hostId);
+    }
   }
 
   /// The QR path, and the whole of what a phone ever does to get linked: open
@@ -1470,7 +1569,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// does after a scan. Unlike the scan path it THROWS on failure, because the
   /// install page shows the failure itself. Builds the transport first when
   /// there is none yet.
-  Future<void> pairWithInvite(AgentsPairingInvite invite) async {
+  Future<AgentsStoredPairing?> pairWithInvite(
+    AgentsPairingInvite invite,
+  ) async {
     if (_busy) {
       throw const AgentsCloudRelayException(
         'Agents is busy. Try again in a moment.',
@@ -1499,7 +1600,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _autoReconnectTimer?.cancel();
     _autoReconnectTimer = null;
     try {
-      await _runInvitePairing(controller, invite);
+      return await _runInvitePairing(controller, invite);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1507,7 +1608,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
 
   /// The shared sequence ([pairAgentsFromInvite]) plus this view's own record
   /// of the trust it saved.
-  Future<void> _runInvitePairing(
+  Future<AgentsStoredPairing?> _runInvitePairing(
     AgentsRelayController controller,
     AgentsPairingInvite invite,
   ) async {
@@ -1517,7 +1618,11 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       sessionSource: widget.sessionSource,
       store: widget.pairingStore,
     );
-    if (trust != null && mounted) setState(() => _storedPairing = trust);
+    if (trust != null && mounted) {
+      setState(() => _storedPairing = trust);
+      _setPrimaryHost(trust.hostId);
+    }
+    return trust;
   }
 
   /// One plain sentence for whatever went wrong. The user is not shown a code,
@@ -1592,8 +1697,37 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _manuallyDisconnected = false;
     _reconnectAttempts = 0;
     _failedReconnects = 0;
-    await widget.pairingStore?.clearPairing();
+    final AgentsStoredPairing? removed = _storedPairing;
+    final AgentsPairingStore? store = widget.pairingStore;
+    if (store != null) {
+      if (removed != null) {
+        await store.removePairing(removed.hostId);
+      } else {
+        await store.clear();
+      }
+    }
     _codeController.clear();
+    // Another computer is still paired: the view moves to it instead of
+    // asking for a new one.
+    AgentsStoredPairing? next;
+    try {
+      next = await store?.loadPairing();
+    } catch (_) {
+      next = null;
+    }
+    if (next != null) {
+      _setPrimaryHost(next.hostId);
+      if (mounted) {
+        setState(() {
+          _storedPairing = next;
+          _localError = null;
+          _busy = false;
+        });
+      }
+      await reconnect(force: true);
+      return;
+    }
+    _setPrimaryHost(null);
     // Drop the trust from the UI in the same frame the store loses it, so the
     // reconnect bar cannot outlive the pairing it belongs to.
     if (mounted) {
