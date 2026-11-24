@@ -406,3 +406,65 @@ def test_registered_with_the_secrets_tools_and_scrubbed():
     scrub = Scrubber(Secrets().scrub_values)
     assert NUMBER not in scrub.scrub_text(f"n={NUMBER} s={SPACED}")
     assert SPACED not in scrub.scrub_text(f"s={SPACED}")
+
+
+# -- review fixes (CHAT-185 security review) --------------------------------------
+
+
+def test_run_code_is_blocked_on_every_page_after_a_card_fill():
+    # browser_run_code gets the whole context (context.pages()): from another
+    # tab it could read the filled field and encode the number past the mask.
+    access = Access()
+    manager, _conn, _guard = _manager(access, Approver(True))
+    manager.call("playwright", "browser_fill_form", _fill_args())
+    FakeConnection.page_url = "https://elsewhere.example/"
+    for tool in ("browser_run_code", "browser_run_code_unsafe"):
+        out = manager.call("playwright", tool, {"code": "async (page) => 1"})
+        assert out["ok"] is False and "blocked" in out["error"], (tool, out)
+
+
+def test_file_outputs_are_blocked_after_a_card_fill():
+    access = Access()
+    manager, conn, _guard = _manager(access, Approver(True))
+    # Before a fill, a file output is a normal call.
+    assert manager.call("playwright", "browser_snapshot", {"filename": "a.md"})["ok"] is True
+    manager.call("playwright", "browser_fill_form", _fill_args())
+    for tool, args in (
+        ("browser_pdf_save", {}),
+        ("browser_snapshot", {"filename": "page.md"}),
+        ("browser_network_requests", {"filename": "net.txt"}),
+    ):
+        before = len(conn.calls)
+        out = manager.call("playwright", tool, args)
+        assert out["ok"] is False and "file" in out["error"], (tool, out)
+        assert len(conn.calls) == before  # never sent
+    assert manager.call("playwright", "browser_snapshot", {})["ok"] is True
+
+
+def test_page_that_moves_during_the_approval_gets_no_card():
+    access = Access()
+
+    class Moving(Approver):
+        def __call__(self, request):
+            FakeConnection.page_url = "https://evil.example/pay"
+            return super().__call__(request)
+
+    manager, conn, _guard = _manager(access, Moving(True))
+    out = manager.call("playwright", "browser_fill_form", _fill_args())
+    assert out["ok"] is False and "approval" in out["error"]
+    assert not [a for t, a in conn.calls if t == "browser_fill_form"]
+    assert access.used == []
+
+
+def test_payment_frame_that_changes_during_the_approval_gets_no_card():
+    access = Access()
+
+    class Swapping(Approver):
+        def __call__(self, request):
+            FakeConnection.frames = {"num": "https://evil.example"}
+            return super().__call__(request)
+
+    manager, conn, _guard = _manager(access, Swapping(True))
+    out = manager.call("playwright", "browser_fill_form", _fill_args())
+    assert out["ok"] is False
+    assert not [a for t, a in conn.calls if t == "browser_fill_form"]

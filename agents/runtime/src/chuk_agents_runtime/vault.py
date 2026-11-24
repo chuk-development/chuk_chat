@@ -71,6 +71,9 @@ from .registry import ToolRegistry
 VAULT_LIST_TOOL = "vault_list"
 VAULT_CONTACTS_TOOL = "vault_contacts"
 SCREENSHOT_TOOL = "browser_take_screenshot"
+#: Browser tools whose output is a file on disk (never masked). Refused for
+#: the rest of a session after a card fill, as is any call with ``filename``.
+FILE_OUT_TOOLS = frozenset({"browser_pdf_save"})
 
 CARD_FIELDS = ("number", "exp", "exp_month", "exp_year", "exp_year2", "cvc", "name", "zip")
 CONTACT_FIELDS = (
@@ -494,6 +497,21 @@ class VaultGuard:
         args = arguments if isinstance(arguments, dict) else {}
         if getattr(self._login._internal, "depth", 0):
             return invoke(args)
+        if self._card_origins and (tool in FILE_OUT_TOOLS or "filename" in args):
+            # A file the browser writes (a PDF, a snapshot or a request log
+            # saved to disk) is not masked: it could hold the number or the
+            # security code, and the agent can read it back with a file tool.
+            self._audit(tool, "", "", [], "refused_file")
+            return {
+                "ok": False,
+                "server": server,
+                "tool": tool,
+                "error": (
+                    f"{tool} with a file output is blocked in this session after a saved card "
+                    "was filled: the file could show the card. Call it without 'filename', "
+                    "or use browser_snapshot."
+                ),
+            }
         if tool == SCREENSHOT_TOOL and self._card_origins:
             origin = normalize_origin(self._login._page_url(manager, server))
             if origin is None or origin in self._card_origins:
@@ -582,44 +600,30 @@ class VaultGuard:
                 raise Refusal("use one saved card per call.", "ambiguous_entry", page_origin)
             card = _pick_card(self._access, next(iter(selectors)))
             entry_id = f"card:{card.get('id')}"
-            for container, _key, cards in card_slots:
-                ref = container.get("ref") if isinstance(container, dict) else None
-                probe = self._probe(manager, server, ref, container.get("element"))
-                if probe is None:
-                    raise Refusal(
-                        "the checkout field could not be checked (no element ref, or the "
-                        "page did not answer). Take a browser_snapshot and pass the field's ref.",
-                        "refused_frame",
-                        page_origin,
-                        entry_id,
-                    )
-                frame_origin = normalize_origin(probe.get("origin"))
-                if not frame_ok(page_origin, frame_origin):
-                    raise Refusal(
-                        f"a saved card goes only into a field of {page_origin} or of a known "
-                        f"payment provider; this field is in {frame_origin or 'an unknown frame'}.",
-                        "refused_frame",
-                        page_origin,
-                        entry_id,
-                    )
-                frames.append(frame_origin or "")
-                for _sel, field in cards:
-                    if not checkout_field_ok(field, probe):
-                        raise Refusal(
-                            f"the card {field} goes only into a checkout field for it "
-                            "(an <input> with autocomplete cc-*, or named for it). "
-                            "This field is not one.",
-                            "refused_field",
-                            page_origin,
-                            entry_id,
-                        )
-                    if field not in fields_used:
-                        fields_used.append(field)
-                    if not card_field_value(card, field):
-                        raise Refusal(
-                            f"the saved card has no {field}.", "unknown_entry", page_origin, entry_id
-                        )
+            frames, fields_used = self._check_card_slots(
+                manager, server, card, card_slots, page_origin, entry_id
+            )
             self._approve(card, page_origin, frames, fields_used, entry_id)
+            # The answer can take minutes. The page may have moved on in that
+            # time: the fill goes only where the user said yes.
+            now_url = self._login._page_url(manager, server)
+            now_origin = normalize_origin(now_url) if now_url else None
+            if now_origin != page_origin:
+                raise Refusal(
+                    f"the page left {page_origin} while the payment waited for approval "
+                    f"(now {now_origin or 'unknown'}). The card was not filled.",
+                    "navigated_during_fill",
+                    page_origin,
+                    entry_id,
+                )
+            if self._check_card_slots(manager, server, card, card_slots, page_origin, entry_id)[0] != frames:
+                raise Refusal(
+                    "the checkout fields changed while the payment waited for approval. "
+                    "The card was not filled; take a browser_snapshot and try again.",
+                    "refused_frame",
+                    page_origin,
+                    entry_id,
+                )
 
         # Resolve.
         secret_values: dict[str, str] = card_secret_values(card) if card else {}
@@ -681,6 +685,58 @@ class VaultGuard:
                 info["card_fields"] = list(fields_used)
             result = {**result, "vault": info}
         return result
+
+    def _check_card_slots(
+        self,
+        manager: Any,
+        server: str,
+        card: Mapping,
+        card_slots: list,
+        page_origin: str,
+        entry_id: str,
+    ) -> tuple[list[str], list[str]]:
+        """Probe every card slot: a checkout field in the page or a known
+        payment frame. Returns the frame origins and the card fields used."""
+        fields_used: list[str] = []
+        frames: list[str] = []
+        for container, _key, cards in card_slots:
+            ref = container.get("ref") if isinstance(container, dict) else None
+            probe = self._probe(manager, server, ref, container.get("element"))
+            if probe is None:
+                raise Refusal(
+                    "the checkout field could not be checked (no element ref, or the "
+                    "page did not answer). Take a browser_snapshot and pass the field's ref.",
+                    "refused_frame",
+                    page_origin,
+                    entry_id,
+                )
+            frame_origin = normalize_origin(probe.get("origin"))
+            if not frame_ok(page_origin, frame_origin):
+                raise Refusal(
+                    f"a saved card goes only into a field of {page_origin} or of a known "
+                    f"payment provider; this field is in {frame_origin or 'an unknown frame'}.",
+                    "refused_frame",
+                    page_origin,
+                    entry_id,
+                )
+            frames.append(frame_origin or "")
+            for _sel, field in cards:
+                if not checkout_field_ok(field, probe):
+                    raise Refusal(
+                        f"the card {field} goes only into a checkout field for it "
+                        "(an <input> with autocomplete cc-*, or named for it). "
+                        "This field is not one.",
+                        "refused_field",
+                        page_origin,
+                        entry_id,
+                    )
+                if field not in fields_used:
+                    fields_used.append(field)
+                if not card_field_value(card, field):
+                    raise Refusal(
+                        f"the saved card has no {field}.", "unknown_entry", page_origin, entry_id
+                    )
+        return frames, fields_used
 
     def _approve(
         self, card: Mapping, page_origin: str, frames: list[str], fields: list[str], entry_id: str

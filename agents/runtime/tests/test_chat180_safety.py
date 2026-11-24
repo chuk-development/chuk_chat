@@ -525,3 +525,17 @@ def test_server_names_are_matched_as_tool_names_spell_them(server, tmp_path):
     store.append_message(sid, "tool", _tool_row(tool_name(server, "search"), {"t": "x"}))
     assert purge_transcripts(store, [server]) == 1
     store.close()
+
+
+def test_a_request_the_judge_cannot_read_asks_instead_of_running():
+    # Review fix: a class rule whose prepare returns no ActionRequest was a
+    # silent allow under the intent check (fail open).
+    store = _Store(ActionPolicy(modes={SEND_EXTERNAL: MODE_ALLOW}))
+    asked: list = []
+    binding = ActionApprovals(policy=lambda: store.policy, ask=lambda r: asked.append(r) or False)
+    policy = ApprovalPolicy()
+    policy.intent = IntentGuard(_Judge('{"covered": true, "quote": "x"}'), history_provider=lambda: _rows("x"))
+    rule = action_rule(SEND_EXTERNAL, lambda args: object(), binding)
+    result = _decide(policy, rule, {"to": "a@b.c"}, "mail_send")
+    assert not isinstance(result, ToolApproved)
+    assert len(asked) == 1

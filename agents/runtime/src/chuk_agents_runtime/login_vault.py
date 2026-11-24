@@ -87,6 +87,11 @@ EVALUATE_TOOL = "browser_evaluate"
 #: the password straight out of the field, so on an origin the vault filled
 #: they are refused for the rest of the session.
 SCRIPT_TOOLS = frozenset({EVALUATE_TOOL, "browser_run_code", "browser_run_code_unsafe"})
+#: Script tools that get the whole browser context (every tab, not only the
+#: current page): ``context.pages()`` reads a filled field from another tab.
+#: After any vault fill they are refused on every page, not only on the
+#: filled origin.
+CONTEXT_SCRIPT_TOOLS = frozenset({"browser_run_code", "browser_run_code_unsafe"})
 
 #: Run on the target element (``browser_evaluate`` with its ``ref``): the
 #: origin of the document the element lives in (an iframe has its own), and
@@ -363,7 +368,7 @@ class LoginGuard:
             return invoke(args)
         if tool in SCRIPT_TOOLS and self._filled_origins and not has_placeholder(args):
             origin = normalize_origin(self._page_url(manager, server))
-            if origin is None or origin in self._filled_origins:
+            if tool in CONTEXT_SCRIPT_TOOLS or origin is None or origin in self._filled_origins:
                 shown = origin or "an unknown page"
                 self._audit(tool, origin or "", "", [], OUTCOME_REFUSED_SCRIPT)
                 return {

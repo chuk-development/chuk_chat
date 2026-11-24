@@ -273,15 +273,16 @@ class ApprovalPolicy:
                     )
                 if isinstance(request, dict):
                     return self._deny(call_id, request)
-                if not isinstance(request, ActionRequest):
-                    return ToolApproved()
-                intent = await anyio.to_thread.run_sync(_judge, self.intent, request)
-                if intent.covered:
-                    return ToolApproved()
-                request.details = {
-                    **request.details, "kind": INTENT_CARD_KIND, "intent": intent.to_dict()
-                }
-                request.options = (SCOPE_ONCE, SCOPE_DENY)
+                if isinstance(request, ActionRequest):
+                    intent = await anyio.to_thread.run_sync(_judge, self.intent, request)
+                    if intent.covered:
+                        return ToolApproved()
+                    request.details = {
+                        **request.details, "kind": INTENT_CARD_KIND, "intent": intent.to_dict()
+                    }
+                    request.options = (SCOPE_ONCE, SCOPE_DENY)
+                # A request the judge cannot read is never a silent allow: it
+                # goes to the user like any card (fail safe).
             if mode == MODE_DENY:
                 self._note(rule, None, name, "denied", "policy")
                 return self._deny(call_id, rule.declined(args, "denied_by_policy"))

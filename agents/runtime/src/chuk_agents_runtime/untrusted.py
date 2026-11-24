@@ -79,6 +79,17 @@ PROMPT_RULE = (
 )
 
 
+#: Tools whose result is untrusted only when it says so: a codemode script
+#: (``run_tool_script``) that called a web, mail or document tool marks its
+#: result with this key, and its stdout then carries that outside text.
+MARKED_TOOLS = frozenset({"run_tool_script"})
+MARK_KEY = "untrusted_output"
+
+
+def _marked(name: Any, result: Any) -> bool:
+    return name in MARKED_TOOLS and isinstance(result, Mapping) and result.get(MARK_KEY) is True
+
+
 def is_untrusted_tool(name: Any) -> bool:
     """Whether results of tool ``name`` carry outside content."""
     if not isinstance(name, str) or not name:
@@ -154,7 +165,7 @@ class UntrustedWrapper:
         return self.wrap(name, result)
 
     def wrap(self, name: str, result: Any) -> Any:
-        if not is_untrusted_tool(name) or result is None:
+        if result is None or not (is_untrusted_tool(name) or _marked(name, result)):
             return result
         if _is_error_envelope(result) or is_wrapped(result):
             return result
