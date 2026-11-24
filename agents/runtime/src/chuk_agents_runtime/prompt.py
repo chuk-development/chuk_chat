@@ -26,6 +26,7 @@ import json
 from collections.abc import Sequence
 
 from .registry import ToolRegistry
+from .untrusted import PROMPT_RULE as UNTRUSTED_RULE
 
 BASE_INSTRUCTIONS = """\
 You are Agents, an AI agent. You run on the user's own computer, in the
@@ -130,6 +131,9 @@ Mobbin | Update payment method | | due Last chance | 18.10. | mobbin.com
 - When you need a tool that is not in your tool list, call `search_tools` with
   its name or a few words of what it does. Then call the tool it returns. A
   tool that a skill names works the same way.
+- Many similar tool calls (10+ file reads, a loop over search results): call
+  `run_tool_script` once with a Python script that calls `tools.read_file(...)`
+  and the other tools as functions, and prints a short summary.
 
 # Online research
 
@@ -214,6 +218,8 @@ Mobbin | Update payment method | | due Last chance | 18.10. | mobbin.com
 - The facts of every finished task are stored automatically. Use `memory_add`
   for something you want kept verbatim, and `memory_search` when a task may
   depend on a decision, a preference or a fact from before.
+- Facts about the user go to `USER.md` / `remember` (`memory` tool), only
+  from the user's own words.
 
 # Saving a skill
 
@@ -230,7 +236,7 @@ Mobbin | Update payment method | | due Last chance | 18.10. | mobbin.com
 - Reversible work you just do. A command that destroys data the user cannot get
   back (delete, overwrite, `git reset --hard`) is the one case to stop on: if
   the user did not clearly ask for it, ask first, then do it.
-"""
+""" + UNTRUSTED_RULE
 
 #: How the model points at a file in the workspace (DeepSeek harness item 49).
 #: The app turns an angle-bracket path into a tap target; the ``#L`` suffix
@@ -266,7 +272,22 @@ def upgrade_research_instructions(prompt: str) -> str:
     prompt = _rename_old_head(prompt)
     prompt = _add_skill_proposals(_add_takeover(_add_deferred_tools(_add_research(prompt))))
     prompt = _add_clock_and_automations(_add_research_depth(_add_language_and_rounds(prompt)))
-    return _add_answer_blocks(_add_self_check_and_no_guessing(prompt))
+    prompt = _add_answer_blocks(_add_self_check_and_no_guessing(prompt))
+    return _add_untrusted_rule(prompt)
+
+
+def _add_untrusted_rule(prompt: str) -> str:
+    """Sessions seeded before the untrusted data block (CHAT-180) get its
+    rule as the last bullet of ``# Safety``. Depends on the stored prompt
+    alone, so the text is the same on every round."""
+    if "`<<<UNTRUSTED_DATA" in prompt or "\n# Safety\n" not in prompt:
+        return prompt
+    head, tail = prompt.split("\n# Safety\n", 1)
+    end = tail.find("\n\n#")
+    body, rest = (tail, "") if end < 0 else (tail[:end], tail[end:])
+    kept = body.rstrip("\n")
+    trailing = body[len(kept) :]
+    return head + "\n# Safety\n" + kept + "\n" + UNTRUSTED_RULE.rstrip("\n") + trailing + rest
 
 
 #: Bullets of :data:`BASE_INSTRUCTIONS` that replace an older bullet in a

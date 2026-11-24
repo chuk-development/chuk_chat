@@ -46,6 +46,7 @@ from typing import Any
 
 import httpx
 
+from .cost import cache_hit_tokens
 from .model import ModelResponse, ToolCall
 from .telemetry import get_tracer
 
@@ -836,7 +837,7 @@ class BackendModelClient:
         from pydantic_ai.tools import ToolDefinition
 
         from .pai.convert import rows_to_messages
-        from .pai.model import ChukModelSpec, chuk_chat_model
+        from .pai.model import ChukModelSpec, chuk_chat_model, needs_reasoning_passback
 
         model, settings = chuk_chat_model(
             self._session,
@@ -865,7 +866,11 @@ class BackendModelClient:
         try:
             return await model_request(
                 model,
-                rows_to_messages(messages),
+                # A subagent child or a browser step with tools on DeepSeek
+                # needs its earlier reasoning back (CHAT-181).
+                rows_to_messages(
+                    messages, include_reasoning=needs_reasoning_passback(self._model_id)
+                ),
                 model_settings=settings,
                 model_request_parameters=ModelRequestParameters(
                     function_tools=tools, allow_text_output=True
@@ -891,6 +896,11 @@ class BackendModelClient:
                 "completion_tokens": reply.usage.output_tokens,
                 "total_tokens": reply.usage.input_tokens + reply.usage.output_tokens,
             }
+            # The prefix-cache hits (CHAT-181): the cost line prices them at
+            # the cache price (``cost.usage_split``).
+            cached = cache_hit_tokens(reply.usage)
+            if cached:
+                usage["cached_tokens"] = cached
         timing = self._record(started, usage, error_code=None)
         if reasoning and self.on_reasoning is not None:
             _safe_sink(self.on_reasoning, reasoning)
@@ -936,13 +946,37 @@ class BackendModelClient:
 
     # -- clones, tools, lifecycle ------------------------------------------
 
-    def cheap_clone(self, *, max_tokens: int = 512) -> "BackendModelClient":
+    def routed_clone(self, route: Any, *, max_tokens: int | None = None) -> "BackendModelClient":
+        """A client on the same session for one kind of work
+        (:mod:`~chuk_agents_runtime.model_routes`, CHAT-181): the route's
+        model, provider pin and effort. The task's provider pin is kept only
+        for the task's own model (a pin names a provider of one model)."""
+        provider = route.provider_slug
+        if provider is None and route.model_id == self._model_id:
+            provider = self._provider_slug
+        return BackendModelClient(
+            self._session,
+            model_id=route.model_id,
+            provider_slug=provider,
+            base_url=self._base_url,
+            max_tokens=max_tokens,
+            reasoning_effort=route.reasoning_effort,
+            transport=self._transport,
+            timeout=self._timeout,
+            clock=self._clock,
+        )
+
+    def cheap_clone(self, *, max_tokens: int = 512, route: Any = None) -> "BackendModelClient":
         """The housekeeping client (context summary, memory extraction) on the
         same session: the configured aux model (:func:`aux_model_settings`,
         by default a fast model whose reasoning really turns off), reasoning
         off and a small output cap. It carries no tools. The task's provider
         pin is kept only when the aux model is the task's own model: a slug
-        of another model's provider would be refused."""
+        of another model's provider would be refused. ``route`` (an agent's
+        own ``aux`` route, :mod:`~chuk_agents_runtime.model_routes`) wins over
+        the host's setting."""
+        if route is not None:
+            return self.routed_clone(route, max_tokens=max_tokens)
         aux = aux_model_settings()
         if aux.model_id is None or aux.model_id == self._model_id:
             model_id = self._model_id

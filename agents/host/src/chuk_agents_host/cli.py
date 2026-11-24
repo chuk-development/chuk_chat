@@ -314,6 +314,10 @@ def _build_parser() -> argparse.ArgumentParser:
         help="also remove the workspace and the message history (back them up first)",
     )
 
+    from .gateways.cli import add_parser as _add_telegram_parser
+
+    _add_telegram_parser(sub, WORKSPACE_HELP)
+
     trace_parser = sub.add_parser(
         "trace",
         help="read a run trace back: where did the four minutes go",
@@ -1077,6 +1081,10 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_trace(args)
     if command == "agents":
         return cmd_agents(args)
+    if command == "telegram":
+        from .gateways.cli import cmd_telegram
+
+        return cmd_telegram(args)
     return cmd_run(args)
 
 

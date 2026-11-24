@@ -56,6 +56,7 @@ def test_defaults_ask_for_outward_classes_and_allow_the_browser():
         "mcp_destructive": "ask",
         "browser_act": "allow",
         "local_actions": "allow",
+        "payment": "ask",
     }
     assert wire["sites"] == {"browser_act": []}
     assert wire["defaults"]["browser_act"] == "allow"

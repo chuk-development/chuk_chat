@@ -471,6 +471,7 @@ dependencies = [
     { name = "chuk-agents-manager" },
     { name = "chuk-agents-runtime" },
     { name = "chuk-agents-sandbox" },
+    { name = "httpx" },
     { name = "qrcode" },
     { name = "websockets" },
 ]
@@ -489,6 +490,7 @@ requires-dist = [
     { name = "chuk-agents-manager", editable = "../manager" },
     { name = "chuk-agents-runtime", editable = "../runtime" },
     { name = "chuk-agents-sandbox", editable = "../sandbox" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "qrcode", specifier = ">=8" },
     { name = "websockets", specifier = ">=13" },
 ]

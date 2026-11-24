@@ -149,7 +149,10 @@ def test_payload_is_the_openai_request_with_the_provider_pin():
     messages = body["messages"]
     assert messages[0] == {"role": "system", "content": "be brief"}
     assistant = messages[2]
-    assert "reasoning" not in assistant and "reasoning_content" not in assistant
+    # CHAT-181: a DeepSeek model gets its stored thinking back in
+    # ``reasoning_content`` (never as ``reasoning``).
+    assert "reasoning" not in assistant
+    assert assistant["reasoning_content"] == "stored thinking"
     assert assistant["tool_calls"][0]["function"]["arguments"] == '{"command":"ls"}'
     assert messages[3] == {"role": "tool", "tool_call_id": "c1", "content": '{"exit_code":0,"stdout":"a"}'}
 

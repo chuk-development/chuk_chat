@@ -42,7 +42,11 @@ from pathlib import Path
 
 from chuk_agents_runtime import Scrubber, status_map, valid_name
 from chuk_agents_runtime.login_vault import clean_origin, parse_totp_secret
+from chuk_agents_runtime.vault import card_secret_values
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+from . import vault_items
+from .vault_items import VaultItemError
 
 logger = logging.getLogger(__name__)
 
@@ -115,6 +119,10 @@ class SecretsVault:
         #: Login vault: id -> {id, origin, username, password, totp_secret,
         #: label, created_at, last_used_at}.
         self._logins: dict[str, dict] = {}
+        #: Payment cards and contact info (CHAT-185, :mod:`.vault_items`).
+        self._cards: dict[str, dict] = {}
+        self._default_card: str | None = None
+        self._contacts: dict[str, dict] = {}
         self._audit_lock = threading.Lock()
         self._scrubber = Scrubber(self.scrub_values)
 
@@ -167,7 +175,123 @@ class SecretsVault:
                     out[f"login:{origin}#{entry['id']}:password"] = entry["password"]
                 if entry.get("totp_secret"):
                     out[f"login:{origin}#{entry['id']}:totp_secret"] = entry["totp_secret"]
+            # Card numbers in every rendering. The short security code is
+            # masked by the browser guard only (a 3-digit global mask would
+            # hit every number in every output).
+            for card in self._cards.values():
+                for name, value in card_secret_values(card).items():
+                    if not name.endswith(":cvc"):
+                        out[name] = value
             return out
+
+    # -- payment cards and contacts (CHAT-185) ----------------------------
+
+    def card_entries(self) -> list[dict]:
+        """Every card, public view (no number, no security code)."""
+        with self._lock:
+            rows = [vault_items.card_public(c, self._default_card) for c in self._cards.values()]
+        return sorted(rows, key=lambda r: (not r["is_default"], r["label"], r["id"]))
+
+    def card_full(self, card_id: str) -> dict | None:
+        """The full card, for the browser guard only."""
+        with self._lock:
+            card = self._cards.get(card_id)
+            return dict(card) if card else None
+
+    @property
+    def default_card_id(self) -> str | None:
+        with self._lock:
+            return self._default_card
+
+    def card_set(self, payload: Mapping) -> dict:
+        """Upsert a card (``id`` names the card to change). Returns its public row."""
+        if not isinstance(payload, Mapping):
+            raise VaultItemError("card must be an object")
+        card_id = payload.get("id")
+        with self._lock:
+            current = self._cards.get(card_id) if isinstance(card_id, str) and card_id else None
+            if card_id and current is None:
+                raise VaultItemError("no card with this id")
+            if current is None and len(self._cards) >= vault_items.MAX_CARDS:
+                raise VaultItemError(f"at most {vault_items.MAX_CARDS} cards per host")
+            card = vault_items.card_update(current, payload)
+            self._cards[card["id"]] = card
+            if payload.get("make_default") is True or self._default_card is None:
+                self._default_card = card["id"]
+            public = vault_items.card_public(card, self._default_card)
+        logger.info("vault: saved card %s", public["id"])
+        self.save()
+        return public
+
+    def card_delete(self, card_id: object) -> bool:
+        if not isinstance(card_id, str):
+            return False
+        with self._lock:
+            gone = self._cards.pop(card_id, None)
+            if gone is not None and self._default_card == card_id:
+                self._default_card = None
+        if gone is None:
+            return False
+        logger.info("vault: deleted card %s", card_id)
+        self.save()
+        return True
+
+    def card_set_default(self, card_id: object) -> None:
+        """Make ``card_id`` the default payment method; ``None`` clears it."""
+        with self._lock:
+            if card_id is not None and (not isinstance(card_id, str) or card_id not in self._cards):
+                raise VaultItemError("no card with this id")
+            self._default_card = card_id
+        self.save()
+
+    def card_used(self, card_id: str) -> None:
+        with self._lock:
+            card = self._cards.get(card_id)
+            if card is None:
+                return
+            card["last_used_at"] = _now_ms()
+        self.save()
+
+    def contact_entries(self) -> list[dict]:
+        """Every contact in full (the model may read contact info)."""
+        with self._lock:
+            rows = [json.loads(json.dumps(c)) for c in self._contacts.values()]
+        return sorted(rows, key=lambda r: (r["label"].lower(), r["id"]))
+
+    def contact_set(self, payload: Mapping) -> dict:
+        if not isinstance(payload, Mapping):
+            raise VaultItemError("contact must be an object")
+        contact_id = payload.get("id")
+        with self._lock:
+            current = (
+                self._contacts.get(contact_id) if isinstance(contact_id, str) and contact_id else None
+            )
+            if contact_id and current is None:
+                raise VaultItemError("no contact with this id")
+            if current is None and len(self._contacts) >= vault_items.MAX_CONTACTS:
+                raise VaultItemError(f"at most {vault_items.MAX_CONTACTS} contacts per host")
+            contact = vault_items.contact_update(current, payload)
+            clash = any(
+                c["label"].lower() == contact["label"].lower() and c["id"] != contact["id"]
+                for c in self._contacts.values()
+            )
+            if clash:
+                raise VaultItemError("another contact has this label")
+            self._contacts[contact["id"]] = contact
+            out = json.loads(json.dumps(contact))
+        logger.info("vault: saved contact %s", out["id"])
+        self.save()
+        return out
+
+    def contact_delete(self, contact_id: object) -> bool:
+        if not isinstance(contact_id, str):
+            return False
+        with self._lock:
+            gone = self._contacts.pop(contact_id, None)
+        if gone is None:
+            return False
+        self.save()
+        return True
 
     # -- the login vault (Hermes H32) -------------------------------------
 
@@ -350,6 +474,9 @@ class SecretsVault:
                     "revision": self._revision,
                     "values": self._values,
                     "logins": list(self._logins.values()),
+                    "cards": list(self._cards.values()),
+                    "default_card": self._default_card,
+                    "contacts": list(self._contacts.values()),
                 },
                 separators=(",", ":"),
             ).encode("utf-8")
@@ -397,9 +524,15 @@ class SecretsVault:
                 if valid_name(k) and isinstance(v, str) and v
             }
             logins = _clean_logins(data.get("logins"))
+            cards = vault_items.clean_cards(data.get("cards"))
+            default_card = data.get("default_card")
+            contacts = vault_items.clean_contacts(data.get("contacts"))
             with self._lock:
                 self._values = clean
                 self._logins = logins
+                self._cards = cards
+                self._default_card = default_card if default_card in cards else None
+                self._contacts = contacts
                 try:
                     self._revision = int(data.get("revision") or 0)
                 except (TypeError, ValueError):

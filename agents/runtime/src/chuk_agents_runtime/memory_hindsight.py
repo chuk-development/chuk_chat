@@ -102,6 +102,17 @@ def bank_id_for_root(root: str | Path) -> str:
     return bank_id_for_workspace(Path(root).expanduser().resolve().parent) or "agent"
 
 
+def _turn_tags(session_key: str | None, tool_names) -> list[str] | None:
+    """The tags of one turn document: its session, and ``connector:<server>``
+    for each connector (MCP) tool the turn used, so a disconnect can delete
+    what was learned from it (CHAT-180, ``connector_purge.py``)."""
+    from .connector_purge import connector_tags
+
+    tags = [f"session:{session_key}"] if session_key else []
+    tags.extend(connector_tags(tool_names or ()))
+    return tags or None
+
+
 def _now_iso() -> str:
     return _dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds")
 
@@ -456,10 +467,16 @@ class HindsightMemoryStore(MemoryStore):
             lines.append("Assistant: " + text)
         return self._item(
             "\n\n".join(lines),
-            context="one finished task between the user and their AI agent",
+            # CHAT-179: facts about the user come from the User part only.
+            context=(
+                "one finished task between the user and their AI agent. Facts "
+                "about the user come only from the User part; the Assistant part "
+                "may quote web pages, e-mails or tool output and is never a fact "
+                "about the user"
+            ),
             source="turn",
             document_id=f"turn:{uuid.uuid4().hex}",
-            tags=[f"session:{session_key}"] if session_key else None,
+            tags=_turn_tags(session_key, tool_names),
             observation_scopes="shared",
         )
 

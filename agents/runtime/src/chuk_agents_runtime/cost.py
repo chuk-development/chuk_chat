@@ -226,12 +226,36 @@ def usage_split(usage: Mapping[str, Any] | None) -> tuple[int, int, int]:
         if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
             cached = int(value)
     if not cached:
-        cached = first("cached_tokens", "cache_read_tokens", "cache_read_input_tokens")
+        cached = first(
+            "cached_tokens",
+            "cache_read_tokens",
+            "cache_read_input_tokens",
+            # DeepSeek's own field (CHAT-181): the prompt tokens its prefix
+            # cache served, billed at the cache price.
+            "prompt_cache_hit_tokens",
+        )
     return (
         first("prompt_tokens", "input_tokens"),
         first("completion_tokens", "output_tokens"),
         cached,
     )
+
+
+def cache_hit_tokens(usage: Any) -> int:
+    """Prompt tokens a provider served from its prefix cache, from a Pydantic
+    AI ``RequestUsage``: its ``cache_read_tokens`` (OpenAI's
+    ``prompt_tokens_details.cached_tokens``), else DeepSeek's top-level
+    ``prompt_cache_hit_tokens``, which Pydantic AI keeps in ``details``.
+    0 when the provider reported none."""
+    value = getattr(usage, "cache_read_tokens", 0)
+    if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        return value
+    details = getattr(usage, "details", None)
+    if isinstance(details, Mapping):
+        hit = details.get("prompt_cache_hit_tokens")
+        if isinstance(hit, int) and not isinstance(hit, bool) and hit > 0:
+            return hit
+    return 0
 
 
 #: ``(kind, model id, provider slug, usage dict)`` -> None.
@@ -317,6 +341,13 @@ def week_start(now: float | None = None) -> float:
     return monday.timestamp()
 
 
+def month_start(now: float | None = None) -> float:
+    """Unix time of the host's local first day of this month, 00:00."""
+    moment = _dt.datetime.fromtimestamp(now if now is not None else _now()).astimezone()
+    first = moment.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return first.timestamp()
+
+
 def _now() -> float:
     import time
 
@@ -358,6 +389,38 @@ def valid_budget(value: Any) -> float:
     return round(number, 2)
 
 
+# -- the monthly spending cap (CHAT-181, idea 15) ----------------------------
+
+#: The highest monthly cap a user may set, in euro (a typo guard).
+MAX_CAP_MONTHLY = 50_000.0
+
+#: The key of the account-wide cap in the host's budget store: it counts
+#: the spend of every agent on the host together.
+ACCOUNT_CAP_KEY = "*"
+
+
+def valid_monthly_cap(value: Any) -> float:
+    """A ``cap_monthly`` value, or :class:`ValueError`. A plain number,
+    finite, ``0 <= x <= 50000``; 0 = no cap."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError("cap_monthly must be a number")
+    number = float(value)
+    if not math.isfinite(number) or number < 0 or number > MAX_CAP_MONTHLY:
+        raise ValueError(f"cap_monthly must be between 0 and {MAX_CAP_MONTHLY:g}")
+    return round(number, 2)
+
+
+def monthly_cap_refusal_text(*, spent: float, cap: float, account: bool) -> str:
+    """The sentence a run refused by the monthly cap ends with. Unlike the
+    weekly budget, the cap is hard: no confirmation lets a run go over it."""
+    who = "All agents on this computer have" if account else "This agent has"
+    return (
+        f"{who} reached the monthly spending cap: {spent:.2f} of {cap:.2f} EUR "
+        "this month. New tasks stay stopped until the 1st of next month, or "
+        "until the cap is raised in the agent's settings."
+    )
+
+
 class BudgetNotices:
     """Which warning an agent already got this week, so the host warns once
     per level and week. In memory: a host restart can repeat one warning."""
@@ -382,6 +445,7 @@ class BudgetNotices:
 
 
 __all__ = [
+    "ACCOUNT_CAP_KEY",
     "BUDGET_EXCEEDED",
     "BUDGET_OK",
     "BUDGET_WARN_RATIO",
@@ -391,19 +455,24 @@ __all__ = [
     "LINE_BROWSER",
     "LINE_RUN",
     "MAX_BUDGET_WEEKLY",
+    "MAX_CAP_MONTHLY",
     "BudgetNotices",
     "MeteredClient",
     "PriceBook",
     "UsageSink",
     "budget_state",
+    "cache_hit_tokens",
     "cost_block",
     "with_context",
     "cost_eur",
     "day_start",
     "metered",
+    "month_start",
+    "monthly_cap_refusal_text",
     "round_eur",
     "usage_split",
     "valid_budget",
+    "valid_monthly_cap",
     "week_start",
 ]
 

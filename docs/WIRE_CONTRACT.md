@@ -4031,6 +4031,18 @@ Host -> app, `agent_permissions` gains:
   `{"budgets": {"<agent key>": 5.0}}`. Only budgets above 0 are stored. A bad
   entry is dropped on load (logged).
 
+#### Monthly spending cap (CHAT-181, additive)
+
+The same frames carry two hard caps, euro per calendar month, `0` = no cap:
+`cap_monthly` (this agent) and `account_cap_monthly` (all agents on this
+host together). Both are in every reply for a known agent. The same strict
+rule as `budget_weekly`, range `0` to `50000`. Host record:
+`agent_permissions.json` key `caps_monthly`, the account under key `*`.
+
+At a cap the executor refuses every new run (`done`, reason
+`budget_exceeded`, a sentence that names the monthly cap). `budget_override`
+does not lift a cap. No `budget_warning` is sent for it.
+
 ### Inbound: host -> app `budget_warning` (NEW)
 
 ```json

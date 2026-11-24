@@ -2304,6 +2304,15 @@ class SessionAutomations:
     def control(self, automation_id: str, action: str) -> dict:
         return self._manager.control(self._session_key, automation_id, action)
 
+    def proactive(self):
+        """The proactive tools' backend for this chat (CHAT-182), or ``None``
+        when the host has no proactive manager or this run may not set up
+        automations (the same guard as the creating tools)."""
+        manager = getattr(self._manager, "proactive", None)
+        if manager is None or not self.can_create():
+            return None
+        return manager.bound(self._session_key)
+
 
 __all__ = [
     "AutomationManager",

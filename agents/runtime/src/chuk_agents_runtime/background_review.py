@@ -9,9 +9,9 @@ directly:
   through the existing ``propose_skill`` card path
   (:mod:`chuk_agents_runtime.skill_proposals`): scrubbed, validated, stored,
   shown to the user, written only on the user's accept;
-- **memory** candidates are returned in the report and nothing else. There is
-  no approval path for memory writes yet, so the caller decides (today: they
-  are logged as counts and dropped).
+- **memory** candidates are returned in the report. The executor stores them
+  as pending candidates (CHAT-179, :mod:`chuk_agents_runtime.personal_memory`);
+  the agent asks the user, and only the user's yes keeps one.
 
 Read-before-write for a skill update: the review re-reads the CURRENT
 ``SKILL.md`` of every skill the task loaded and gives that text to the model.

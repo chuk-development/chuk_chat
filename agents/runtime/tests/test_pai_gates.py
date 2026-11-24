@@ -125,9 +125,11 @@ def test_gate1_sse_text_and_reasoning_deltas_stream_live_in_order(tmp_path):
         "type": "object",
         "properties": {"v": {"type": "string"}},
     }
-    # The thinking is not sent back (native parity), the tool result is.
+    # CHAT-181: DeepSeek needs the thinking of its tool-call turn back in a
+    # request with tools (``reasoning_content``); the tool result goes too.
     second = endpoint.requests[1]["body"]["messages"]
-    assert all("reasoning_content" not in m for m in second)
+    assistant = [m for m in second if m.get("role") == "assistant"]
+    assert assistant and assistant[0]["reasoning_content"] == "I should echo."
     assert second[-1]["role"] == "tool" and second[-1]["tool_call_id"] == "call_a"
 
 

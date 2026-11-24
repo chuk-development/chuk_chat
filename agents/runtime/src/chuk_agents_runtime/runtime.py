@@ -33,6 +33,7 @@ from .file_edit import EditGuard, observations_for
 from .files_out import FileSink
 from .safety_floor import SafetyFloor
 from .action_policy import ActionApprovals
+from .untrusted import UntrustedWrapper
 from .herenow import ApprovalGate, HereNowConfig, register_herenow_tools
 from .loop import AgentLoop, IterationBudget, KillSwitch, LoopResult
 from .mcp_client import MCPManager, open_browser_gui_async, register_mcp_tools
@@ -44,6 +45,7 @@ from .memory import (
     register_memory_tool,
 )
 from .model import ModelClient, ModelResponse
+from .personal_memory import observe_user_turn, owner_words_from_loop
 from .oauth_bridge import (
     BackendOAuthClient,
     CredentialStash,
@@ -64,10 +66,13 @@ from .agent_naming import AgentNamingBackend, naming_prompt_section, register_na
 from .room_handoff import HandoffBackend, register_handoff_tools
 from .peer_tools import PeerToolsBackend, register_peer_tools
 from .automations import AutomationBackend, register_automation_tools
+from .proactive import register_proactive_tools
 from .calls import CallBackend, register_call_tools
 from .takeover import TakeoverBackend, register_takeover_tool
 from .ask_user import QuestionBackend, register_ask_user_tool
 from .goal import GoalController, register_goal_tools
+from .goal_judge import make_judge
+from .run_modes import apply_mode_to_approvals, apply_mode_to_registry, mode_context_rows
 from .plan_mode import PlanMode, register_plan_tool
 from .todo import register_todo_tool
 from .skill_proposals import SkillProposalSink, register_propose_skill_tool
@@ -89,6 +94,8 @@ from .shell_tools import JobManager, register_job_tools, register_shell_tools
 from .terminal import TerminalManager
 from .tool_search import DEFAULT_THRESHOLD, ToolSearchDecision, apply_tool_search
 from .tools import register_builtin_tools
+from .codemode import register_codemode_tool
+from .tools import _secret_env
 from .web_search import DEFAULT_BASE_URL, TokenSession
 from .workspace_git import JOURNAL_PATH, GitWorkspace, summarize_result, workspace_state_dir
 from .workspace_tools import JournalingRegistry, register_workspace_tools
@@ -410,6 +417,7 @@ def build_runtime(
     aux_model: ModelClient | None = None,
     aux_model_factory: Callable[[], ModelClient] | None = None,
     enable_terminal: bool = True,
+    enable_codemode: bool = True,
     terminal_task_id: str = "task",
     enable_browser: bool = True,
     browser_model: ModelClient | None = None,
@@ -458,6 +466,7 @@ def build_runtime(
     questions: QuestionBackend | None = None,
     context_observer: Callable[[dict], None] | None = None,
     checkpoint_sink: Callable[[str, Any], None] | None = None,
+    run_mode: Any = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract is prepended from :mod:`chuk_agents_runtime.prompt` and the live
@@ -579,6 +588,9 @@ def build_runtime(
     seam the executor uses to hand a finished job's output to a running turn.
     """
     env = environment or LocalEnvironment()
+    # CHAT-183: a run mode (run_modes.py) with ``approvals: strict`` makes
+    # every per-action class that would run without a card ask first.
+    action_approvals = apply_mode_to_approvals(action_approvals, run_mode)
     # The ladder fits the model's real window (bead B18): a 1M model is not
     # compacted at 128k, a 32k model is compacted before it overflows.
     ladder_config = context_config or ladder_config_for(model)
@@ -594,6 +606,9 @@ def build_runtime(
         else None
     )
     registry = JournalingRegistry(git_workspace, observer=tool_observer)
+    # CHAT-180: results with outside content reach the model as an untrusted
+    # data block with a random id per runtime (untrusted.py).
+    registry.result_wrapper = UntrustedWrapper()
     # Checkpoints (docs/WIRE_CONTRACT.md, "Checkpoints, rewind and fork"):
     # the run's first workspace-changing call pins the workspace as it was.
     registry.checkpoint_sink = checkpoint_sink
@@ -671,6 +686,10 @@ def build_runtime(
     # start_watcher / list / pause / resume / cancel, bound to ONE session by
     # the executor. ``None`` (no host, no clock) registers nothing.
     register_automation_tools(registry, automations)
+    # The proactive agent (CHAT-182, docs/agents/PROACTIVE.md):
+    # ``proactive_settings`` and ``heartbeat_checklist``, through the same
+    # session-bound backend. A host without it registers nothing.
+    register_proactive_tools(registry, automations)
 
     # Self-naming (docs/WIRE_CONTRACT.md, "Agent names"): ``rename_self``,
     # bound to THIS agent's id by the executor. ``None`` (no host, a room or
@@ -788,6 +807,22 @@ def build_runtime(
         register_dashboard_tool(registry, dashboard, by=dashboard_by or "Agent")
 
     kill = kill_switch or KillSwitch(estop_path)
+
+    # Codemode (CHAT-186, docs/agents/CODEMODE.md): ``run_tool_script`` runs
+    # ONE script in the sandbox that calls many whitelisted tools through this
+    # registry. The approval policy is bound below, once the loop exists.
+    codemode = (
+        register_codemode_tool(
+            registry,
+            env,
+            workspace=workspace,
+            secret_env=lambda: _secret_env(secrets),
+        )
+        if enable_codemode
+        else None
+    )
+    if codemode is not None:
+        codemode.cancel = lambda: kill.interrupted() or kill.estop_engaged()
 
     # Agent mail (docs/AGENT_MAIL.md §7): the full set for a normal run, or the
     # four tools of ONE mail for a restricted run, bound by the executor.
@@ -952,6 +987,9 @@ def build_runtime(
     if tool_allowlist is not None:
         allowed = set(tool_allowlist)
         _withhold_tools(registry, [name for name in registry.names() if name not in allowed])
+    # CHAT-183: the run mode refuses its denied tools at dispatch. The tool
+    # list stays the same bytes (prefix cache), like plan mode.
+    apply_mode_to_registry(registry, run_mode)
 
     decision = ToolSearchDecision(
         active=False,
@@ -1032,6 +1070,16 @@ def build_runtime(
         action_approvals=action_approvals,
         reviewer=reviewer,
     )
+    # CHAT-180: the intent check. A class action that would run silently is
+    # first compared with the user's own words by the aux model.
+    intent_guard = None
+    if action_approvals is not None and aux_model is not None and loop_extra.get("approval_policy") is not None:
+        from .intent_check import IntentGuard
+
+        intent_guard = IntentGuard(aux_model)
+        loop_extra["approval_policy"].intent = intent_guard
+    if codemode is not None and loop_extra.get("approval_policy") is not None:
+        codemode.requires_approval = loop_extra["approval_policy"].requires_approval
     loop = AgentLoop(
         loop_model,
         registry,
@@ -1065,8 +1113,10 @@ def build_runtime(
         # The plan-mode rules, once per task while plan mode is on: an
         # appended row, never a system prompt change (prefix cache).
         task_context_providers=(
-            [plan_mode.state.task_context] if plan_mode is not None else None
-        ),
+            ([plan_mode.state.task_context] if plan_mode is not None else [])
+            # CHAT-183: the run mode's prompt block, once per task.
+            + ([lambda: mode_context_rows(run_mode)] if run_mode is not None else [])
+        ) or None,
         # Typed context rows (``source``) as live ``context`` frames.
         context_observer=context_observer,
         interim_writer=interim_writer,
@@ -1119,18 +1169,15 @@ def build_runtime(
         ),
         recall_wait=automatic_recall_wait(),
         turn_observer=(
-            (
-                lambda record: memory.observe_turn(
-                    record.user_message,
-                    record.final_answer,
-                    tool_names=record.tool_names,
-                    session_key=record.session_key,
-                )
-            )
+            (lambda record: _observe_memory_turn(memory, loop, record))
             if memory is not None and memory.automatic and not light_context
             else None
         ),
     )
+    if memory is not None:
+        # CHAT-179: the `memory` tool checks quotes and approvals against
+        # what the user typed in the running session.
+        memory.personal.owner_words = lambda: owner_words_from_loop(loop)
     # Two handles the caller needs and the loop itself does not: the MCP manager,
     # whose transport threads and subprocesses must be closed when the run ends,
     # and the tool-search decision, which is what the executor logs.
@@ -1144,10 +1191,39 @@ def build_runtime(
         loop.image_loader = make_image_loader(workspace)
     if reviewer is not None:
         reviewer.history_provider = lambda: loop_history(loop)
+    if intent_guard is not None:
+        intent_guard.history_provider = lambda: loop_history(loop)
     if subagents is not None and subagents.supervisor is not None:
         # ``fork=true`` copies the history of the run that calls it.
         subagents.supervisor.history_provider = lambda: loop_history(loop)
+    if goal is not None:
+        # CHAT-183: the goal judge checks a ``complete`` on the cheap aux
+        # model (a fresh client per check when the aux client can clone).
+        if goal.judge is None:
+            goal.judge = make_judge(
+                interim_factory if callable(interim_factory) else aux_model
+            )
+        if goal.steps_left is None:
+            goal.steps_left = lambda: loop.budget.remaining
     return loop
+
+
+def _observe_memory_turn(memory: MemoryStore, loop: AgentLoop, record) -> None:
+    """The turn hook: the backend's own extraction, then the quoted user
+    notes (CHAT-179) from the prompt, if the user typed it."""
+    memory.observe_turn(
+        record.user_message,
+        record.final_answer,
+        tool_names=record.tool_names,
+        session_key=record.session_key,
+    )
+    observe_user_turn(
+        memory.personal,
+        memory.personal.model,
+        lambda: loop.store.get_conversation(record.session_id),
+        record.user_message,
+        session=record.session_key,
+    )
 
 
 def _current_agent_name(backend: AgentNamingBackend) -> str | None:

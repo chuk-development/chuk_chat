@@ -116,10 +116,13 @@ from chuk_agents_runtime.action_policy import (
     ActionDecision,
     ActionPolicy,
     ActionRequest,
+    PAYMENT,
+    SCOPE_CHAT,
     SCOPE_PREFIX,
     parse_scope,
     user_browser_policy,
 )
+from chuk_agents_runtime import chat_grants as _chat_grants
 from chuk_agents_runtime.takeover import (
     STATUS_DONE as TAKEOVER_DONE,
     STATUS_SKIPPED as TAKEOVER_SKIPPED,
@@ -140,8 +143,22 @@ from chuk_agents_runtime.background_review import (
     MIN_ITERATIONS as REVIEW_MIN_ITERATIONS,
     run_background_review,
 )
+from chuk_agents_runtime.skill_selffix import (
+    FAILURE_REASONS as SELFFIX_FAILURE_REASONS,
+    run_skill_selffix,
+    selffix_enabled,
+)
+from chuk_agents_runtime.run_modes import (
+    RunModeState,
+    load_modes,
+    normalize_switch,
+    parse_mode_prefix,
+    resolve_run_mode,
+    run_mode_payload,
+)
 from chuk_agents_runtime.skill_curator import curate_skills
 from chuk_agents_runtime.skills import load_skills
+from chuk_agents_runtime.model_routes import ModelRoutes, clean_routes, resolve_routes
 from chuk_agents_runtime.cost import (
     BUDGET_EXCEEDED,
     BUDGET_OK,
@@ -153,6 +170,8 @@ from chuk_agents_runtime.cost import (
     cost_block,
     day_start,
     metered,
+    month_start,
+    monthly_cap_refusal_text,
     round_eur,
     with_context,
     usage_split,
@@ -168,7 +187,8 @@ from chuk_agents_sandbox import DEFAULT_USER, BaseEnvironment, make_environment
 
 from .environment import SandboxEnvironment
 from .secrets import SecretsVault
-from .login_vault import LOGIN_VAULT_FRAMES, handle_login_vault_frame, login_guard
+from .login_vault import LOGIN_VAULT_FRAMES, handle_login_vault_frame
+from .vault_frames import VAULT_FRAMES, handle_vault_frame, vault_guard
 from .shell import JobWakeRouter
 from . import box_browser as _box_browser
 from . import user_browser as _user_browser
@@ -658,6 +678,10 @@ class _Run:
     # docs/WIRE_CONTRACT.md, "Plan mode": the task's switch (``True`` on,
     # ``False`` off, ``None`` no change), applied when the run starts.
     plan: bool | None = None
+    # CHAT-183, run modes (run_modes.py): the task's switch (a name, ``""``
+    # to clear, ``None`` no change) and the mode this run resolved.
+    mode: str | None = None
+    run_mode: Any = None
     # docs/WIRE_CONTRACT.md, "Goal mode": the round number of a goal round.
     goal_round: int | None = None
     # Typed fields of the prompt row (``answer_to_pending_question``).
@@ -1062,6 +1086,12 @@ class _SecretsOff:
 
     def login_entries(self) -> list[dict]:
         return self._vault.login_entries()
+
+    def card_entries(self) -> list[dict]:
+        return self._vault.card_entries()
+
+    def contact_entries(self) -> list[dict]:
+        return self._vault.contact_entries()
 
     def request(self, names: list[str], purpose: str) -> dict[str, str]:
         raise PermissionError(SECRETS_OFF_MESSAGE)
@@ -1644,6 +1674,10 @@ class Executor:
         # and to learn that the app saw a live ``done``. All optional; a raising
         # hook is swallowed so a notifier can never take a run down.
         self._on_run_finished = on_run_finished
+        # In-process observers of every outbound event (CHAT-184 gateways):
+        # ``fn(payload)`` with the plaintext, scrubbed payload. Added and
+        # removed with :meth:`add_event_listener`.
+        self._event_listeners: list[Callable[[dict], None]] = []
         self._on_approval_pending = on_approval_pending
         self._on_account_frame = on_account_frame
         self._on_run_ack = on_run_ack
@@ -2376,6 +2410,11 @@ class Executor:
                 request_id, handle_login_vault_frame(self._secrets, kind, payload)
             )
             return
+        if kind in VAULT_FRAMES:
+            # Vault payment cards and contacts (CHAT-185): one terminal
+            # ``payment_vault`` / ``contact_vault`` frame, never a card number.
+            self._terminal(request_id, handle_vault_frame(self._secrets, kind, payload))
+            return
         if kind in ("automation_control", "automation_list", "automation_create", "automation_update"):
             # The user manages the automations of this host (docs/WIRE_CONTRACT.md,
             # "Automations"). A control is like a stop (no terminal; the state
@@ -2578,6 +2617,13 @@ class Executor:
         if switch is not None:
             run.plan = switch
             run.prompt = stripped
+        # CHAT-183: the ``mode`` field or a ``/mode <name>`` prefix. The mode
+        # sticks to the chat; it is applied when the run starts.
+        run.mode = normalize_switch(payload.get("mode"))
+        mode_switch, mode_stripped = parse_mode_prefix(run.prompt)
+        if mode_switch is not None:
+            run.mode = mode_switch
+            run.prompt = mode_stripped
         # A run of the same question is already in flight for this session:
         # refuse the copy rather than pay for the same answer twice.
         #
@@ -3280,10 +3326,58 @@ class Executor:
         owned = {key for key in keys if key == session_key or agents.get(key, key) == agent}
         return [sum(eur for key, eur in by.items() if key in owned) for by in maps]
 
+    def _monthly_cap_refusal(self, run: _Run) -> dict | None:
+        """The facts of a refusal when the agent or the whole account on this
+        host is at its monthly spending cap (CHAT-181), else ``None``. The
+        cap is hard: ``budget_override`` does not lift it."""
+        caps = getattr(self._budget, "caps_monthly", None)
+        if not callable(caps):
+            return None
+        try:
+            agent_cap, account_cap = (float(v or 0.0) for v in caps(run.session_key))
+        except Exception:  # noqa: BLE001 — a broken store is "no cap"
+            return None
+        if agent_cap <= 0 and account_cap <= 0:
+            return None
+        month = month_start()
+        if agent_cap > 0:
+            (spent,) = self._spend_since(run.session_key, month)
+            if spent >= agent_cap:
+                return self._cap_facts(run, spent, agent_cap, month, account=False)
+        if account_cap > 0:
+            try:
+                store = StateStore(self._db_path)
+                try:
+                    spent = sum(store.spend_by_session(month).values())
+                finally:
+                    store.close()
+            except Exception:  # noqa: BLE001 — no record, no spend
+                spent = 0.0
+            if spent >= account_cap:
+                return self._cap_facts(run, spent, account_cap, month, account=True)
+        return None
+
+    def _cap_facts(
+        self, run: _Run, spent: float, cap: float, month: float, *, account: bool
+    ) -> dict:
+        logger.info(
+            "run=%s session=%s refused: monthly %s cap %.2f EUR reached (%.4f)",
+            run.run_id, run.session_key, "account" if account else "agent", cap, spent,
+        )
+        return {
+            "spent": spent, "budget": cap, "week": month,
+            "agent": self._agent_of(run.session_key), "monthly": True,
+            "message": monthly_cap_refusal_text(spent=spent, cap=cap, account=account),
+        }
+
     def _budget_refusal(self, run: _Run) -> dict | None:
         """The facts of a refusal when the agent is at or over its weekly
         budget and this run may not go over it, else ``None``. Only a task
-        the user sent with ``budget_override`` may go over (once)."""
+        the user sent with ``budget_override`` may go over (once). The
+        monthly cap (CHAT-181) is checked first and is never overridden."""
+        capped = self._monthly_cap_refusal(run)
+        if capped is not None:
+            return capped
         budget = self._budget_of(run.session_key)
         if budget <= 0:
             return None
@@ -3306,14 +3400,17 @@ class Executor:
         anything: a ``done`` with reason ``budget_exceeded`` and a sentence
         for the user, a closed ``runs`` row, the usual finished hook."""
         request_id, session_key = run.request_id, run.session_key
-        message = budget_refusal_text(
+        message = over.get("message") or budget_refusal_text(
             spent=over["spent"], budget=over["budget"], interactive=run.origin == ORIGIN_APP
         )
         logger.info(
             "run=%s session=%s origin=%s refused: weekly budget %.2f EUR reached (%.4f)",
             run.run_id, session_key, run.origin, over["budget"], over["spent"],
         )
-        self._notify_budget(run, request_id, BUDGET_EXCEEDED, over)
+        if not over.get("monthly"):
+            # The monthly cap ends the run with its own sentence; a
+            # ``budget_warning`` names the WEEKLY budget, so it is not sent.
+            self._notify_budget(run, request_id, BUDGET_EXCEEDED, over)
         stamps: dict[str, Any] = {}
         if run.run_id:
             try:
@@ -5055,6 +5152,38 @@ class Executor:
         finally:
             store.close()
 
+    def _payment_approver(self, session_key: str):
+        """The ``payment`` approver of one session's vault guard (CHAT-185).
+
+        A card fill happens inside a tool call of the session's live run, so
+        the card goes out on that run's stream and its Stop ends the wait. No
+        live run, or the agent's policy says ``deny``: no fill."""
+        key = session_key or ""
+
+        def approve(request: ActionRequest) -> bool | ActionDecision:
+            hook = self._action_approvals
+            if hook is not None:
+                try:
+                    mode = hook.policy_for(key).mode(PAYMENT)
+                except Exception:  # noqa: BLE001 — an unreadable policy still asks
+                    mode = "ask"
+                if mode == "deny":
+                    raise PermissionError(
+                        "this agent may not pay with a saved card: the user turned it off "
+                        "in the approval settings. Do not retry; tell the user."
+                    )
+            request_id = self.live_request_id(key)
+            runs = [r for r in self._live_runs() if r.session_key == key]
+            run = next((r for r in runs if r.request_id == request_id), None)
+            if run is None and len(runs) == 1:
+                run = runs[0]  # a side run (CHAT-80) does not set the active id
+            if run is None:
+                return False
+            request_id = run.request_id
+            return self._make_approval_gate(request_id, run.kill, key)(request)
+
+        return approve
+
     def _action_approvals_binding(
         self, request_id: str, kill: KillSwitch, session_key: str | None
     ) -> ActionApprovals | None:
@@ -5076,9 +5205,14 @@ class Executor:
 
         def policy():
             current = hook.policy_for(key) if hook is not None else ActionPolicy()
-            return user_browser_policy(current) if user_browser else current
+            current = user_browser_policy(current) if user_browser else current
+            # CHAT-180: what the user allowed for this chat only.
+            return current.with_chat(self._chat_approval_classes(key))
 
         def remember(action_class: str, scope: str, site: str) -> None:
+            if scope == SCOPE_CHAT:
+                self._grant_chat_approval(key, action_class)
+                return
             if hook is not None:
                 hook.remember(key, action_class, scope, site)
 
@@ -5109,7 +5243,38 @@ class Executor:
             user_browser=user_browser,
             site_for=site_for if user_browser else None,
             prefix_allowed=prefix_allowed,
+            chat_scope=bool(key),
         )
+
+    def _chat_approval_classes(self, session_key: str) -> frozenset[str]:
+        """The classes the user allowed for this chat (``always_this_chat``,
+        CHAT-180). Empty on any error."""
+        if not session_key:
+            return frozenset()
+        try:
+            store = StateStore(self._db_path)
+        except Exception:  # noqa: BLE001 — no store, no grant
+            return frozenset()
+        try:
+            return _chat_grants.chat_classes(store, session_key)
+        finally:
+            store.close()
+
+    def _grant_chat_approval(self, session_key: str, action_class: str) -> None:
+        """Keep an ``always_this_chat`` decision. Best effort: a failure costs
+        the next call one more card."""
+        if not session_key:
+            return
+        try:
+            store = StateStore(self._db_path)
+        except Exception:  # noqa: BLE001
+            return
+        try:
+            _chat_grants.grant_chat(store, session_key, action_class)
+        except Exception:  # noqa: BLE001
+            logger.debug("chat approval grant failed", exc_info=True)
+        finally:
+            store.close()
 
     def _user_browser_tabs_text(self, session_key: str) -> str | None:
         """The user browser's tab list, as the agent's MCP server renders it
@@ -5409,6 +5574,52 @@ class Executor:
             with self._approvals_lock:
                 self._approvals.pop(approval_id, None)
 
+    # -- run modes (CHAT-183, run_modes.py) ------------------------------------
+    def _apply_run_mode(self, run: _Run, request_id: str, session_key: str) -> None:
+        """Apply the task's mode switch and resolve the chat's mode for this
+        run: ``run.run_mode``, the model it names, and plan mode for the
+        ``plan`` mode. A change (or an unknown name) is sent as a
+        ``run_mode`` frame. Never raises: a failure costs the mode, never the
+        run. A restricted mail run gets no mode."""
+        if run.profile is not None:
+            return
+        try:
+            store = StateStore(self._db_path)
+        except Exception:  # noqa: BLE001
+            return
+        try:
+            plan_state = PlanState(store, session_key)
+            before = RunModeState(store, session_key).name()
+            resolved = resolve_run_mode(
+                store,
+                session_key,
+                run.mode,
+                workspace=self._workspace_for(session_key),
+                plan_active=plan_state.active(),
+            )
+            mode = resolved.mode
+            run.run_mode = mode
+            if run.plan is None and resolved.changed:
+                # The ``plan`` mode is plan mode; leaving it leaves plan mode.
+                if mode is not None and mode.plan:
+                    run.plan = True
+                elif before == "plan" and plan_state.active():
+                    run.plan = False
+            if mode is not None and mode.model:
+                run.model = mode.model
+            if mode is not None and mode.reasoning_effort:
+                run.reasoning_effort = mode.reasoning_effort
+            payload = run_mode_payload(session_key, mode, error=resolved.error)
+            if resolved.changed or resolved.error:
+                self._emit_persisted(request_id, session_key, payload)
+            elif mode is not None:
+                # Still in that mode: the run's stream says so (live only).
+                self._event(request_id, payload)
+        except Exception:  # noqa: BLE001
+            logger.debug("run mode failed", exc_info=True)
+        finally:
+            store.close()
+
     # -- agent modes (docs/WIRE_CONTRACT.md, "Goal mode", "Plan mode", ...) --
     def _mode_bindings(self, run: _Run, request_id: str, session_key: str):
         """The goal controller, plan mode, todo sink and question backend of
@@ -5510,6 +5721,11 @@ class Executor:
                 out["goal"] = goal
             if PlanState(store, session_key).active():
                 out["plan_mode"] = True
+            mode_name = RunModeState(store, session_key).name()
+            if mode_name:
+                mode = load_modes(self._workspace_for(session_key))[0].get(mode_name)
+                if mode is not None:
+                    out["run_mode"] = mode.view()
             todos = load_todos(store, session_key)
             if todos:
                 out["todos"] = todos
@@ -5862,6 +6078,12 @@ class Executor:
             def login_entries(self) -> list[dict]:
                 return vault.login_entries()
 
+            def card_entries(self) -> list[dict]:
+                return vault.card_entries()
+
+            def contact_entries(self) -> list[dict]:
+                return vault.contact_entries()
+
             def request(self, names: list[str], purpose: str) -> dict[str, str]:
                 return executor._request_secrets(
                     request_id, kill, session_key, list(names), purpose
@@ -5935,6 +6157,62 @@ class Executor:
         with self._runs_lock:
             return any(r.session_key == session_key for r in self._runs.values())
 
+    # -- in-process gateways (CHAT-184, docs/agents/GATEWAYS.md) ----------
+    def add_event_listener(self, fn: Callable[[dict], None]) -> None:
+        """Observe every event and terminal this executor sends (plaintext,
+        after the secret scrub, with ``run_id`` / ``session_key`` when the
+        run is known). Adding the same function twice adds it once. A
+        listener runs on the emitting thread: it must return fast."""
+        with self._emit_lock:
+            if fn not in self._event_listeners:
+                self._event_listeners = [*self._event_listeners, fn]
+
+    def remove_event_listener(self, fn: Callable[[dict], None]) -> None:
+        with self._emit_lock:
+            self._event_listeners = [f for f in self._event_listeners if f != fn]
+
+    def _notify_listeners(self, request_id: str, payload: dict) -> None:
+        listeners = self._event_listeners
+        if not listeners or not isinstance(payload, dict):
+            return
+        with self._runs_lock:
+            owner = self._runs.get(request_id)
+        if owner is not None and ("run_id" not in payload or "session_key" not in payload):
+            payload = {
+                **payload,
+                "run_id": payload.get("run_id") or owner.run_id,
+                "session_key": payload.get("session_key") or owner.session_key,
+            }
+        scrubber = self._secret_scrubber
+        if scrubber is not None:
+            payload = scrubber.scrub_obj(payload)
+        for fn in listeners:
+            try:
+                fn(payload)
+            except Exception:  # noqa: BLE001 — an observer never breaks a run
+                logger.debug("event listener failed", exc_info=True)
+
+    def stop_session(self, session_key: str) -> int:
+        """Stop the live runs of ``session_key`` (a gateway's ``/stop``).
+        Returns how many runs were told to stop."""
+        targets = self._resolve_stop({"session_key": session_key})
+        for run in targets:
+            run.kill.interrupt()
+        return len(targets)
+
+    def resolve_approval(self, approval_id: str, approved: bool, scope: str | None = None) -> None:
+        """Answer one ``approval_request`` from inside the host (a gateway
+        button). The same path as the app's ``approval_decision``: the first
+        answer wins, a second one is a no-op."""
+        self._resolve_approval(
+            {"approval_id": approval_id, "approved": approved is True,
+             **({"scope": scope} if scope else {})}
+        )
+
+    def workspace_for(self, session_key: str | None) -> str | None:
+        """The host directory of that session's agent workspace."""
+        return self._workspace_for(session_key)
+
     def live_request_id(self, session_key: str) -> str | None:
         """The relay request id of the run of ``session_key`` that is in
         flight right now (its stream), or None."""
@@ -6002,6 +6280,8 @@ class Executor:
         # the snapshot ``_work`` leased for this run. It holds from the first
         # command to the last; a changed box is rebuilt on its first command.
         run_policy = self._sandbox_policy_for(session_key)
+        # CHAT-183: the chat's run mode (it can name the model, so first).
+        self._apply_run_mode(run, request_id, session_key)
         # A task may name the model to run on and how hard it thinks. If it named
         # either and a per-task selector is wired (production), build that model;
         # otherwise fall back to the default factory — which is both the
@@ -6051,7 +6331,15 @@ class Executor:
         # JSON has no business there. Built here, not inline, so the ``finally``
         # below can close it — a per-task backend client owns a socket and a
         # reader thread, and one leaked per task adds up on a long-running host.
-        browser_client = self._model_factory()
+        # The model per kind of work (CHAT-181): an agent's own ``browser``
+        # route replaces the default client, its ``aux`` route the aux model.
+        routes = self._model_routes(session_key)
+        browser_route = routes.route("browser")
+        routed_clone = getattr(inner_model, "routed_clone", None)
+        if browser_route is not None and callable(routed_clone):
+            browser_client = routed_clone(browser_route)
+        else:
+            browser_client = self._model_factory()
         model = StreamingModelClient(
             inner_model,
             on_delta=lambda text: self._event(request_id, delta_payload(text)),
@@ -6068,7 +6356,13 @@ class Executor:
         # only. It owns its own socket, closed in the ``finally`` below so it never
         # leaks past the task.
         cheap_clone = getattr(inner_model, "cheap_clone", None)
-        hero_model = cheap_clone() if callable(cheap_clone) else None
+        aux_route = routes.route("aux")
+        if not callable(cheap_clone):
+            hero_model = None
+        elif aux_route is not None and callable(routed_clone):
+            hero_model = cheap_clone(route=aux_route)
+        else:
+            hero_model = cheap_clone()
         # Their calls are cost lines of their own (docs/WIRE_CONTRACT.md,
         # "Cost per run and weekly budget"): the user sees what compaction,
         # memory extraction and the browser fallback cost. A background
@@ -6316,6 +6610,7 @@ class Executor:
             skill_proposals=self._skill_proposal_sink(request_id, run, session_key),
             goal=goal,
             plan_mode=plan_mode,
+            run_mode=run.run_mode,
             todo_sink=todo_sink,
             questions=questions,
             # Typed context rows as live ``context`` frames (docs/WIRE_CONTRACT.md,
@@ -6515,7 +6810,15 @@ class Executor:
         curate = curator_days is not None and (
             time.time() - getattr(self, "_curated_at", 0.0) >= CURATOR_INTERVAL_SECONDS
         )
-        if not (review or curate):
+        # CHAT-183: a run that used a skill and failed, or a user correction
+        # after one, may propose a fix of that skill (user approval needed).
+        selffix = (
+            selffix_enabled()
+            and run.profile is None
+            and run.origin not in UNATTENDED_ORIGINS
+            and (reason == StopReason.FINISHED.value or reason in SELFFIX_FAILURE_REASONS)
+        )
+        if not (review or curate or selffix):
             return
         if curate:
             self._curated_at = time.time()
@@ -6527,7 +6830,10 @@ class Executor:
         def work() -> None:
             if curate:
                 self._run_curator(root, curator_days)
-            if review:
+            fixed = False
+            if selffix:
+                fixed = self._run_skill_selffix(run, request_id, session_key, root, reason)
+            if review and not fixed:
                 self._run_background_review(run, request_id, session_key, root)
 
         threading.Thread(target=work, name="skill-learning", daemon=True).start()
@@ -6548,6 +6854,72 @@ class Executor:
                 )
         except Exception as exc:  # noqa: BLE001 — housekeeping must not crash a thread
             logger.info("skill curator failed: %s", type(exc).__name__)
+
+    def _run_skill_selffix(
+        self, run: _Run, request_id: str, session_key: str, root: str, reason: str
+    ) -> bool:
+        """CHAT-183: propose a fix of a skill after a failed run that used it,
+        or after the user corrected such a run. The rows are checked first: no
+        trigger, no model client. True when a proposal was stored."""
+        client = None
+        try:
+            from chuk_agents_runtime.skill_selffix import find_trigger
+
+            store = StateStore(self._db_path)
+            try:
+                sid = store.resolve_session(session_key)
+                rows = (
+                    [{"role_tag": m.role, "content": m.content} for m in store.get_conversation(sid)]
+                    if sid is not None
+                    else []
+                )
+            finally:
+                store.close()
+            if find_trigger(rows, reason) is None:
+                return False
+            client = self._model_factory()
+            clone = getattr(client, "cheap_clone", None)
+            model = clone() if callable(clone) else client
+            if model is not client:
+                close = getattr(client, "close", None)
+                if callable(close):
+                    close()
+                client = model
+            try:
+                model = metered(model, self._usage_sink(run), kind=LINE_AUX)
+            except Exception:  # noqa: BLE001 — unmetered is better than no fix
+                pass
+            report = run_skill_selffix(
+                model,
+                rows,
+                reason,
+                skills_root=root,
+                sink=_SkillProposalSink(
+                    self, request_id, run, session_key, live=False, origin="review"
+                ),
+                vault=(
+                    self._secret_scrubber.scrub_obj
+                    if self._secret_scrubber is not None
+                    else None
+                ),
+            )
+            logger.info(
+                "skill self-fix: ran=%s proposal=%s errors=%d",
+                report.ran,
+                bool(report.proposal),
+                len(report.errors),
+            )
+            return bool(report.proposal)
+        except Exception as exc:  # noqa: BLE001 — the fix is optional
+            logger.info("skill self-fix failed: %s", type(exc).__name__)
+            return False
+        finally:
+            close = getattr(client, "close", None) if client is not None else None
+            if callable(close):
+                try:
+                    close()
+                except Exception:  # noqa: BLE001
+                    pass
 
     def _run_background_review(
         self, run: _Run, request_id: str, session_key: str, root: str
@@ -6591,6 +6963,15 @@ class Executor:
                     else None
                 ),
             )
+            if report.memory_candidates:
+                # CHAT-179: the review saw tool output too, so its facts wait
+                # as candidates for the user's yes (`memory` approve/reject).
+                from chuk_agents_runtime.personal_memory import PersonalMemory
+                from chuk_agents_runtime.runtime import MEMORY_DIRNAME
+
+                PersonalMemory(Path(root).parent / MEMORY_DIRNAME).add_candidates(
+                    report.memory_candidates, session=session_key, run=request_id
+                )
             logger.info(
                 "background review: ran=%s proposal=%s memory_candidates=%d errors=%d",
                 report.ran,
@@ -6730,7 +7111,30 @@ class Executor:
             value = data.get(key)
             if isinstance(value, str) and value.strip():
                 out[key] = value.strip()
+        routes = clean_routes(data.get("routes"))
+        if routes:
+            out["routes"] = routes
         return out
+
+    def _model_routes(self, session_key: str) -> ModelRoutes:
+        """The agent's model per kind of work (CHAT-181,
+        ``chuk_agents_runtime.model_routes``): the host's environment, then
+        the ``routes`` of the stored ``agent_model`` row. Also read when the
+        row has no own model id."""
+        data = None
+        if session_key:
+            try:
+                store = StateStore(self._db_path)
+                try:
+                    data = store.load_feature(session_key, AGENT_MODEL_FEATURE)
+                finally:
+                    store.close()
+            except Exception:  # noqa: BLE001 — no row, the defaults
+                data = None
+        try:
+            return resolve_routes(data if isinstance(data, dict) else None)
+        except Exception:  # noqa: BLE001 — a bad row is the defaults
+            return ModelRoutes()
 
     def set_agent_model(
         self,
@@ -6739,9 +7143,15 @@ class Executor:
         *,
         provider: str | None = None,
         reasoning_effort: str | None = None,
+        routes: Any = ...,
     ) -> dict | None:
         """Store (or with ``model=None`` drop) the agent's own model. Returns
-        what is stored now (docs/agents/AGENT_MODEL.md)."""
+        what is stored now (docs/agents/AGENT_MODEL.md).
+
+        ``routes`` is the model per kind of work (CHAT-181,
+        ``chuk_agents_runtime.model_routes``). Left out, the stored routes
+        stay, also when the own model is dropped; ``None`` or ``{}`` clears
+        them."""
         data = None
         if isinstance(model, str) and model.strip():
             data = {"id": model.strip()}
@@ -6751,12 +7161,19 @@ class Executor:
                 data["reasoning_effort"] = reasoning_effort.strip()
         store = StateStore(self._db_path)
         try:
+            if routes is ...:
+                old = store.load_feature(session_key, AGENT_MODEL_FEATURE)
+                kept = clean_routes(old.get("routes")) if isinstance(old, dict) else None
+            else:
+                kept = clean_routes(routes)
+            if kept:
+                data = {**(data or {}), "routes": kept}
             store.save_feature(session_key, AGENT_MODEL_FEATURE, data)
         finally:
             store.close()
         logger.info(
             "agent model %s session=%s model=%s",
-            "set" if data else "cleared", session_key, data["id"] if data else "-",
+            "set" if data else "cleared", session_key, (data or {}).get("id") or "-",
         )
         return self._agent_model(session_key)
 
@@ -6777,6 +7194,8 @@ class Executor:
                     if isinstance(payload.get("reasoning_effort"), str)
                     else None
                 ),
+                # CHAT-181: absent = keep the stored routes.
+                routes=payload["routes"] if "routes" in payload else ...,
             )
         except Exception as exc:  # noqa: BLE001 — the serve loop must survive
             self._terminal(request_id, {**reply, "error": f"agent model failed: {type(exc).__name__}"})
@@ -7338,7 +7757,11 @@ class Executor:
             )
             # Login vault placeholders are resolved (or refused) here, on the
             # one path every browser call takes (Hermes H32).
-            manager.call_guard = login_guard(self._secrets, session_key)
+            # Cards and contacts (CHAT-185) too: a card fill asks the user
+            # (action class ``payment``) through the session's live run.
+            manager.call_guard = vault_guard(
+                self._secrets, session_key, approver=self._payment_approver(session_key)
+            )
             with self._mcp_lock:
                 self._mcp_entry_meta[session_key] = _entry_meta(mcp_servers)
         except Exception:  # noqa: BLE001 — building MCP must never crash a task
@@ -7752,6 +8175,10 @@ class Executor:
         handled: list[dict] = []
         try:
             keys = set()
+            # CHAT-180: the connectors whose data is purged. The entry may
+            # name its server (``server``); else it is read off the sessions
+            # that still hold the grant.
+            servers: set[str] = set()
             for entry in entries:
                 if not isinstance(entry, dict):
                     continue
@@ -7761,6 +8188,9 @@ class Executor:
                 if key and client_id:
                     keys.add(key)
                     handled.append({"token_endpoint": endpoint, "client_id": client_id})
+                    named = entry.get("server")
+                    if isinstance(named, str) and named.strip():
+                        servers.add(named.strip()[:200])
             if not keys:
                 return handled
             with self._mcp_lock:
@@ -7769,17 +8199,55 @@ class Executor:
             # DELETE of the MCP session), and that request would adopt the
             # grant into the store again.
             for session_key, manager in managers.items():
+                configs = list(getattr(manager, "configs", []) or [])
                 held = {
                     _mcp_grants.OAuthGrantStore.key(getattr(c, "oauth", None))
-                    for c in getattr(manager, "configs", []) or []
+                    for c in configs
                 }
+                for config in configs:
+                    if _mcp_grants.OAuthGrantStore.key(getattr(config, "oauth", None)) in keys:
+                        name = getattr(config, "name", None)
+                        if isinstance(name, str) and name:
+                            servers.add(name)
                 if held & keys:
                     self._forget_session_mcp(close=True, session_key=session_key)
             _mcp_grants.GRANTS.forget(sorted(keys))
+            if servers:
+                self._purge_connector_data(sorted(servers))
             return handled
         except Exception as exc:  # noqa: BLE001 — a cleanup must not fail a probe
             logger.warning("mcp sign-out cleanup failed: %s", type(exc).__name__)
             return []
+
+    def _purge_connector_data(self, servers: list[str]) -> dict:
+        """Delete what was kept from disconnected connectors (CHAT-180,
+        ``connector_purge.py``): their memories in Hindsight and their tool
+        results in the stored chats and the search index. Never raises."""
+        from chuk_agents_runtime.connector_purge import purge_connectors
+
+        store = None
+        memory_api = None
+        try:
+            store = StateStore(self._db_path)
+        except Exception:  # noqa: BLE001 — purge what can be reached
+            store = None
+        try:
+            from chuk_agents_runtime.hindsight_service import shared_memory_service
+
+            service = shared_memory_service()
+            memory_api = service.api() if service is not None else None
+        except Exception:  # noqa: BLE001
+            memory_api = None
+        try:
+            report = purge_connectors(servers, store=store, memory_api=memory_api)
+        finally:
+            if store is not None:
+                store.close()
+        logger.info(
+            "connector purge: %d server(s), %d chat row(s), %d memory document(s), errors=%s",
+            len(report["servers"]), report["transcript_rows"], report["memories"], report["errors"],
+        )
+        return report
 
     def _queue_newer_mcp_credentials(
         self, session_key: str, manager: object | None, forwarded: list | None
@@ -8127,6 +8595,7 @@ class Executor:
                     METHOD_EVENT, {"requestId": request_id, "frame": frame}
                 )
                 self._endpoint.send(encode_frame(envelope))
+        self._notify_listeners(request_id, payload)
 
     def _terminal(self, request_id: str, payload: dict) -> None:
         """Close the stream with a relay response correlated to the task."""
@@ -8146,3 +8615,4 @@ class Executor:
                 )
             envelope = make_response(request_id, {"frame": frames[-1]})
             self._endpoint.send(encode_frame(envelope))
+        self._notify_listeners(request_id, payload)

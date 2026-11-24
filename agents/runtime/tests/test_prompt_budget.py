@@ -62,7 +62,10 @@ DEFAULT_PERSONA = "You are an Agents agent running on the user's own machine."
 #: so a list of payments or invoices is drawn as a status card, not bullets.
 #: 4,000 -> 4,050 (CHAT-176, ~50): the `installing-software` skill in the
 #: catalogue, so the agent on a cloud computer (no root) installs without sudo.
-SYSTEM_PROMPT_BUDGET = 4_050
+#: 4,050 -> 4,250 (CHAT-178, ~170): the untrusted-data rule (CHAT-180), the
+#: `USER.md` rule (CHAT-179) and the `run_tool_script` hint (CHAT-186). The
+#: prefix is cached; codemode saves whole rounds.
+SYSTEM_PROMPT_BUDGET = 4_250
 DECLARED_TOOLS_BUDGET = 3_000
 DECLARED_TOOLS_MAX = 20
 
@@ -232,7 +235,7 @@ def test_baseline_request_for_hi_stays_under_budget(coworker):
     total = estimate_tokens(_system_prompt(coworker)) + sum(_declared(coworker).values())
     assert total <= SYSTEM_PROMPT_BUDGET + DECLARED_TOOLS_BUDGET
     # The measured value was ~5.2k; the old baseline was ~12.7k.
-    assert total < 6_550
+    assert total < 6_750
 
 
 def test_the_prompt_head_is_stable_across_seeds(coworker):

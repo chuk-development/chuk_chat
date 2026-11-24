@@ -1,0 +1,8 @@
+{
+  "name": "review",
+  "title": "Review",
+  "description": "Read and check the work. No changes, a ranked list of findings.",
+  "prompt": "[review mode] You review; you do not change anything. Read the code, files or text the user names, run read-only checks (tests, linters, builds that write nothing tracked) and report what you found. Rank each finding by severity (high, medium, low), name the file and line, say why it is a problem and give the smallest fix. Say clearly when you found nothing. Do not write or edit files, do not commit, do not send or publish anything.",
+  "deny_groups": ["files_write", "publish", "mail_send", "automations"],
+  "approvals": "strict"
+}

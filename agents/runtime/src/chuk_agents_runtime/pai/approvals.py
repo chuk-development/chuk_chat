@@ -54,6 +54,7 @@ from ..action_policy import (
     MCP_DESTRUCTIVE,
     PUBLISH,
     SCOPE_AGENT,
+    SCOPE_CHAT,
     SCOPE_ONCE,
     SCOPE_SITE,
     SEND_EXTERNAL,
@@ -76,7 +77,10 @@ from ..action_policy import (
     is_destructive,
     USER_BROWSER_ACT_TOOLS,
     user_browser_tool_acts,
+    with_chat_option,
 )
+from ..intent_check import CARD_KIND as INTENT_CARD_KIND
+from ..intent_check import IntentVerdict
 from ..loop import KillSwitch
 from .convert import tool_call_args
 from .tools import CallRecord, RegistryToolset
@@ -152,18 +156,46 @@ class ApprovalPolicy:
     #: Where a finished-without-running result is recorded, so the loop
     #: stores the same tool result the native tool returned.
     toolset: RegistryToolset | None = None
+    #: The intent check (CHAT-180, :class:`~chuk_agents_runtime.intent_check.IntentGuard`):
+    #: a class action that would run silently (``allow``) is first compared
+    #: with the user's own words; not covered = a card. ``None`` = no check.
+    intent: Any = None
+    #: The run's approval audit (CHAT-180): one entry per decided card and
+    #: per refused action, read and cleared by :meth:`end_run`.
+    audit: list[dict] = field(default_factory=list)
 
     def requires_approval(self, name: str) -> bool:
         """Whether ``name`` is declared ``unapproved`` this step. Read live, so
         "always for this agent" stops the next call of the same run from
-        deferring at all."""
+        deferring at all. A class under the intent check always defers, so
+        the handler can judge it."""
         rule = self.rules.get(name)
         if rule is None:
             return False
         try:
-            return rule.defers()
+            return rule.defers() or self._intent_on(rule)
         except Exception:  # noqa: BLE001 — an unreadable policy asks
             return True
+
+    def _intent_on(self, rule: ApprovalRule) -> bool:
+        intent = self.intent
+        if intent is None or rule.action_class is None:
+            return False
+        try:
+            return bool(intent.applies(rule.action_class))
+        except Exception:  # noqa: BLE001 — an unreadable guard checks
+            return True
+
+    def end_run(self) -> list[dict]:
+        """The run's audit entries (then cleared), and a fresh intent state
+        for the next run."""
+        entries, self.audit = list(self.audit), []
+        if self.intent is not None:
+            try:
+                self.intent.reset()
+            except Exception:  # noqa: BLE001
+                pass
+        return entries
 
     def add(self, name: str, rule: ApprovalRule) -> None:
         self.rules[name] = rule
@@ -182,7 +214,9 @@ class ApprovalPolicy:
             args = tool_call_args(call)
             if not isinstance(args, dict):
                 args = {}
-            approvals[call.tool_call_id] = await self._decide(call.tool_call_id, rule, args)
+            approvals[call.tool_call_id] = await self._decide(
+                call.tool_call_id, rule, args, name=call.tool_name
+            )
         if not approvals:
             return None
         return requests.build_results(approvals=approvals)
@@ -200,17 +234,22 @@ class ApprovalPolicy:
         rule = self.rules.get(name)
         if rule is None:
             return None
-        decided = await self._decide(call_id, rule, args if isinstance(args, dict) else {})
+        decided = await self._decide(
+            call_id, rule, args if isinstance(args, dict) else {}, name=name
+        )
         return isinstance(decided, ToolApproved)
 
     async def _decide(
-        self, call_id: str, rule: ApprovalRule, args: dict
+        self, call_id: str, rule: ApprovalRule, args: dict, *, name: str = ""
     ) -> ToolApproved | ToolDenied:
         if self.kill is not None and (self.kill.interrupted() or self.kill.estop_engaged()):
+            self._note(rule, None, name, "denied", "stopped")
             return self._deny(call_id, rule.declined(args, "stopped"))
         if rule.applies is not None and not _applies(rule.applies, args):
             return ToolApproved()
         site = ""
+        request: Any = None
+        intent: IntentVerdict | None = None
         if rule.action_class is not None:
             if rule.action_class in SITE_CLASSES and rule.approvals is not None:
                 own = None
@@ -222,8 +261,29 @@ class ApprovalPolicy:
                     site = await anyio.to_thread.run_sync(_read_site, rule.approvals.site)
             mode = rule.mode(site)
             if mode == MODE_ALLOW:
-                return ToolApproved()
+                if not self._intent_on(rule):
+                    return ToolApproved()
+                # CHAT-180: a silent allow is first compared with the user's
+                # own words. Covered = run; anything else = a card.
+                try:
+                    request = await anyio.to_thread.run_sync(_prepare, rule, args, site)
+                except Exception as exc:  # noqa: BLE001 — a failed preflight is a no
+                    return self._deny(
+                        call_id, rule.declined(args, f"{type(exc).__name__}: {exc}")
+                    )
+                if isinstance(request, dict):
+                    return self._deny(call_id, request)
+                if not isinstance(request, ActionRequest):
+                    return ToolApproved()
+                intent = await anyio.to_thread.run_sync(_judge, self.intent, request)
+                if intent.covered:
+                    return ToolApproved()
+                request.details = {
+                    **request.details, "kind": INTENT_CARD_KIND, "intent": intent.to_dict()
+                }
+                request.options = (SCOPE_ONCE, SCOPE_DENY)
             if mode == MODE_DENY:
+                self._note(rule, None, name, "denied", "policy")
                 return self._deny(call_id, rule.declined(args, "denied_by_policy"))
         verdict = None
         if rule.action_class is not None and mode in REVIEW_MODES:
@@ -232,13 +292,15 @@ class ApprovalPolicy:
             if verdict.allowed:
                 return ToolApproved()
             if mode == MODE_REVIEW_STRICT and verdict.valid:
+                self._note(rule, None, name, "denied", "review")
                 return self._deny(call_id, rule.declined(args, _review_reason(verdict)))
-        try:
-            request = await anyio.to_thread.run_sync(_prepare, rule, args, site)
-        except Exception as exc:  # noqa: BLE001 — a failed preflight is a no
-            return self._deny(
-                call_id, rule.declined(args, f"{type(exc).__name__}: {exc}")
-            )
+        if request is None:
+            try:
+                request = await anyio.to_thread.run_sync(_prepare, rule, args, site)
+            except Exception as exc:  # noqa: BLE001 — a failed preflight is a no
+                return self._deny(
+                    call_id, rule.declined(args, f"{type(exc).__name__}: {exc}")
+                )
         if isinstance(request, dict):
             # The preflight already answered (a scan error): that is the result.
             return self._deny(call_id, request)
@@ -246,7 +308,17 @@ class ApprovalPolicy:
             # The card says why it asks; a review card is for this call only.
             request.details = {**request.details, "kind": "auto_review", "review": verdict.to_dict()}
             request.options = (SCOPE_ONCE, SCOPE_DENY)
+        if (
+            verdict is None
+            and intent is None
+            and isinstance(request, ActionRequest)
+            and rule.approvals is not None
+            and rule.approvals.chat_scope
+        ):
+            # CHAT-180: "allow for this chat" next to the lasting scopes.
+            request.options = with_chat_option(request.options)
         if rule.ask is None:
+            self._note(rule, request, name, "denied", "unattended", intent=intent)
             return self._deny(call_id, rule.declined(args, "unattended"))
         try:
             answer = await anyio.to_thread.run_sync(
@@ -262,16 +334,117 @@ class ApprovalPolicy:
             else ActionDecision(approved=answer is True, scope=SCOPE_ONCE)
         )
         if not decision.approved:
+            self._note(rule, request, name, "denied", "user", intent=intent)
             return self._deny(call_id, rule.declined(args, "declined"))
-        if decision.scope in (SCOPE_AGENT, SCOPE_SITE) and rule.action_class is not None:
+        if decision.scope in (SCOPE_AGENT, SCOPE_SITE, SCOPE_CHAT) and rule.action_class is not None:
             await anyio.to_thread.run_sync(_remember, rule, decision.scope, site)
+        if self.intent is not None and isinstance(request, ActionRequest):
+            try:
+                self.intent.note_approved(request)
+            except Exception:  # noqa: BLE001
+                pass
+        self._note(rule, request, name, "allowed", "user", scope=decision.scope, site=site, intent=intent)
         return ToolApproved()
+
+    def _note(
+        self,
+        rule: ApprovalRule,
+        request: Any,
+        name: str,
+        outcome: str,
+        by: str,
+        *,
+        scope: str = "",
+        site: str = "",
+        intent: IntentVerdict | None = None,
+    ) -> None:
+        """One audit entry (CHAT-180). Never raises."""
+        try:
+            self.audit.append(
+                audit_entry(
+                    tool=name,
+                    action_class=rule.action_class or "",
+                    summary=getattr(request, "summary", "") if request is not None else "",
+                    outcome=outcome,
+                    by=by,
+                    scope=scope,
+                    site=site,
+                    intent_checked=intent is not None,
+                )
+            )
+        except Exception:  # noqa: BLE001 — the audit never fails a call
+            pass
 
     def _deny(self, call_id: str, result: dict) -> ToolDenied:
         if self.toolset is not None:
             record = self.toolset.calls.setdefault(call_id, CallRecord(started_at=0.0))
             record.result = result
         return ToolDenied(message=json.dumps(result, separators=(",", ":")))
+
+
+#: The words of one audit line, by who decided and how far it reaches.
+_AUDIT_WORDS = {
+    ("allowed", SCOPE_ONCE): "allowed once by the user",
+    ("allowed", SCOPE_CHAT): "allowed for this chat by the user",
+    ("allowed", SCOPE_AGENT): "allowed always for this agent by the user",
+    ("allowed", SCOPE_SITE): "allowed always on this site by the user",
+}
+_AUDIT_BY = {
+    "user": "declined by the user",
+    "policy": "refused by the approval settings",
+    "review": "refused by the automatic review",
+    "unattended": "not run: nobody could approve it",
+    "stopped": "not run: the run was stopped",
+}
+
+
+def audit_entry(
+    *,
+    tool: str,
+    action_class: str,
+    summary: str,
+    outcome: str,
+    by: str,
+    scope: str = "",
+    site: str = "",
+    intent_checked: bool = False,
+) -> dict:
+    """One approval audit entry with its collapsed line (``text``), e.g.
+    "Send a mail to a@b.c: allowed once by the user"."""
+    if outcome == "allowed":
+        words = _AUDIT_WORDS.get((outcome, scope), "allowed by the user")
+        if scope == SCOPE_SITE and site:
+            words = f"allowed always on {site} by the user"
+    else:
+        words = _AUDIT_BY.get(by, "not run")
+    if intent_checked:
+        words += " (not clearly asked for, so the user was asked)"
+    label = summary or CLASS_WORDS.get(action_class, "") or tool or "action"
+    entry = {
+        "tool": tool,
+        "action_class": action_class,
+        "outcome": outcome,
+        "by": by,
+        "text": f"{label}: {words}",
+    }
+    if scope:
+        entry["scope"] = scope
+    if intent_checked:
+        entry["intent_check"] = True
+    return entry
+
+
+def _judge(guard: Any, request: ActionRequest) -> IntentVerdict:
+    """Run the intent check; any failure is "not covered" (the user is asked)."""
+    if guard is None:
+        return IntentVerdict(False, valid=False, reason="no intent check")
+    try:
+        verdict = guard.check(request)
+    except Exception:  # noqa: BLE001 — fail safe: ask
+        return IntentVerdict(False, valid=False, reason="the intent check failed")
+    if not isinstance(verdict, IntentVerdict):
+        return IntentVerdict(False, valid=False, reason="no verdict")
+    return verdict
 
 
 def _review(rule: ApprovalRule, args: dict) -> Any:
@@ -561,6 +734,7 @@ __all__ = [
     "ApprovalRule",
     "action_rule",
     "action_rules",
+    "audit_entry",
     "bind_publish",
     "class_declined",
     "herenow_rule",

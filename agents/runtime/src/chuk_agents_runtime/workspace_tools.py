@@ -26,7 +26,16 @@ from .workspace_git import CommitInfo, GitWorkspace, timed_record
 #: "Checkpoints, rewind and fork"): the first of them in a run takes the
 #: run's checkpoint, and each of them updates the agent-write ledger.
 CHECKPOINT_TOOLS = frozenset(
-    {"run_command", "python", "write_file", "edit_file", "apply_patch", "run_ffmpeg", "workspace_undo"}
+    {
+        "run_command",
+        "python",
+        "run_tool_script",
+        "write_file",
+        "edit_file",
+        "apply_patch",
+        "run_ffmpeg",
+        "workspace_undo",
+    }
 )
 
 #: ``(checkpoint_id, commit)`` -> None: the executor stores the checkpoint

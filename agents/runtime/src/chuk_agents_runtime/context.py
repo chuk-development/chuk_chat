@@ -612,6 +612,10 @@ class CompressionStats:
     automation_window: bool = False
     #: Earlier automation runs that window left out.
     automation_runs_omitted: int = 0
+    #: Why the pass trimmed instead of summarising (CHAT-181): ``error``
+    #: (the aux call raised), ``junk`` (empty or useless reply) or
+    #: ``cooldown`` (a recent failure). ``None``: no fallback.
+    summary_fallback: str | None = None
 
     @property
     def saved(self) -> int:
@@ -1100,6 +1104,41 @@ def background_summaries() -> BackgroundSummaries:
     return _BACKGROUND
 
 
+#: The row that stands in for a middle the aux summary could not fold
+#: (CHAT-181, idea 16). Starts with the summary prefix, so the ladder and the
+#: replay treat it as an injected row, never as a user turn.
+TRIM_MARKER = (
+    "Earlier messages were removed to fit the context window. A summary "
+    "could not be made. Ask the user if you need something from them."
+)
+
+#: After a failed or useless aux summary, the blocking path does not call the
+#: aux model again for this many seconds: it trims instead (Hermes'
+#: cooldown). A dead aux model must not cost a timeout on every round.
+SUMMARY_FAILURE_COOLDOWN_S = 120.0
+
+#: A summary shorter than this is no summary (an empty reply, "OK", "...").
+MIN_SUMMARY_CHARS = 4
+
+
+def summary_is_junk(summary: str | None, transcript: str) -> bool:
+    """True when an aux summary cannot stand in for the transcript: empty,
+    too short to say anything, or more than twice as long as the transcript
+    (a runaway reply; it would grow the context it should shrink). Checked
+    by size only, never by what the text says."""
+    text = (summary or "").strip()
+    if len(text) < MIN_SUMMARY_CHARS:
+        return True
+    return len(text) > 2 * max(len(transcript), MIN_SUMMARY_CHARS)
+
+
+def _trim_message(previous: str | None = None) -> dict:
+    """The marker row of a deterministic trim, with the last good summary in
+    front when there is one."""
+    content = SUMMARY_PREFIX + (f"{previous}\n\n" if previous else "") + TRIM_MARKER
+    return {"role": "user", "content": content}
+
+
 def _summary_message(summary: str, skills: list[str] | tuple[str, ...] = ()) -> dict:
     """The summary row. ``skills`` are the skill bodies the summary folded
     away; each gets a reload note, so the model knows to load it again
@@ -1247,6 +1286,9 @@ class ContextLadder:
 
     _summary: str | None = field(default=None, init=False, repr=False)
     _summarized_upto: int = field(default=0, init=False, repr=False)
+    # monotonic time of the last failed or junk blocking aux summary
+    # (CHAT-181): inside SUMMARY_FAILURE_COOLDOWN_S the ladder trims instead.
+    _aux_failed_at: float | None = field(default=None, init=False, repr=False)
     # Digest of the scrubbed input slice ``[head_end:_summarized_upto]`` that
     # ``_summary`` covers. ``None`` = not checked against a history yet.
     _summary_digest: str | None = field(default=None, init=False, repr=False)
@@ -1891,16 +1933,40 @@ class ContextLadder:
         # Redact BEFORE the transcript leaves the machine, and redact what
         # comes back. The model is asked to redact too, but is not trusted to.
         transcript = redact_secrets(render_transcript(new_slice))
+        if self._in_aux_cooldown():
+            if stats is not None:
+                stats.summary_fallback = "cooldown"
+            return self._deterministic_trim(messages, head_end, tail_start, previous)
         started = time.monotonic()
-        summary = self.summarizer.summarize(transcript, previous)
-        summary = redact_secrets(summary).strip()
+        try:
+            summary = self.summarizer.summarize(transcript, previous)
+            summary = redact_secrets(summary or "").strip()
+        except Exception as exc:  # noqa: BLE001 — a summary failure must never end the run
+            logger.warning(
+                "context ladder: aux summary failed (%s); trimming instead",
+                type(exc).__name__,
+            )
+            self._aux_failed_at = time.monotonic()
+            if stats is not None:
+                stats.summary_fallback = "error"
+            return self._deterministic_trim(messages, head_end, tail_start, previous)
         logger.info(
             "context ladder: blocking aux summary took %.0f ms (%d transcript chars)",
             (time.monotonic() - started) * 1000,
             len(transcript),
         )
-        if not summary:
-            return None
+        if summary_is_junk(summary, transcript):
+            logger.warning(
+                "context ladder: aux summary unusable (%d chars for %d transcript "
+                "chars); trimming instead",
+                len(summary),
+                len(transcript),
+            )
+            self._aux_failed_at = time.monotonic()
+            if stats is not None:
+                stats.summary_fallback = "junk"
+            return self._deterministic_trim(messages, head_end, tail_start, previous)
+        self._aux_failed_at = None
         self._summary = summary
         self._summarized_upto = tail_start
         if self.on_summary is not None:
@@ -1914,6 +1980,26 @@ class ContextLadder:
             + [_summary_message(self._summary, _skill_names(messages, head_end, tail_start))]
             + messages[tail_start:]
         )
+        return self._repair_dangling_refs(rebuilt, messages)
+
+    def _in_aux_cooldown(self) -> bool:
+        failed = self._aux_failed_at
+        return failed is not None and time.monotonic() - failed < SUMMARY_FAILURE_COOLDOWN_S
+
+    def _deterministic_trim(
+        self,
+        messages: list[dict],
+        head_end: int,
+        tail_start: int,
+        previous: str | None,
+    ) -> list[dict]:
+        """The fallback when no aux summary can be had (CHAT-181, idea 16):
+        the head (system prompt, first user message), one marker row (with the
+        last good summary in it, when there is one), and the newest turns
+        verbatim from ``tail_start`` (whole units, by the tail budget). No
+        model call, so the run goes on. Nothing is stored: the next pass tries
+        a real summary again after the cooldown."""
+        rebuilt = messages[:head_end] + [_trim_message(previous)] + messages[tail_start:]
         return self._repair_dangling_refs(rebuilt, messages)
 
     def _schedule(
@@ -1963,6 +2049,14 @@ class ContextLadder:
             summarizer = factory()
             try:
                 summary = redact_secrets(summarizer.summarize(transcript, previous) or "").strip()
+                if summary and summary_is_junk(summary, transcript):
+                    # A junk summary is never stored (CHAT-181): the turn
+                    # path trims when it must, and a later job tries again.
+                    logger.warning(
+                        "context ladder: background summary unusable (%d chars); dropped",
+                        len(summary),
+                    )
+                    summary = ""
             finally:
                 close = getattr(summarizer, "close", None)
                 if callable(close):

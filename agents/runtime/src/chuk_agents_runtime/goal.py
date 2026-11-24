@@ -34,6 +34,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from .goal_judge import GoalJudge, JudgeVerdict, VERDICT_SKIPPED, nudge_text
 from .registry import ToolRegistry
 from .sources import SOURCE_GOAL
 from .state import StateStore
@@ -161,6 +162,9 @@ def goal_view(doc: dict | None, arming: GoalArming | None, session_key: str) -> 
     }
     if isinstance(doc.get("blocked_reason"), dict):
         view["blocked_reason"] = dict(doc["blocked_reason"])
+    if isinstance(doc.get("judge"), dict):
+        # CHAT-183: the last verdict of the goal judge (goal_judge.py).
+        view["judge"] = dict(doc["judge"])
     return view
 
 
@@ -170,6 +174,15 @@ def load_goal(store: StateStore, session_key: str) -> dict | None:
 
 class GoalError(Exception):
     """A refused goal change; the text goes to the model as the tool error."""
+
+
+class GoalJudgeRefusal(GoalError):
+    """The goal judge says the objective is not done yet (CHAT-183)."""
+
+    def __init__(self, message: str, verdict: dict, doc: dict | None) -> None:
+        super().__init__(message)
+        self.verdict = verdict
+        self.doc = doc
 
 
 def _words(text: str) -> set[str]:
@@ -220,7 +233,14 @@ class GoalController:
     default_max_rounds: int = DEFAULT_MAX_ROUNDS
     blocked_after: int = BLOCKED_AFTER_ROUNDS
     on_change: Callable[[dict | None], None] | None = None
+    #: CHAT-183: checks a ``complete`` against the objective (goal_judge.py).
+    #: ``None`` = no judge, a complete is accepted as before.
+    judge: GoalJudge | None = None
+    #: Model steps the run has left (``None`` = unknown). A refusal needs a
+    #: few, else the agent could not act on it.
+    steps_left: Callable[[], int | None] | None = None
     _pending: list[dict] = field(default_factory=list)
+    _judge_note: dict | None = None
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     # -- reads ---------------------------------------------------------------
@@ -305,6 +325,7 @@ class GoalController:
         objective: Any = None,
         max_rounds: Any = None,
         blocked_reason: Any = None,
+        evidence: Any = None,
     ) -> tuple[dict | None, str | None]:
         """Apply one ``update_goal``. Returns the stored document (``None``
         after ``clear``) and a note for the model, or raises
@@ -328,6 +349,11 @@ class GoalController:
         new_objective = _clip(objective, MAX_OBJECTIVE_CHARS)
         new_cap = _cap(max_rounds)
         note: dict[str, str | None] = {"text": None}
+        self._judge_note = None
+        if action == "complete":
+            # Raises GoalJudgeRefusal when the judge says "not done yet".
+            self._judge_complete(gid, rev, _clip(evidence, MAX_REASON_CHARS * 4))
+        judged = self._judge_note
 
         def change(current: dict | None):
             if not current:
@@ -370,6 +396,8 @@ class GoalController:
                     raise GoalError("the goal is already complete")
                 doc["phase"] = PHASE_COMPLETE
                 doc["blocked_reason"] = None
+                if judged is not None:
+                    doc.update(judged)
             elif action == "blocked":
                 if phase != PHASE_ACTIVE:
                     raise GoalError(f"only an active goal can be blocked (phase {phase})")
@@ -412,6 +440,109 @@ class GoalController:
             self._queue_wrapup(doc, reason if action == "blocked" else None)
         self._changed(doc)
         return doc, None
+
+    # -- the goal judge (CHAT-183) ---------------------------------------------
+
+    def _judge_transcript(self, limit: int) -> str:
+        """The tail of the newest task, as the background review reads it."""
+        from .background_review import last_task, transcript_digest
+
+        try:
+            sid = self.store.resolve_session(self.session_key)
+            if sid is None:
+                return ""
+            rows = [
+                {"role_tag": m.role, "content": m.content}
+                for m in self.store.get_conversation(sid)
+            ]
+            return transcript_digest(last_task(rows), limit=limit)
+        except Exception:  # noqa: BLE001 — the judge reads what it can
+            return ""
+
+    def _judge_complete(self, gid: str, rev: int, evidence: str) -> None:
+        """Ask the judge before an active goal completes. Returns quietly to
+        accept (the stored fields wait in ``_judge_note``); raises
+        :class:`GoalJudgeRefusal` to refuse. Fails open on every error."""
+        judge = self.judge
+        if judge is None:
+            return
+        current = self.current()
+        if (
+            not current
+            or current.get("id") != gid
+            or int(current.get("revision") or 0) != rev
+            or current.get("phase") != PHASE_ACTIVE
+        ):
+            return  # the normal path answers with the right error
+        used = int(current.get("judge_rounds") or 0)
+        spent = int(current.get("judge_chars") or 0)
+        if used >= judge.max_rounds or spent >= judge.max_total_chars:
+            self._judge_note = {
+                "judge": JudgeVerdict(
+                    VERDICT_SKIPPED, "judge limit reached; completion accepted", used
+                ).as_dict(judge.max_rounds)
+            }
+            return
+        round_no = used + 1
+        try:
+            verdict = judge.judge(
+                current.get("objective") or "",
+                evidence,
+                self._judge_transcript(judge.max_input_chars),
+                round_no=round_no,
+            )
+        except Exception:  # noqa: BLE001 — fail open
+            return
+        if verdict.refuses and self.steps_left is not None:
+            try:
+                left = self.steps_left()
+            except Exception:  # noqa: BLE001
+                left = None
+            if left is not None and left < judge.min_steps:
+                verdict = JudgeVerdict(
+                    VERDICT_SKIPPED,
+                    "not enough steps left in this run; completion accepted. "
+                    f"Judge said: {verdict.reason}",
+                    round_no,
+                    verdict.chars,
+                )
+        stored = {
+            "judge_rounds": round_no,
+            "judge_chars": spent + int(verdict.chars),
+            "judge": verdict.as_dict(judge.max_rounds),
+        }
+        if not verdict.refuses:
+            self._judge_note = stored
+            return
+
+        def change(doc: dict | None):
+            if not doc or doc.get("id") != gid:
+                return doc, doc
+            new = dict(doc)
+            new.update(stored)
+            # Not a lifecycle change: the revision stays, so the agent's
+            # next ``complete`` with the same revision is still valid.
+            new["updated_at"] = time.time()
+            return new, new
+
+        doc = self.store.update_feature(self.session_key, FEATURE_KIND, change)
+        with self._lock:
+            self._pending.append(
+                {
+                    "role_tag": "context",
+                    "role": "user",
+                    "source": SOURCE_GOAL,
+                    "content": nudge_text(verdict.reason, round_no, judge.max_rounds),
+                }
+            )
+        self._changed(doc)
+        raise GoalJudgeRefusal(
+            "The goal judge says the objective is not done yet: "
+            f"{verdict.reason} Keep working on it, verify it, then call update_goal "
+            "with action complete again.",
+            stored["judge"],
+            doc,
+        )
 
     def _streak(self, previous: Any, reason: str) -> int:
         if not isinstance(previous, dict) or self.goal_round is None:
@@ -459,6 +590,10 @@ UPDATE_GOAL_SCHEMA = {
         "objective": {"type": "string", "description": "New objective (edit)."},
         "max_rounds": {"type": "integer", "description": "New cap (edit)."},
         "blocked_reason": {"type": "string", "description": "The blocker (blocked)."},
+        "evidence": {
+            "type": "string",
+            "description": "What proves the whole objective is done (complete).",
+        },
     },
     "required": ["goal_id", "revision", "action"],
 }
@@ -503,6 +638,7 @@ def register_goal_tools(registry: ToolRegistry, controller: GoalController | Non
         objective: Any = None,
         max_rounds: Any = None,
         blocked_reason: Any = None,
+        evidence: Any = None,
     ) -> dict:
         try:
             doc, note = controller.update(
@@ -512,7 +648,15 @@ def register_goal_tools(registry: ToolRegistry, controller: GoalController | Non
                 objective=objective,
                 max_rounds=max_rounds,
                 blocked_reason=blocked_reason,
+                evidence=evidence,
             )
+        except GoalJudgeRefusal as exc:
+            return {
+                "ok": False,
+                "error": str(exc),
+                "judge": exc.verdict,
+                "goal": controller.view(exc.doc) if exc.doc else None,
+            }
         except GoalError as exc:
             return {"ok": False, "error": str(exc)}
         if note and doc is not None and doc.get("phase") == PHASE_ACTIVE and action == "blocked":

@@ -191,10 +191,21 @@ BROWSER_ACT = "browser_act"
 #: ``allow``; the user can set ``ask`` or one of the auto-review modes
 #: (docs/WIRE_CONTRACT.md, "Auto review", DeepSeek research item 31).
 LOCAL_ACTIONS = "local_actions"
-ACTION_CLASSES: tuple[str, ...] = (PUBLISH, SEND_EXTERNAL, MCP_DESTRUCTIVE, BROWSER_ACT, LOCAL_ACTIONS)
+#: A browser fill that uses a saved payment card (``{{card:...}}``,
+#: :mod:`chuk_agents_runtime.vault`, CHAT-185). It always asks: the only
+#: modes are ``ask`` and ``deny``, and no decision lasts past one fill.
+PAYMENT = "payment"
+ACTION_CLASSES: tuple[str, ...] = (
+    PUBLISH, SEND_EXTERNAL, MCP_DESTRUCTIVE, BROWSER_ACT, LOCAL_ACTIONS, PAYMENT
+)
+#: Classes that can never be set to ``allow`` or remembered.
+ALWAYS_ASK_CLASSES = frozenset({PAYMENT})
 
 #: The tools of :data:`LOCAL_ACTIONS`.
-LOCAL_ACTION_TOOLS = frozenset({"run_command", "python", "write_file", "edit_file", "apply_patch"})
+#: ``run_tool_script`` (codemode, CHAT-186) runs a script like ``python``.
+LOCAL_ACTION_TOOLS = frozenset(
+    {"run_command", "python", "run_tool_script", "write_file", "edit_file", "apply_patch"}
+)
 
 #: The classes whose actions happen on a web site: they offer "always for this
 #: site" and keep a site allow-list.
@@ -221,6 +232,7 @@ DEFAULT_MODES: dict[str, str] = {
     MCP_DESTRUCTIVE: MODE_ASK,
     BROWSER_ACT: MODE_ALLOW,
     LOCAL_ACTIONS: MODE_ALLOW,
+    PAYMENT: MODE_ASK,
 }
 
 # -- decision scopes ------------------------------------------------------------
@@ -233,7 +245,14 @@ SCOPE_DENY = "deny"
 #: docs/WIRE_CONTRACT.md "Shell command rules"): allow every command whose
 #: token prefix matches the one the user approved (e.g. ``git push``).
 SCOPE_PREFIX = "always_this_prefix"
-SCOPES: tuple[str, ...] = (SCOPE_ONCE, SCOPE_AGENT, SCOPE_SITE, SCOPE_PREFIX, SCOPE_DENY)
+#: "Allow for this chat" (CHAT-180, Grok Bot item 8): the class runs without a
+#: card in this one chat (``session_key``); other chats of the same agent
+#: still ask. Kept per chat by the executor (``chat_grants.py``), never in
+#: the agent's stored policy.
+SCOPE_CHAT = "always_this_chat"
+SCOPES: tuple[str, ...] = (
+    SCOPE_ONCE, SCOPE_AGENT, SCOPE_SITE, SCOPE_PREFIX, SCOPE_CHAT, SCOPE_DENY
+)
 
 #: The ``action`` of an ``approval_request`` for a class that has no older
 #: action name of its own (``publish`` keeps ``herenow_publish``).
@@ -301,7 +320,11 @@ def user_browser_policy(policy: ActionPolicy) -> ActionPolicy:
     Only the evaluation changes; the stored policy is never rewritten."""
     if BROWSER_ACT in policy.modes:
         return policy
-    return ActionPolicy(modes={**policy.modes, BROWSER_ACT: MODE_ASK}, sites=policy.sites)
+    return ActionPolicy(
+        modes={**policy.modes, BROWSER_ACT: MODE_ASK},
+        sites=policy.sites,
+        chat_allowed=policy.chat_allowed,
+    )
 
 
 def is_destructive(annotations: Mapping[str, Any] | None) -> bool:
@@ -364,9 +387,16 @@ class ActionPolicy:
 
     modes: Mapping[str, str] = field(default_factory=dict)
     sites: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    #: The classes the user allowed for the current chat (``always_this_chat``).
+    #: A live overlay the executor adds per run; never stored, never on the
+    #: wire. It turns ``ask`` into ``allow``, never ``deny``.
+    chat_allowed: frozenset[str] = field(default_factory=frozenset)
 
     def mode(self, action_class: str) -> str:
-        return self.modes.get(action_class) or DEFAULT_MODES.get(action_class, MODE_ASK)
+        mode = self.modes.get(action_class) or DEFAULT_MODES.get(action_class, MODE_ASK)
+        if action_class in ALWAYS_ASK_CLASSES and mode != MODE_DENY:
+            return MODE_ASK
+        return mode
 
     def site_allowed(self, action_class: str, site: str | None) -> bool:
         canon = normalize_site(site) if site else None
@@ -380,7 +410,19 @@ class ActionPolicy:
         mode = self.mode(action_class)
         if mode == MODE_ASK and action_class in SITE_CLASSES and self.site_allowed(action_class, site):
             return MODE_ALLOW
+        if mode == MODE_ASK and action_class in self.chat_allowed:
+            return MODE_ALLOW
         return mode
+
+    def with_chat(self, classes: Any) -> ActionPolicy:
+        """This policy with the classes allowed for the current chat. An
+        always-ask class is never allowed for a chat."""
+        allowed = frozenset(
+            c for c in (classes or ()) if c in ACTION_CLASSES and c not in ALWAYS_ASK_CLASSES
+        )
+        if allowed == self.chat_allowed:
+            return self
+        return ActionPolicy(modes=self.modes, sites=self.sites, chat_allowed=allowed)
 
     def to_dict(self) -> dict[str, Any]:
         """The wire form: every class with its effective mode, every site
@@ -435,7 +477,7 @@ class ActionPolicy:
         """The policy after a decision with a lasting scope. ``once`` and
         ``deny`` change nothing; ``always_this_agent`` sets the class to
         ``allow``; ``always_this_site`` adds the site (site classes only)."""
-        if action_class not in ACTION_CLASSES:
+        if action_class not in ACTION_CLASSES or action_class in ALWAYS_ASK_CLASSES:
             return self
         if scope == SCOPE_AGENT:
             if self.modes.get(action_class) == MODE_ALLOW:
@@ -463,6 +505,8 @@ def _check_modes(raw: Any) -> dict[str, str]:
         if value not in MODES or (value in REVIEW_MODES and key not in REVIEW_CLASSES):
             allowed = "ask, allow, deny, review or review_strict" if key in REVIEW_CLASSES else "ask, allow or deny"
             raise ActionPolicyError(f"mode of {key} must be {allowed}")
+        if key in ALWAYS_ASK_CLASSES and value not in (MODE_ASK, MODE_DENY):
+            raise ActionPolicyError(f"mode of {key} must be ask or deny")
         out[key] = value
     return out
 
@@ -492,12 +536,27 @@ def _check_sites(raw: Any) -> dict[str, tuple[str, ...]]:
 
 def options_for(action_class: str, site: str | None = None) -> tuple[str, ...]:
     """The answers the card offers. "Always for this site" only for a site
-    class and only when the site is known."""
+    class and only when the site is known. An always-ask class offers only
+    this once or deny."""
+    if action_class in ALWAYS_ASK_CLASSES:
+        return (SCOPE_ONCE, SCOPE_DENY)
     options = [SCOPE_ONCE, SCOPE_AGENT]
     if action_class in SITE_CLASSES and normalize_site(site):
         options.append(SCOPE_SITE)
     options.append(SCOPE_DENY)
     return tuple(options)
+
+
+def with_chat_option(options: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+    """``options`` with "for this chat" (``always_this_chat``, CHAT-180) after
+    "once". Only a card that already offers a lasting scope
+    (``always_this_agent``) gets it: an always-ask class or a one-time review
+    card stays once-or-deny."""
+    listed = list(options)
+    if SCOPE_CHAT in listed or SCOPE_ONCE not in listed or SCOPE_AGENT not in listed:
+        return tuple(listed)
+    listed.insert(listed.index(SCOPE_ONCE) + 1, SCOPE_CHAT)
+    return tuple(listed)
 
 
 @dataclass
@@ -572,6 +631,9 @@ class ActionApprovals:
     #: ``browser_tabs select`` -> the host of that tab). ``None`` = use
     #: ``site()``.
     site_for: Callable[[str, Mapping[str, Any]], str | None] | None = None
+    #: ``True`` when ``remember`` can keep an ``always_this_chat`` grant (the
+    #: executor binds a chat): the card then offers "for this chat".
+    chat_scope: bool = False
 
     def current(self) -> ActionPolicy:
         try:
@@ -714,7 +776,7 @@ def describe_local(tool: str, args: Mapping[str, Any]) -> ActionRequest:
         command = args.get("command")
         details["command"] = command[:ARGS_CHARS] if isinstance(command, str) else ""
         summary = f"Run: {_clip(command, 120)}"
-    elif tool == "python":
+    elif tool in ("python", "run_tool_script"):
         code = args.get("code")
         details["code"] = code[:ARGS_CHARS] if isinstance(code, str) else ""
         summary = f"Run a Python script: {_clip(args.get('description') or '', 120)}".rstrip(": ")
@@ -758,12 +820,15 @@ CLASS_WORDS = {
     MCP_DESTRUCTIVE: "run this connector action",
     BROWSER_ACT: "do this in the browser",
     LOCAL_ACTIONS: "run this command or change this file",
+    PAYMENT: "pay with this saved card",
 }
 
 
 __all__ = [
     "ACTION_APPROVAL",
     "ACTION_CLASSES",
+    "ALWAYS_ASK_CLASSES",
+    "PAYMENT",
     "BROWSER_ACT",
     "BROWSER_ACT_TOOLS",
     "LOCAL_ACTIONS",
@@ -784,6 +849,7 @@ __all__ = [
     "PUBLISH",
     "SCOPES",
     "SCOPE_AGENT",
+    "SCOPE_CHAT",
     "SCOPE_DENY",
     "SCOPE_ONCE",
     "SCOPE_PREFIX",
@@ -812,4 +878,5 @@ __all__ = [
     "site_matches",
     "user_browser_policy",
     "user_browser_tool_acts",
+    "with_chat_option",
 ]

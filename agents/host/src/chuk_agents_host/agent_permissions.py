@@ -21,6 +21,12 @@ bead chuk_chat-qcbv) lives here too, under ``budgets``: per agent, the euro
 the user allows it to spend per week (``budget_weekly``, 0 = no budget). It
 rides the same two frames and applies from the next task.
 
+The monthly spending cap (CHAT-181) lives next to it, under ``caps_monthly``:
+per agent (``cap_monthly`` in the frames) and for the whole account on this
+host (key ``*``, ``account_cap_monthly`` in the frames), in euro per
+calendar month, 0 = no cap. Unlike the weekly budget it is hard: the
+executor refuses every new run at the cap, also one the user confirms.
+
 Enforcement is not here. The sandbox carries the policy
 (:class:`chuk_agents_sandbox.SandboxPolicy`): the host hands every per-agent
 environment a *provider* over this store, and the executor reads that provider
@@ -38,7 +44,12 @@ from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from chuk_agents_runtime.cost import BudgetNotices, valid_budget
+from chuk_agents_runtime.cost import (
+    ACCOUNT_CAP_KEY,
+    BudgetNotices,
+    valid_budget,
+    valid_monthly_cap,
+)
 from chuk_agents_runtime.action_policy import (
     ACTION_CLASSES,
     SCOPE_AGENT,
@@ -121,6 +132,7 @@ class AgentPermissionsStore:
         self._approvals: dict[str, ActionPolicy] = {}
         self._command_rules: dict[str, CommandRules] = {}
         self._budgets: dict[str, float] = {}
+        self._caps_monthly: dict[str, float] = {}
         self._overrides: dict[str, dict[str, Any]] = self._load()
 
     @property
@@ -188,6 +200,31 @@ class AgentPermissionsStore:
         """The agent's weekly budget in euro; 0 = none."""
         with self._lock:
             return self._budgets.get(agent_id, 0.0)
+
+    def cap_monthly(self, agent_id: str) -> float:
+        """The agent's monthly cap in euro (``*`` = the account); 0 = none."""
+        with self._lock:
+            return self._caps_monthly.get(agent_id, 0.0)
+
+    def update_cap_monthly(self, agent_id: str, value: Any) -> float:
+        """Set a monthly cap (0 clears it) and persist it. Raises
+        :class:`ValueError` for a bad value; nothing changes then."""
+        cap = valid_monthly_cap(value)
+        with self._lock:
+            before = self._caps_monthly.get(agent_id)
+            if cap > 0:
+                self._caps_monthly[agent_id] = cap
+            else:
+                self._caps_monthly.pop(agent_id, None)
+            try:
+                self._save_locked()
+            except OSError:
+                if before is None:
+                    self._caps_monthly.pop(agent_id, None)
+                else:
+                    self._caps_monthly[agent_id] = before
+                raise
+        return cap
 
     # ------------------------------------------------------------------ #
     # Writes
@@ -318,6 +355,18 @@ class AgentPermissionsStore:
                     continue
                 if budget > 0:
                     self._budgets[agent_id] = budget
+        caps = raw.get("caps_monthly") if isinstance(raw, dict) else None
+        if isinstance(caps, dict):
+            for agent_id, value in caps.items():
+                if not isinstance(agent_id, str):
+                    continue
+                try:
+                    cap = valid_monthly_cap(value)
+                except ValueError as exc:
+                    self._log(f"[permissions] dropped the monthly cap of {agent_id!r}: {exc}")
+                    continue
+                if cap > 0:
+                    self._caps_monthly[agent_id] = cap
         agents = raw.get("agents") if isinstance(raw, dict) else None
         if not isinstance(agents, dict):
             return {}
@@ -354,6 +403,8 @@ class AgentPermissionsStore:
             document["command_rules"] = command_rules
         if self._budgets:
             document["budgets"] = dict(self._budgets)
+        if self._caps_monthly:
+            document["caps_monthly"] = dict(self._caps_monthly)
         body = json.dumps(document, indent=2, sort_keys=True)
         fd, tmp = tempfile.mkstemp(prefix=".agent_permissions.", dir=self._path.parent)
         try:
@@ -407,6 +458,8 @@ def permissions_payload(
     error: str | None = None,
     approvals: ActionPolicy | None = None,
     budget_weekly: float | None = None,
+    cap_monthly: float | None = None,
+    account_cap_monthly: float | None = None,
 ) -> dict[str, Any]:
     """The ``agent_permissions`` reply: every key, which ones this host really
     enforces, and when a change applies. ``policy`` is ``None`` only when there
@@ -427,6 +480,11 @@ def permissions_payload(
     # 0 = no budget. Always present when the agent is known.
     if budget_weekly is not None:
         payload["budget_weekly"] = float(budget_weekly)
+    # CHAT-181: the hard monthly caps, euro per month, 0 = none.
+    if cap_monthly is not None:
+        payload["cap_monthly"] = float(cap_monthly)
+    if account_cap_monthly is not None:
+        payload["account_cap_monthly"] = float(account_cap_monthly)
     if error:
         payload["error"] = error
     return payload
@@ -463,6 +521,7 @@ def handle_permissions_frame(
         reply = permissions_payload(
             agent_id, policy, enforced=enforced, error=error, approvals=approvals,
             budget_weekly=store.budget(key) if policy is not None else None,
+            **(_caps(store, key) if policy is not None else {}),
         )
         return reply, None, None
 
@@ -478,10 +537,11 @@ def handle_permissions_frame(
     current = store.get(key)
     current_approvals = store.approvals(key)
     current_budget = store.budget(key)
+    current_caps = _caps(store, key)
     if kind == FRAME_GET:
         reply = permissions_payload(
             agent_id, current, enforced=enforced, approvals=current_approvals,
-            budget_weekly=current_budget,
+            budget_weekly=current_budget, **current_caps,
         )
         return reply, None, None
 
@@ -489,7 +549,10 @@ def handle_permissions_frame(
     approvals_partial = payload.get("approvals")
     has_budget = "budget_weekly" in payload
     budget_value = payload.get("budget_weekly")
-    if partial is None and (approvals_partial is not None or has_budget):
+    cap_changes = {
+        field: payload.get(field) for field in ("cap_monthly", "account_cap_monthly") if field in payload
+    }
+    if partial is None and (approvals_partial is not None or has_budget or cap_changes):
         partial = {}
     if not isinstance(partial, Mapping):
         return refused("permissions must be an object", current, current_approvals)
@@ -505,6 +568,8 @@ def handle_permissions_frame(
             current_approvals.updated(approvals_partial)
         if has_budget:
             valid_budget(budget_value)
+        for value in cap_changes.values():
+            valid_monthly_cap(value)
     except (PolicyError, ActionPolicyError, ValueError) as exc:
         return refused(str(exc), current, current_approvals)
     try:
@@ -515,6 +580,10 @@ def handle_permissions_frame(
             else current_approvals
         )
         budget = store.update_budget(key, budget_value) if has_budget else current_budget
+        if "cap_monthly" in cap_changes:
+            store.update_cap_monthly(key, cap_changes["cap_monthly"])
+        if "account_cap_monthly" in cap_changes:
+            store.update_cap_monthly(ACCOUNT_CAP_KEY, cap_changes["account_cap_monthly"])
     except (PolicyError, ActionPolicyError, ValueError) as exc:
         return refused(str(exc), store.get(key), store.approvals(key))
     except OSError as exc:
@@ -525,13 +594,29 @@ def handle_permissions_frame(
             changed = ", ".join(x for x in (changed, "approvals") if x)
         if has_budget:
             changed = ", ".join(x for x in (changed, f"budget_weekly={budget:g}") if x)
+        for field_name in cap_changes:
+            changed = ", ".join(x for x in (changed, field_name) if x)
         log(f"[permissions] {key}: {changed or 'no change'}")
+    caps = _caps(store, key)
     reply = permissions_payload(
-        agent_id, policy, enforced=enforced, approvals=approvals, budget_weekly=budget
+        agent_id, policy, enforced=enforced, approvals=approvals, budget_weekly=budget, **caps
     )
-    if policy == current and approvals == current_approvals and budget == current_budget:
+    if (
+        policy == current
+        and approvals == current_approvals
+        and budget == current_budget
+        and caps == current_caps
+    ):
         return reply, None, None
     return reply, current, policy
+
+
+def _caps(store: AgentPermissionsStore, key: str) -> dict[str, float]:
+    """The two monthly caps of an agent for a reply (CHAT-181)."""
+    return {
+        "cap_monthly": store.cap_monthly(key),
+        "account_cap_monthly": store.cap_monthly(ACCOUNT_CAP_KEY),
+    }
 
 
 class ActionApprovalsBridge:
@@ -634,6 +719,13 @@ class BudgetBridge:
 
     def budget_weekly(self, session_key: str) -> float:
         return self._store.budget(self._agent_key(session_key))
+
+    def caps_monthly(self, session_key: str) -> tuple[float, float]:
+        """``(agent cap, account cap)`` in euro per month; 0 = none (CHAT-181)."""
+        return (
+            self._store.cap_monthly(self._agent_key(session_key)),
+            self._store.cap_monthly(ACCOUNT_CAP_KEY),
+        )
 
     def first_notice(self, agent_key: str, week: float, level: str) -> bool:
         return self._notices.first(agent_key, week, level)

@@ -24,6 +24,8 @@ SOURCE_TIME = "time"
 SOURCE_SUBAGENT = "subagent"
 SOURCE_REVIEW = "review"
 SOURCE_PLAN = "plan"
+#: The block of a run mode (run_modes.py, CHAT-183).
+SOURCE_MODE = "mode"
 
 SOURCES = frozenset(
     {
@@ -36,6 +38,7 @@ SOURCES = frozenset(
         SOURCE_SUBAGENT,
         SOURCE_REVIEW,
         SOURCE_PLAN,
+        SOURCE_MODE,
     }
 )
 

@@ -55,6 +55,7 @@ from .context import (
     prompt_tokens_from_usage,
     total_tokens_from_usage,
 )
+from .cost import cache_hit_tokens
 from .model_retry import EmptyModelResponse, RetryPolicy, RetryTracker, attended_policy
 from .registry import ToolRegistry
 from .tool_search import relevance_search
@@ -747,6 +748,7 @@ class AgentLoop:
         deferred_mode: str = "hide",
         expose_tools: bool = True,
         model_factory: Callable[[], Model] | None = None,
+        model_fallback: Callable[[], Any] | None = None,
     ) -> None:
         if token_budget is not None and token_budget < 0:
             raise ValueError("token_budget must be >= 0")
@@ -754,6 +756,12 @@ class AgentLoop:
         #: Builds the model for each run (the HTTP model: its client belongs to
         #: one event loop, and each run has its own). ``None``: ``model`` is used.
         self._model_factory = model_factory
+        #: Keep the stored reasoning in the history (set per run from the
+        #: model, ``reasoning_passback``; CHAT-181).
+        self._reasoning_passback = False
+        #: Builds the run's :class:`~chuk_agents_runtime.model_fallback.FallbackChain`
+        #: (retry, then another model; CHAT-181). ``None``: same model only.
+        self._model_fallback = model_fallback
         self._pai_model: Model = (
             model if isinstance(model, Model) else LegacyClientModel(model)
         )
@@ -1079,7 +1087,12 @@ class AgentLoop:
         if tracer.enabled:
             self._trace_prepare(tracer, outbound, elapsed)
         converted = rows_to_messages(
-            outbound, deferred=self._registry.deferred_names(), image_loader=self.image_loader
+            outbound,
+            deferred=self._registry.deferred_names(),
+            image_loader=self.image_loader,
+            # DeepSeek in a tool loop needs the reasoning of its earlier
+            # turns back (CHAT-181, ``pai.model.needs_reasoning_passback``).
+            include_reasoning=self._reasoning_passback,
         )
         if not converted or not hasattr(converted[-1], "parts") or converted[-1].kind != "request":
             # Pydantic AI needs the history to end in a request. The store
@@ -1204,9 +1217,23 @@ class AgentLoop:
                 tools=len(tools_used),
                 **timings.as_row(),
             )
+        self._store_approval_audit(session_id)
         self._observe_turn(session_key, user_message, outcome, tools_used)
         self._plan_compaction(session_id)
         return outcome
+
+    def _store_approval_audit(self, session_id: int) -> None:
+        """CHAT-180: the run's approval decisions as one ``approval_audit``
+        event row after the answer (a collapsed line each, e.g. "allowed
+        once by the user"). Also resets the run's intent check. Never raises."""
+        try:
+            entries = self._policy.end_run()
+            if entries:
+                self._store.append_event(
+                    session_id, {"type": "approval_audit", "entries": entries}
+                )
+        except Exception:  # noqa: BLE001 — the audit never fails a run
+            pass
 
     def _pre_round_stop(self, iterations: int) -> StopReason | None:
         if self._kill.interrupted():
@@ -1247,6 +1274,11 @@ class AgentLoop:
         # this run's event loop) is closed when the run ends.
         run_model = self._model_factory() if self._model_factory is not None else self._pai_model
         state.model = run_model
+        self._reasoning_passback = bool(getattr(run_model, "reasoning_passback", False))
+        fallback = self._model_fallback() if self._model_fallback is not None else None
+        #: Run-level settings of a fallback model (no provider pin of the
+        #: first model); ``None`` while the run is on its own model.
+        run_settings: Any = None
         streaming = not is_legacy(run_model)
         request_log = getattr(run_model, "request_log", None)
 
@@ -1267,6 +1299,7 @@ class AgentLoop:
                             None,
                             model=run_model,
                             message_history=history,
+                            model_settings=run_settings,
                             cancellation_token=token,
                             usage_limits=self._usage_limits or UsageLimits(request_limit=None),
                         ) as run:
@@ -1309,6 +1342,32 @@ class AgentLoop:
                                         if self._kill.interrupted():
                                             state.reason = StopReason.INTERRUPTED
                                             break
+                                        switched = (
+                                            fallback.next_model()
+                                            if fallback is not None
+                                            and fallback.wants_fallback(exc, tracker.attempts)
+                                            else None
+                                        )
+                                        if switched is not None:
+                                            # Retry, then another model (CHAT-181,
+                                            # ``model_fallback``): the request is
+                                            # rebuilt from the store on the new model.
+                                            old_model, run_model = run_model, switched[1]
+                                            state.model = run_model
+                                            run_settings = getattr(run_model, "fallback_settings", None)
+                                            request_log = getattr(run_model, "request_log", None)
+                                            self._reasoning_passback = bool(
+                                                getattr(run_model, "reasoning_passback", False)
+                                            )
+                                            if old_model is not self._pai_model:
+                                                await _close_model(old_model)
+                                            tracker.reset()
+                                            state.iterations -= 1
+                                            active.round = state.iterations
+                                            self._budget.refund()
+                                            raise _RetryModelCall(
+                                                0.0, f"fallback to {switched[0]}", 1
+                                            ) from exc
                                         delay = tracker.next_delay(exc)
                                         if delay is not None:
                                             # Only this model call is asked
@@ -1443,7 +1502,7 @@ class AgentLoop:
             if state.last_response is not None:
                 await self._settle_inflight()
                 self._close_calls(active, _calls(state.last_response), tools_used)
-            if self._model_factory is not None:
+            if self._model_factory is not None or run_model is not self._pai_model:
                 await _close_model(run_model)
         if state.reason.value in LIMIT_REASONS and not state.final_answer:
             state.final_answer = _limit_answer(state.passes, state.reason, state.iterations)
@@ -1624,8 +1683,9 @@ class AgentLoop:
                 if (usage.input_tokens or usage.output_tokens)
                 else None
             )
-            if raw_usage is not None and usage.cache_read_tokens:
-                raw_usage["cached_tokens"] = usage.cache_read_tokens
+            cached = cache_hit_tokens(usage)
+            if raw_usage is not None and cached:
+                raw_usage["cached_tokens"] = cached
         timings.cached_tokens += cached_tokens_from_usage(raw_usage)
         prompt, completion = _split_tokens(raw_usage)
         if prompt > 0:
@@ -2488,6 +2548,8 @@ def cached_tokens_from_usage(usage: dict | None) -> int:
         usage.get("cached_tokens"),
         usage.get("cache_read_tokens"),
         usage.get("cache_read_input_tokens"),
+        # DeepSeek's own field (CHAT-181).
+        usage.get("prompt_cache_hit_tokens"),
     ]
     for value in candidates:
         if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:

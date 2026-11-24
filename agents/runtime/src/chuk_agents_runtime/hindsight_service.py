@@ -343,6 +343,30 @@ class HindsightAPI:
     def operation(self, bank_id: str, operation_id: str) -> dict:
         return self._call("GET", f"/v1/default/banks/{bank_id}/operations/{operation_id}")
 
+    # -- purge on disconnect (CHAT-180, connector_purge.py) -----------------
+
+    def list_banks(self, *, limit: int = 1000) -> list[str]:
+        """The ids of every bank of the sidecar."""
+        result = self._call("GET", "/v1/default/banks", params={"limit": int(limit)})
+        banks = result.get("banks") if isinstance(result, dict) else None
+        return [str(b["bank_id"]) for b in banks or [] if isinstance(b, dict) and b.get("bank_id")]
+
+    def list_documents(
+        self, bank_id: str, *, tags: list[str], limit: int = 100, offset: int = 0
+    ) -> list[dict]:
+        """The documents of a bank that carry any of ``tags``."""
+        result = self._call(
+            "GET",
+            f"/v1/default/banks/{bank_id}/documents",
+            params={"tags": list(tags), "tags_match": "any_strict", "limit": int(limit), "offset": int(offset)},
+        )
+        items = result.get("items") if isinstance(result, dict) else None
+        return [item for item in items or [] if isinstance(item, dict)]
+
+    def delete_document(self, bank_id: str, document_id: str) -> None:
+        """Delete one document and every memory made from it."""
+        self._call("DELETE", f"/v1/default/banks/{bank_id}/documents/{document_id}")
+
 
 # -- the service ---------------------------------------------------------------
 

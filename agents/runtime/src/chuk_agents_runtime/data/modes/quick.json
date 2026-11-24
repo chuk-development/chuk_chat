@@ -1,0 +1,8 @@
+{
+  "name": "quick",
+  "title": "Quick",
+  "description": "A fast, short answer with few tool calls.",
+  "prompt": "[quick mode] Answer fast. Use as few tool calls as you can (none when you know the answer), no subagents and no browser. Keep the answer short: the result first, at most a few lines of support.",
+  "deny_groups": ["subagents", "browser"],
+  "reasoning_effort": "low"
+}

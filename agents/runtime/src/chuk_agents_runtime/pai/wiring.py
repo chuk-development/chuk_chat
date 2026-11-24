@@ -101,6 +101,50 @@ def openai_model_from_client(model: Any) -> tuple[Any, Any, Any, Any] | None:
     return factory, chuk_model_settings(chuk_spec), getattr(inner, "on_delta", None), getattr(inner, "on_reasoning", None)
 
 
+def fallback_from_client(model: Any) -> Any:
+    """A factory of the run's :class:`~chuk_agents_runtime.model_fallback.FallbackChain`
+    for the account client (CHAT-181), or ``None`` for a client that cannot
+    describe itself (a mock: no fallback, as before) or when
+    ``AGENTS_MODEL_FALLBACK=0``.
+
+    The chain is the run's model, then
+    :data:`~chuk_agents_runtime.backend.TOOL_CALL_CAPABLE_MODELS`. A fallback
+    model is built on the same session, effort and output cap, without the
+    first model's provider pin: ``"provider": null`` goes in the run-level
+    settings, so the pin in the agent's settings does not reach it."""
+    from ..model_fallback import FallbackChain, fallback_enabled
+
+    if not fallback_enabled():
+        return None
+    inner = getattr(model, "inner", None) or model
+    chat_spec = getattr(inner, "chat_spec", None)
+    if not callable(chat_spec):
+        return None
+    spec = chat_spec()
+    from ..backend import TOOL_CALL_CAPABLE_MODELS
+    from .model import ChukModelSpec, chuk_chat_model
+
+    primary = str(spec["model_id"])
+    base_url = str(spec.get("base_url") or "https://api.chuk.chat")
+    session = spec["session"]
+
+    def build(model_id: str) -> Any:
+        fallback_spec = ChukModelSpec(
+            model_id=model_id,
+            reasoning_effort=spec.get("reasoning_effort"),
+            max_tokens=spec.get("max_tokens"),
+            extra_body={"provider": None},
+        )
+        built, settings = chuk_chat_model(session, fallback_spec, base_url=base_url)
+        built.fallback_settings = settings  # type: ignore[attr-defined]
+        return built
+
+    def factory() -> Any:
+        return FallbackChain(primary, TOOL_CALL_CAPABLE_MODELS, build)
+
+    return factory
+
+
 def loop_setup(
     model: Any,
     *,
@@ -152,10 +196,14 @@ def loop_setup(
             on_delta=on_delta,
             on_reasoning=on_reasoning,
         )
+        fallback = fallback_from_client(model)
+        if fallback is not None:
+            extra["model_fallback"] = fallback
     return model, extra
 
 
 __all__ = [
+    "fallback_from_client",
     "herenow_tool_gate",
     "instrumentation_capabilities",
     "loop_setup",

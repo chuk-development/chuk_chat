@@ -153,13 +153,31 @@ class ChukModelSpec:
     extra_body: dict[str, Any] = field(default_factory=dict)
 
 
+#: Model id parts of the models that need their own ``reasoning_content``
+#: back in a request that carries ``tools`` (CHAT-181). DeepSeek's thinking
+#: mode: "the ``reasoning_content`` of all previous turns should be passed
+#: back ... If your code does not correctly pass back ``reasoning_content``,
+#: the API will return a 400 error" (api-docs.deepseek.com, thinking_mode,
+#: read 2026-11-24). Without ``tools`` the API ignores it, so sending it is
+#: always safe for these models. Kimi K2 thinking has the same rule.
+REASONING_PASSBACK_MARKERS = ("deepseek", "kimi-k2")
+
+
+def needs_reasoning_passback(model_id: str | None) -> bool:
+    """True when ``model_id`` must get the reasoning of its earlier turns
+    back (see :data:`REASONING_PASSBACK_MARKERS`)."""
+    name = str(model_id or "").lower()
+    return any(marker in name for marker in REASONING_PASSBACK_MARKERS)
+
+
 def chuk_profile(*, send_back_thinking: bool = False) -> OpenAIModelProfile:
     """The model profile for the account proxy.
 
     The proxy serves open models (DeepSeek, Kimi, Qwen, ...) behind one
-    OpenAI-compatible surface: thinking comes in ``reasoning_content``. The
-    native loop never sent the thinking back, so the default keeps that
-    (``send_back_thinking=False``); the history converter drops it as well.
+    OpenAI-compatible surface: thinking comes in ``reasoning_content``. With
+    ``send_back_thinking`` the thinking parts of earlier turns go back in the
+    same field (DeepSeek needs that in a tool loop,
+    :func:`needs_reasoning_passback`); without it they are dropped.
     """
     return OpenAIModelProfile(
         openai_chat_thinking_field="reasoning_content",
@@ -226,9 +244,14 @@ def chuk_chat_model(
     base_url: str = "https://api.chuk.chat",
     transport: httpx2.AsyncBaseTransport | None = None,
     timeout: float = 600.0,
-    send_back_thinking: bool = False,
+    send_back_thinking: bool | None = None,
 ) -> tuple[OpenAIChatModel, OpenAIChatModelSettings]:
     """The model and its settings for one task.
+
+    ``send_back_thinking`` ``None`` (the default) decides by the model:
+    :func:`needs_reasoning_passback`. The model carries the decision as
+    ``model.reasoning_passback``; the loop reads it to keep the stored
+    reasoning in the history it builds.
 
     The HTTP client always carries :class:`SupabaseJwtAuth`; ``transport`` is
     only for tests (an ``httpx2.MockTransport``), so the auth path under test
@@ -253,12 +276,18 @@ def chuk_chat_model(
         http_client=client,
         max_retries=MAX_RETRIES,
     )
+    passback = (
+        needs_reasoning_passback(spec.model_id)
+        if send_back_thinking is None
+        else bool(send_back_thinking)
+    )
     model = OpenAIChatModel(
         spec.model_id,
         provider=OpenAIProvider(openai_client=openai_client),
-        profile=chuk_profile(send_back_thinking=send_back_thinking),
+        profile=chuk_profile(send_back_thinking=passback),
     )
     model.request_log = log  # type: ignore[attr-defined]
+    model.reasoning_passback = passback  # type: ignore[attr-defined]
     return model, chuk_model_settings(spec)
 
 
@@ -398,5 +427,6 @@ __all__ = [
     "chuk_profile",
     "is_legacy",
     "legacy_to_response",
+    "needs_reasoning_passback",
     "tool_definition_to_openai",
 ]

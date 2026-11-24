@@ -111,6 +111,11 @@ class ToolRegistry:
     #: scrubber; ``None`` means results pass untouched. It sees the error
     #: envelope too, so an exception text cannot carry a value out.
     result_filter: Callable[[Any], Any] | None = None
+    #: ``wrapper(name, result)`` runs after :attr:`result_filter` on a result
+    #: the handler returned (never on an error envelope): the untrusted data
+    #: block of :mod:`chuk_agents_runtime.untrusted` (CHAT-180). ``None``
+    #: means results pass untouched.
+    result_wrapper: Callable[[str, Any], Any] | None = None
 
     # -- registration -----------------------------------------------------
 
@@ -267,7 +272,18 @@ class ToolRegistry:
                 result = spec.handler(**coerced)
         except Exception as exc:
             return self._filtered(self._error(name, f"{type(exc).__name__}: {exc}"))
-        return self._filtered(result)
+        return self._wrapped(name, self._filtered(result))
+
+    def _wrapped(self, name: str, result: Any) -> Any:
+        """Run the result through :attr:`result_wrapper`. A wrapper that
+        raises leaves the (already filtered) result as it is."""
+        fn = self.result_wrapper
+        if fn is None:
+            return result
+        try:
+            return fn(name, result)
+        except Exception:  # noqa: BLE001 — marking is best effort, never a failed call
+            return result
 
     def _filtered(self, result: Any) -> Any:
         """Run the result through :attr:`result_filter`. A filter that raises

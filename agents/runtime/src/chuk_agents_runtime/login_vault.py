@@ -342,6 +342,12 @@ class LoginGuard:
         #: pass straight through.
         self._internal = threading.local()
 
+    def mark_filled(self, origin: str) -> None:
+        """Treat ``origin`` as filled: page scripts stay blocked there for the
+        rest of the session (also after a card fill, :mod:`.vault`)."""
+        if origin:
+            self._filled_origins.add(origin)
+
     # The seam ---------------------------------------------------------------
 
     def __call__(

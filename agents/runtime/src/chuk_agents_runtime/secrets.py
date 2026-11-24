@@ -324,8 +324,10 @@ def register_secrets_tools(registry: ToolRegistry, access: SecretsAccess | None)
         scrub_values if callable(scrub_values) else access.env
     ).scrub_obj
     from .login_vault import register_login_vault_tool
+    from .vault import register_vault_tools
 
     register_login_vault_tool(registry, access)
+    register_vault_tools(registry, access)
 
 
 class DictSecrets:

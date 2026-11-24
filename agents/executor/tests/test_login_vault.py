@@ -266,6 +266,7 @@ def test_every_session_mcp_manager_gets_the_login_guard(tmp_path):
     servers = [{"name": "fake", "command": sys.executable, "args": ["-c", "pass"], "auth": "none"}]
     manager = executor._session_mcp_manager("s1", servers)
     try:
-        assert isinstance(manager.call_guard, LoginGuard)
+        # CHAT-185: the vault guard wraps the login guard.
+        assert isinstance(manager.call_guard.login_guard, LoginGuard)
     finally:
         manager.close()

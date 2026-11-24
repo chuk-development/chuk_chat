@@ -140,6 +140,7 @@ from .avatars import AVATAR_CAPABILITY, AVATAR_SET_FRAME, AvatarStore
 from chuk_agents_runtime.automations import owner_session_key
 
 from .automations import AutomationManager
+from .proactive import ProactiveManager, daily_journal_writer
 from .webhooks import OUTCOME_OTHER_AGENT, OUTCOME_OTHER_DEVICE
 from .calls import CallService
 from .notification_text import DEFAULT_COWORKER, coworker_name
@@ -862,6 +863,26 @@ class LocalHost:
             self._automations.start()
         except Exception as exc:  # noqa: BLE001 — automations must not block startup
             self._log(f"could not start automations: {type(exc).__name__}: {exc}")
+        # The proactive agent (CHAT-182, docs/agents/PROACTIVE.md): heartbeat,
+        # quiet hours, nudge rules, morning brief. Its rows live in the
+        # automations table; the tools reach it through ``SessionAutomations``.
+        try:
+            workspace = self._agent.workspace_dir or str(self._agents_dir / self._agent.name)
+            self._proactive = ProactiveManager(
+                automations=self._automations,
+                workspace=workspace,
+                db_path=self._db_path,
+                fire=self._fire_automation,
+                busy=self._automation_busy,
+                deliver=self._deliver_queued_push,
+                logger=self._log,
+                journal_writer=daily_journal_writer(workspace),
+            )
+            self._automations.proactive = self._proactive
+            self._proactive.start()
+        except Exception as exc:  # noqa: BLE001 — never blocks startup
+            self._proactive = None
+            self._log(f"could not start the proactive agent: {type(exc).__name__}: {exc}")
         # Forwarded MCP sign-ins: the host is the one side that renews them
         # (docs/MCP_CONNECTORS.md). The keeper renews an idle grant once a day
         # so its refresh token never times out, and a grant that dies sends
@@ -913,6 +934,20 @@ class LocalHost:
                 ),
             )
             self._agent_mail.start()
+        # Chat-network gateways (CHAT-184, docs/agents/GATEWAYS.md): each is
+        # off until its bot token is stored. Runs go to the same executor.
+        self._gateways = []
+        try:
+            from .gateways import build_gateways
+            from .gateways.host_bridge import HostBridge
+
+            self._gateways = build_gateways(
+                HostBridge(self), self._workspace, self._identity, log=self._log
+            )
+            for gateway in self._gateways:
+                gateway.start()
+        except Exception as exc:  # noqa: BLE001 — a gateway never stops the host
+            self._log(f"gateways not started: {type(exc).__name__}")
         transport, controller_token, reconnect_pipe = self._build_transport()
         party_class = CloudHostParty if self._transport_kind == TRANSPORT_CLOUD else HostParty
         extra = (
@@ -1056,6 +1091,9 @@ class LocalHost:
             mcp_client.GRANTS.dead_listeners.remove(self._on_mcp_grant_dead)
         except ValueError:
             pass
+        proactive = getattr(self, "_proactive", None)
+        if proactive is not None:
+            proactive.stop()
         automations = getattr(self, "_automations", None)
         if automations is not None:
             automations.stop()
@@ -1065,6 +1103,11 @@ class LocalHost:
         mail = getattr(self, "_agent_mail", None)
         if mail is not None:
             mail.stop()
+        for gateway in getattr(self, "_gateways", None) or []:
+            try:
+                gateway.stop()
+            except Exception:  # noqa: BLE001
+                pass
         # Room members first: each is an executor thread of its own, and stopping
         # them unregisters their senders, so nothing is left registered as
         # reachable once this host is down.
@@ -2126,6 +2169,12 @@ class LocalHost:
         # when the panel got it: else the usual toast / push.
         if self._answer_browser_panel(summary):
             return
+        # A gateway run (CHAT-184) was answered in its chat already.
+        run_id = str(summary.get("run_id") or "") if isinstance(summary, dict) else ""
+        if run_id and any(
+            g.owns_run(run_id) for g in getattr(self, "_gateways", None) or []
+        ):
+            return
         origin = summary.get("origin") if isinstance(summary, dict) else None
         outcome = summary.get("automation_result") if isinstance(summary, dict) else None
         if isinstance(outcome, dict) and outcome.get("changed") is False:
@@ -2134,6 +2183,15 @@ class LocalHost:
             # app shows the run collapsed.
             self._log(f"automation {summary.get('automation_id')}: no change, not notified")
             return
+        proactive = getattr(self, "_proactive", None)
+        if proactive is not None and origin == "automation":
+            # CHAT-182: a silent heartbeat, a repeated nudge, the daily cap,
+            # and the quiet hours (queued until they end).
+            try:
+                if proactive.filter_run(summary):
+                    return
+            except Exception as exc:  # noqa: BLE001 — the gate fails open
+                self._log(f"proactive gate failed: {type(exc).__name__}: {exc}")
         if origin == ORIGIN_MAIL_UNTRUSTED:
             # The restricted run of an unknown mail (docs/AGENT_MAIL.md §7)
             # ends as the note on the mail, which the app shows. No toast and
@@ -2237,6 +2295,13 @@ class LocalHost:
         if executor is None:
             return None
         return executor.submit_task(session_key, prompt, meta)
+
+    def _deliver_queued_push(self, summary: dict) -> None:
+        """A run that ended in the quiet hours: announced now that they ended
+        (CHAT-182). Desktop toast and cloud push, like any unattended run."""
+        notifier = getattr(self, "_notifier", None)
+        if notifier is not None:
+            notifier.notify_run_finished(summary)
 
     def _automation_busy(self, session_key: str) -> bool:
         """True while that thread still has an automation/user run queued or
